@@ -1,2 +1,2 @@
-# weird
-weird renderer
+# Weird
+Weird renderer
