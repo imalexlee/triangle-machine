@@ -4,11 +4,12 @@
 
 class Window {
 public:
-  GLFWwindow* window;
+  GLFWwindow* glfw_window{};
 
-  Window(int width, int height, const char* title);
+  Window(){};
   ~Window();
 
+  void init(int width, int height, const char* title);
   VkSurfaceKHR get_surface(const VkInstance instance);
 
 private:
@@ -16,7 +17,6 @@ private:
   int _height;
   const char* _title;
 
-  void init();
   static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
   static void error_callback(int error, const char* description);
 };

@@ -1,36 +1,39 @@
 #define GLFW_INCLUDE_VULKAN
+#define GLFW_INCLUDE_NONE
 #include "window.h"
-#include "fmt/base.h"
-#include "types.h"
+#include "renderer/types.h"
 #include <cstdlib>
 
-Window::Window(int width, int height, const char* title) : _width{width}, _height{height}, _title{title} { init(); }
 Window::~Window() {
+  glfwDestroyWindow(glfw_window);
   glfwTerminate();
-  glfwDestroyWindow(window);
 };
 
-void Window::init() {
+void Window::init(int width, int height, const char* title) {
+  _width = width;
+  _height = height;
+  _title = title;
 
+  glfwSetErrorCallback(error_callback);
   if (!glfwInit()) {
     exit(EXIT_FAILURE);
   }
 
-  glfwSetErrorCallback(error_callback);
-
+  glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-  window = glfwCreateWindow(_width, _height, _title, nullptr, nullptr);
-  if (!window) {
+
+  glfw_window = glfwCreateWindow(_width, _height, _title, nullptr, nullptr);
+  if (!glfw_window) {
     glfwTerminate();
     exit(EXIT_FAILURE);
   }
 
-  glfwSetKeyCallback(window, key_callback);
+  glfwSetKeyCallback(glfw_window, key_callback);
 }
 
 VkSurfaceKHR Window::get_surface(const VkInstance instance) {
   VkSurfaceKHR surface;
-  VK_CHECK(glfwCreateWindowSurface(instance, window, nullptr, &surface));
+  VK_CHECK(glfwCreateWindowSurface(instance, glfw_window, nullptr, &surface));
   return surface;
 }
 

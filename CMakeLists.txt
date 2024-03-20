@@ -18,7 +18,8 @@ endif()
 
 add_executable(
   ${PROJECT_NAME}
-  src/main.cpp
+  src/application/entry.cpp src/application/application.cpp
+  src/application/window.cpp src/renderer/engine.cpp
   # src/vk_engine.cpp
   # src/vk_initializers.cpp
   # src/vk_images.cpp

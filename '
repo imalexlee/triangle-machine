@@ -1,11 +1,15 @@
 #include "application.h"
 #include <GLFW/glfw3.h>
+#include <cassert>
 
-constexpr int WIDTH = 800;
 constexpr int HEIGHT = 600;
+constexpr int WIDTH = 400;
 
 void Application::start() {
-  _window.init(WIDTH, HEIGHT, "my engine!");
+  Window new_window(WIDTH, HEIGHT, "my engine!");
+  _window = new_window;
+  assert(_window.glfw_window != nullptr);
+
   while (!glfwWindowShouldClose(_window.glfw_window)) {
     glfwPollEvents();
   };
