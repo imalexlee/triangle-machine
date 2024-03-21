@@ -18,23 +18,10 @@ endif()
 
 add_executable(
   ${PROJECT_NAME}
-  src/application/entry.cpp src/application/application.cpp
-  src/application/window.cpp src/renderer/engine.cpp
-  # src/vk_engine.cpp
-  # src/vk_initializers.cpp
-  # src/vk_images.cpp
-  # src/vk_descriptors.cpp
-  # src/vk_pipelines.cpp
-  # src/camera.cpp
-  # src/vk_loader.cpp
-  # src/vk_engine.h
-  # src/vk_initializers.h
-  # src/vk_images.h
-  # src/vk_descriptors.h
-  # src/vk_pipelines.h
-  # src/camera.h
-  # src/vk_loader.h)
-)
+  src/entry.cpp src/core/engine.cpp src/core/window.cpp
+  src/renderer/renderer.cpp src/vk_backend/vk_backend.cpp
+  src/vk_backend/debug.cpp)
+
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_23)
 if(APPLE)
   enable_language(OBJC)
@@ -42,7 +29,7 @@ endif()
 
 add_subdirectory(thirdparty/fmt)
 add_subdirectory(thirdparty/VulkanMemoryAllocator)
-add_subdirectory(thirdparty/fastgltf)
+# add_subdirectory(thirdparty/fastgltf)
 add_subdirectory(thirdparty)
 
 target_include_directories(
@@ -51,7 +38,7 @@ target_include_directories(
   PUBLIC thirdparty/glm
   PUBLIC thirdparty/fmt/include
   PUBLIC thirdparty/stb_image
-  PUBLIC thirdparty/fastgltf/include
+  # PUBLIC thirdparty/fastgltf/include
   PUBLIC thirdparty/VulkanMemoryAllocator/include)
 # PUBLIC $ENV{VULKAN_SDK_PATH}/include
 
@@ -61,8 +48,7 @@ target_link_directories(
   ${PROJECT_NAME}
   PUBLIC
   thirdparty/fmt/src
-  PUBLIC
-  thirdparty/fastgltf/src
+  # PUBLIC thirdparty/fastgltf/src
   PUBLIC
   thirdparty/VulkanMemoryAllocator/src)
 # PUBLIC $ENV{VULKAN_SDK_PATH}/lib
@@ -70,11 +56,12 @@ target_link_directories(
 target_link_libraries(
   ${PROJECT_NAME}
   PRIVATE glfw
-  PRIVATE fastgltf
+  # PRIVATE fastgltf
   PRIVATE fmt
   PRIVATE VulkanMemoryAllocator
   PRIVATE Vulkan::Vulkan
-  PRIVATE imgui)
+  # PRIVATE imgui
+)
 
 find_program(
   GLSL_VALIDATOR glslangValidator

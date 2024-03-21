@@ -1,10 +1,12 @@
+#include "fmt/base.h"
 #define GLFW_INCLUDE_VULKAN
 #define GLFW_INCLUDE_NONE
-#include "window.h"
 #include "renderer/types.h"
+#include "window.h"
 #include <cstdlib>
 
 Window::~Window() {
+  fmt::println("destroying GLFW window");
   glfwDestroyWindow(glfw_window);
   glfwTerminate();
 };
