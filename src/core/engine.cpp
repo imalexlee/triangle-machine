@@ -8,7 +8,7 @@ Engine::~Engine() { cleanup(); };
 
 void Engine::init() {
   _window.init(WIDTH, HEIGHT, "my engine!");
-  _engine.init(_window.glfw_window);
+  _renderer.init(_window);
 }
 
 void Engine::start() {

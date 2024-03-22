@@ -1,13 +1,14 @@
 #include "renderer.h"
+#include "core/window.h"
 #include <cassert>
 
-Renderer* active_engine = nullptr;
+Renderer* active_renderer = nullptr;
 
-Renderer& get() { return *active_engine; }
+Renderer& get() { return *active_renderer; }
 
-void Renderer::init(GLFWwindow* window) {
-  assert(active_engine == nullptr);
-  active_engine = this;
+void Renderer::init(Window& window) {
+  assert(active_renderer == nullptr);
+  active_renderer = this;
 
   _vk_backend.init(window);
 }

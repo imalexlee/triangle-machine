@@ -18,9 +18,13 @@ endif()
 
 add_executable(
   ${PROJECT_NAME}
-  src/entry.cpp src/core/engine.cpp src/core/window.cpp
-  src/renderer/renderer.cpp src/vk_backend/vk_backend.cpp
-  src/vk_backend/debug.cpp)
+  src/entry.cpp
+  src/core/engine.cpp
+  src/core/window.cpp
+  src/renderer/renderer.cpp
+  src/vk_backend/vk_backend.cpp
+  src/vk_backend/vk_debug.cpp
+  src/vk_backend/vk_device.cpp)
 
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_23)
 if(APPLE)

@@ -1,4 +1,5 @@
 #pragma once
+#include "core/window.h"
 #include "vk_backend/vk_backend.h"
 #include <renderer/types.h>
 
@@ -7,7 +8,7 @@ public:
   Renderer(){};
   ~Renderer() { cleanup(); };
 
-  void init(GLFWwindow* window);
+  void init(Window& window);
 
   static Renderer& get();
   void run();

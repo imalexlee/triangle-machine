@@ -1,4 +1,5 @@
 #pragma once
+#include <array>
 #include <vk_backend/vk_types.h>
 #include <vulkan/vulkan_core.h>
 
@@ -9,7 +10,9 @@ public:
 
   VkResult create(VkInstance instance);
   void destroy(VkInstance instance);
-  VkDebugUtilsMessengerCreateInfoEXT create_debug_info();
+  VkDebugUtilsMessengerCreateInfoEXT create_messenger_info();
+  VkValidationFeaturesEXT create_validation_features();
+  std::array<const char*, 1> create_validation_layers();
 
 private:
   static VkBool32 debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,

@@ -1,4 +1,5 @@
 #include "vk_backend/vk_backend.h"
+#include "core/window.h"
 #include "fmt/base.h"
 #include "vk_backend/vk_types.h"
 #include <GLFW/glfw3.h>
@@ -11,26 +12,15 @@
 constexpr bool use_validation_layers = false;
 #else
 constexpr bool use_validation_layers = true;
-constexpr std::array<const char*, 1> validation_layers{"VK_LAYER_KHRONOS_validation"};
-constexpr std::array<VkValidationFeatureEnableEXT, 4> enabled_validation_features{
-    VkValidationFeatureEnableEXT::VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
-    VkValidationFeatureEnableEXT::VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
-    VkValidationFeatureEnableEXT::VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT,
-    VkValidationFeatureEnableEXT::VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
-};
 #endif // NDEBUG
-constexpr std::array<VkValidationFeatureDisableEXT, 1> disabled_validation_features{
-    VkValidationFeatureDisableEXT::VK_VALIDATION_FEATURE_DISABLE_ALL_EXT};
-constexpr std::array<const char*, 2> device_extensions{
-    "VK_KHR_dynamic_rendering",
-    VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-};
 
-void VkBackend::init(GLFWwindow* window) {
-  create_instance(window);
+void VkBackend::init(Window& window) {
+  create_instance(window.glfw_window);
   if (use_validation_layers) {
     _debugger.create(_instance);
   }
+  _surface = window.get_surface(_instance);
+  _device.create(_instance, _surface);
 }
 
 void VkBackend::create_instance(GLFWwindow* window) {
@@ -55,37 +45,30 @@ void VkBackend::create_instance(GLFWwindow* window) {
 
   VkDebugUtilsMessengerCreateInfoEXT debug_ci;
   VkValidationFeaturesEXT validation_features;
-  validation_features.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
+  std::array<const char*, 1> validation_layers;
 
-#ifdef NDEBUG
+  if constexpr (use_validation_layers) {
+    debug_ci = _debugger.create_messenger_info();
+    validation_features = _debugger.create_validation_features();
+    validation_layers = _debugger.create_validation_layers();
 
-  validation_features.disabledValidationFeatureCount = disabled_validation_features.size();
-  validation_features.pDisabledValidationFeatures = disabled_validation_features.data();
-#else
-
-  debug_ci = _debugger.create_debug_info();
-
-  validation_features.pEnabledValidationFeatures = enabled_validation_features.data();
-  validation_features.enabledValidationFeatureCount = enabled_validation_features.size();
-
-  validation_features.pNext = &debug_ci;
-  instance_ci.pNext = &validation_features;
-  instance_ci.enabledLayerCount = validation_layers.size();
-  instance_ci.ppEnabledLayerNames = validation_layers.data();
-#endif // NDEBUG
+    validation_features.pNext = &debug_ci;
+    instance_ci.pNext = &validation_features;
+    instance_ci.enabledLayerCount = validation_layers.size();
+    instance_ci.ppEnabledLayerNames = validation_layers.data();
+  }
 
   VK_CHECK(vkCreateInstance(&instance_ci, nullptr, &_instance));
 }
 
 std::vector<const char*> VkBackend::get_instance_extensions(GLFWwindow* window) {
-
   uint32_t count{0};
   const char** glfw_extensions = glfwGetRequiredInstanceExtensions(&count);
   std::vector<const char*> extensions;
   for (size_t i = 0; i < count; i++) {
     extensions.emplace_back(glfw_extensions[i]);
   }
-  if (use_validation_layers) {
+  if constexpr (use_validation_layers) {
     extensions.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
   }
   return extensions;
@@ -93,8 +76,11 @@ std::vector<const char*> VkBackend::get_instance_extensions(GLFWwindow* window) 
 
 void VkBackend::cleanup() {
   fmt::println("destroying Vulkan instance");
-  if (use_validation_layers) {
+  if constexpr (use_validation_layers) {
     _debugger.destroy(_instance);
   }
+
+  _device.destroy();
+  vkDestroySurfaceKHR(_instance, _surface, nullptr);
   vkDestroyInstance(_instance, nullptr);
 }

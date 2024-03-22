@@ -12,6 +12,6 @@ public:
 
 private:
   void cleanup();
-  Renderer _engine;
+  Renderer _renderer;
   Window _window;
 };
