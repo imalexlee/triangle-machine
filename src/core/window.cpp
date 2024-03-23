@@ -1,8 +1,7 @@
-#include "fmt/base.h"
 #define GLFW_INCLUDE_VULKAN
 #define GLFW_INCLUDE_NONE
-#include "renderer/types.h"
 #include "window.h"
+#include "renderer/types.h"
 #include <cstdlib>
 
 Window::~Window() {
@@ -11,9 +10,9 @@ Window::~Window() {
   glfwTerminate();
 };
 
-void Window::init(int width, int height, const char* title) {
-  _width = width;
-  _height = height;
+void Window::init(uint32_t width, uint32_t height, const char* title) {
+  this->width = width;
+  this->height = height;
   _title = title;
 
   glfwSetErrorCallback(error_callback);
@@ -24,7 +23,7 @@ void Window::init(int width, int height, const char* title) {
   glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
-  glfw_window = glfwCreateWindow(_width, _height, _title, nullptr, nullptr);
+  glfw_window = glfwCreateWindow(width, height, _title, nullptr, nullptr);
   if (!glfw_window) {
     glfwTerminate();
     exit(EXIT_FAILURE);

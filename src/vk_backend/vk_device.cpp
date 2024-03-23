@@ -7,13 +7,13 @@
 #include <vector>
 #include <vulkan/vulkan_core.h>
 
-void Device::create(VkInstance instance, VkSurfaceKHR surface) {
+void DeviceContext::create(VkInstance instance, VkSurfaceKHR surface) {
   create_physical_device(instance);
   get_queue_family_indices(surface);
   create_logical_device();
 }
 
-void Device::create_physical_device(VkInstance instance) {
+void DeviceContext::create_physical_device(VkInstance instance) {
   std::vector<VkPhysicalDevice> physical_devices;
   uint32_t physical_device_count;
 
@@ -45,9 +45,9 @@ void Device::create_physical_device(VkInstance instance) {
   }
 }
 
-void Device::destroy() { vkDestroyDevice(logical_device, nullptr); }
+void DeviceContext::destroy() { vkDestroyDevice(logical_device, nullptr); }
 
-void Device::get_queue_family_indices(VkSurfaceKHR surface) {
+void DeviceContext::get_queue_family_indices(VkSurfaceKHR surface) {
   std::vector<VkQueueFamilyProperties> queue_family_properties;
   uint32_t family_property_count;
   vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &family_property_count, nullptr);
@@ -57,31 +57,23 @@ void Device::get_queue_family_indices(VkSurfaceKHR surface) {
   std::optional<uint32_t> graphics_index;
   std::optional<uint32_t> present_index;
 
+  // attempt to use the same queue family for graphics and presentation operations
   for (uint32_t i = 0; i < queue_family_properties.size(); i++) {
-    // use first graphics queue found
-    if (queue_family_properties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-      if (!graphics_index.has_value()) {
-        graphics_index = i;
-      }
-    }
-    // grab a different queue family for presentation that isn't the same as the graphics queue
     VkBool32 present_supported = VK_FALSE;
     vkGetPhysicalDeviceSurfaceSupportKHR(physical_device, i, surface, &present_supported);
-    if (present_supported) {
-      if (!graphics_index.has_value() || graphics_index.value() != i) {
-        present_index = i;
-      }
+    // iterate through all queues and hope to find one queue family that supports both.
+    // otherwise, pick out queues that either present or graphics can use.
+    if (present_supported && queue_family_properties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+      graphics_index = i;
+      present_index = i;
+      break;
+    } else if (present_supported) {
+      present_supported = i;
+    } else if (queue_family_properties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+      graphics_index = i;
     }
   }
 
-  // if no seperate present queue could be found, see if we can just use the graphics queue family
-  if (!present_index.has_value() && graphics_index.has_value()) {
-    VkBool32 present_supported = VK_FALSE;
-    vkGetPhysicalDeviceSurfaceSupportKHR(physical_device, graphics_index.value(), surface, &present_supported);
-    if (present_supported) {
-      present_index = graphics_index.value();
-    }
-  }
   if (!present_index.has_value() || !graphics_index.has_value()) {
     std::cout << "Cannot find suitable queues!" << std::endl;
     exit(EXIT_FAILURE);
@@ -91,7 +83,7 @@ void Device::get_queue_family_indices(VkSurfaceKHR surface) {
   queues.present_family_index = present_index.value();
 }
 
-void Device::create_logical_device() {
+void DeviceContext::create_logical_device() {
   std::set<uint32_t> unique_family_indices{queues.graphics_family_index, queues.present_family_index};
   std::vector<VkDeviceQueueCreateInfo> queue_infos;
 

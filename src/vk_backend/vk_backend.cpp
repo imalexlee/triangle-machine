@@ -19,8 +19,9 @@ void VkBackend::init(Window& window) {
   if (use_validation_layers) {
     _debugger.create(_instance);
   }
-  _surface = window.get_surface(_instance);
-  _device.create(_instance, _surface);
+  VkSurfaceKHR surface = window.get_surface(_instance);
+  _device_context.create(_instance, surface);
+  _swapchain_context.create(_instance, _device_context, surface, window.width, window.height, VK_PRESENT_MODE_FIFO_KHR);
 }
 
 void VkBackend::create_instance(GLFWwindow* window) {
@@ -77,10 +78,11 @@ std::vector<const char*> VkBackend::get_instance_extensions(GLFWwindow* window) 
 void VkBackend::cleanup() {
   fmt::println("destroying Vulkan instance");
   if constexpr (use_validation_layers) {
-    _debugger.destroy(_instance);
+    _debugger.destroy();
   }
 
-  _device.destroy();
-  vkDestroySurfaceKHR(_instance, _surface, nullptr);
+  _swapchain_context.destroy();
+  _device_context.destroy();
+
   vkDestroyInstance(_instance, nullptr);
 }

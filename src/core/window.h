@@ -1,5 +1,6 @@
 #pragma once
 #include <GLFW/glfw3.h>
+#include <cstdint>
 #include <vulkan/vulkan_core.h>
 
 class Window {
@@ -9,12 +10,13 @@ public:
   Window(){};
   ~Window();
 
-  void init(int width, int height, const char* title);
+  void init(uint32_t width, uint32_t height, const char* title);
   VkSurfaceKHR get_surface(const VkInstance instance);
 
+  uint32_t width;
+  uint32_t height;
+
 private:
-  int _width;
-  int _height;
   const char* _title;
 
   static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);

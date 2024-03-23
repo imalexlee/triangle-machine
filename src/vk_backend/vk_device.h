@@ -12,7 +12,7 @@ struct DeviceQueues {
   uint32_t present_family_index;
 };
 
-class Device {
+class DeviceContext {
 public:
   VkDevice logical_device;
   VkPhysicalDevice physical_device;

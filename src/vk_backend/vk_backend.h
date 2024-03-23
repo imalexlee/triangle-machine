@@ -4,6 +4,7 @@
 #include "vk_backend/vk_debug.h"
 #include "vk_backend/vk_device.h"
 #include <vector>
+#include <vk_backend/vk_swapchain.h>
 #include <vk_backend/vk_types.h>
 
 class VkBackend {
@@ -17,7 +18,8 @@ private:
   VkInstance _instance;
   VkSurfaceKHR _surface;
   Debugger _debugger;
-  Device _device;
+  DeviceContext _device_context;
+  SwapchainContext _swapchain_context;
 
   // initializers
   void create_instance(GLFWwindow* window);
