@@ -1,16 +1,16 @@
 #define GLFW_INCLUDE_VULKAN
 #define GLFW_INCLUDE_NONE
 #include "window.h"
-#include "renderer/types.h"
 #include <cstdlib>
+#include <vk_backend/vk_debug.h>
 
 Window::~Window() {
-  fmt::println("destroying GLFW window");
+  DEBUG_PRINT("destroying GLFW window");
   glfwDestroyWindow(glfw_window);
   glfwTerminate();
 };
 
-void Window::init(uint32_t width, uint32_t height, const char* title) {
+void Window::create(uint32_t width, uint32_t height, const char* title) {
   this->width = width;
   this->height = height;
   _title = title;
@@ -32,7 +32,7 @@ void Window::init(uint32_t width, uint32_t height, const char* title) {
   glfwSetKeyCallback(glfw_window, key_callback);
 }
 
-VkSurfaceKHR Window::get_surface(const VkInstance instance) {
+VkSurfaceKHR Window::get_vulkan_surface(const VkInstance instance) {
   VkSurfaceKHR surface;
   VK_CHECK(glfwCreateWindowSurface(instance, glfw_window, nullptr, &surface));
   return surface;

@@ -1,4 +1,5 @@
 #pragma once
+
 #include "core/window.h"
 #include "renderer/renderer.h"
 
@@ -7,11 +8,11 @@ public:
   Engine(){};
   ~Engine();
 
-  void init();
+  void create();
   void start();
 
 private:
-  void cleanup();
+  void destroy();
   Renderer _renderer;
   Window _window;
 };

@@ -1,3 +1,5 @@
+#pragma once
+
 #include "vk_backend/vk_device.h"
 #include "vk_backend/vk_utils.h"
 #include <cstdint>

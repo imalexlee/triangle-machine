@@ -29,10 +29,9 @@ VkResult Debugger::create(VkInstance& instance) {
 
   if (func != nullptr) {
     VkResult result = func(instance, &messenger_ci, nullptr, &messenger);
-    // can only delete messenger later on if it was successfully created
     if (result == VK_SUCCESS) {
       _deletion_queue.push_function([&]() {
-        fmt::println("destroying debugger");
+        DEBUG_PRINT("destroying debugger");
         auto func =
             (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
         if (func != nullptr) {

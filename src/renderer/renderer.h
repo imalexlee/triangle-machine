@@ -1,4 +1,5 @@
 #pragma once
+
 #include "core/window.h"
 #include "vk_backend/vk_backend.h"
 #include <renderer/types.h>
@@ -6,16 +7,15 @@
 class Renderer {
 public:
   Renderer(){};
-  ~Renderer() { cleanup(); };
+  ~Renderer() { destroy(); };
 
-  void init(Window& window);
+  void create(Window& window);
 
   static Renderer& get();
-  void run();
+  void render();
 
 private:
-  // Going to hook directly into vulkan since this is vulkan only.
-  VkBackend _vk_backend{};
+  VkBackend _vk_backend;
 
-  void cleanup();
+  void destroy();
 };

@@ -1,4 +1,5 @@
 #pragma once
+
 #include <GLFW/glfw3.h>
 #include <cstdint>
 #include <vulkan/vulkan_core.h>
@@ -10,8 +11,8 @@ public:
   Window(){};
   ~Window();
 
-  void init(uint32_t width, uint32_t height, const char* title);
-  VkSurfaceKHR get_surface(const VkInstance instance);
+  void create(uint32_t width, uint32_t height, const char* title);
+  VkSurfaceKHR get_vulkan_surface(const VkInstance instance);
 
   uint32_t width;
   uint32_t height;

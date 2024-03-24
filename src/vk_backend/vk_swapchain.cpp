@@ -1,5 +1,4 @@
 #include "vk_swapchain.h"
-#include "fmt/base.h"
 #include "resources/vk_image.h"
 #include "vk_backend/vk_device.h"
 #include "vk_backend/vk_utils.h"
@@ -74,7 +73,7 @@ void SwapchainContext::create_swapchain(DeviceContext& device_context, uint32_t 
   // if graphics and presentation operations are using seperate queue families, make swapchain share image data
   // across them. if they do share the same queue, using exlusive sharing mode is probably more performant
   if (unique_queue_families.size() > 1) {
-    fmt::println("using share mode CONCURRENT");
+    DEBUG_PRINT("using swapchain sharing mode CONCURRENT");
     queue_family_indices.resize(unique_queue_families.size());
     for (const auto& family_index : unique_queue_families) {
       queue_family_indices.push_back(family_index);
@@ -83,7 +82,7 @@ void SwapchainContext::create_swapchain(DeviceContext& device_context, uint32_t 
     swapchain_ci.queueFamilyIndexCount = queue_family_indices.size();
     swapchain_ci.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
   } else {
-    fmt::println("using share mode EXCLUSIVE");
+    DEBUG_PRINT("using swapchain sharing mode EXCLUSIVE");
     swapchain_ci.pQueueFamilyIndices = nullptr;
     swapchain_ci.queueFamilyIndexCount = 0;
     swapchain_ci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -93,6 +92,9 @@ void SwapchainContext::create_swapchain(DeviceContext& device_context, uint32_t 
 
   uint32_t actual_image_count;
   VK_CHECK(vkGetSwapchainImagesKHR(device_context.logical_device, swapchain, &actual_image_count, nullptr));
+
+  // fmt::println("created {} swapchain images", actual_image_count);
+  DEBUG_PRINT("created %d images", actual_image_count);
 
   images.resize(actual_image_count);
   VK_CHECK(vkGetSwapchainImagesKHR(device_context.logical_device, swapchain, &actual_image_count, images.data()));

@@ -1,11 +1,9 @@
 #include "vk_backend/vk_backend.h"
-#include "core/window.h"
-#include "fmt/base.h"
-#include "vk_backend/vk_types.h"
-#include <GLFW/glfw3.h>
-#include <array>
+#include "global_utils.h"
+#include "vk_backend/resources/vk_image.h"
+#include "vk_backend/vk_sync.h"
+#include "vk_backend/vk_utils.h"
 #include <cstdint>
-#include <vector>
 #include <vulkan/vulkan_core.h>
 
 #ifdef NDEBUG
@@ -14,14 +12,19 @@ constexpr bool use_validation_layers = false;
 constexpr bool use_validation_layers = true;
 #endif // NDEBUG
 
-void VkBackend::init(Window& window) {
+constexpr uint64_t TIMEOUT_DURATION = 1'000'000'000;
+
+void VkBackend::create(Window& window) {
   create_instance(window.glfw_window);
   if (use_validation_layers) {
     _debugger.create(_instance);
   }
-  VkSurfaceKHR surface = window.get_surface(_instance);
+  VkSurfaceKHR surface = window.get_vulkan_surface(_instance);
   _device_context.create(_instance, surface);
   _swapchain_context.create(_instance, _device_context, surface, window.width, window.height, VK_PRESENT_MODE_FIFO_KHR);
+  for (Frame& frame : _frames) {
+    frame.create(_device_context.logical_device, _device_context.queues.graphics_family_index);
+  }
 }
 
 void VkBackend::create_instance(GLFWwindow* window) {
@@ -75,12 +78,74 @@ std::vector<const char*> VkBackend::get_instance_extensions(GLFWwindow* window) 
   return extensions;
 }
 
-void VkBackend::cleanup() {
-  fmt::println("destroying Vulkan instance");
+void VkBackend::draw() {
+
+  Frame& current_frame = _frames[get_frame_index()];
+
+  auto frame_indexxx = get_frame_index();
+
+  VkCommandBuffer cmd_buffer = current_frame.command_context.primary_buffer;
+
+  VK_CHECK(vkWaitForFences(_device_context.logical_device, 1, &current_frame.render_fence, VK_TRUE, TIMEOUT_DURATION));
+
+  uint32_t swapchain_image_index;
+  VK_CHECK(vkAcquireNextImageKHR(_device_context.logical_device, _swapchain_context.swapchain, TIMEOUT_DURATION,
+                                 current_frame.present_semaphore, nullptr, &swapchain_image_index));
+
+  VK_CHECK(vkResetFences(_device_context.logical_device, 1, &current_frame.render_fence));
+
+  current_frame.command_context.begin_primary_buffer(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+
+  VkImageMemoryBarrier2 image_barrier = create_image_memory_barrier(_swapchain_context.images[swapchain_image_index],
+                                                                    VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+  insert_image_memory_barrier(cmd_buffer, image_barrier);
+
+  VkClearColorValue clear_color = {{0, 1, 1, 1}};
+
+  VkImageSubresourceRange subresource_range = create_image_subresource_range(VK_IMAGE_ASPECT_COLOR_BIT);
+
+  vkCmdClearColorImage(cmd_buffer, _swapchain_context.images[swapchain_image_index], VK_IMAGE_LAYOUT_GENERAL,
+                       &clear_color, 1, &subresource_range);
+
+  image_barrier = create_image_memory_barrier(_swapchain_context.images[swapchain_image_index], VK_IMAGE_LAYOUT_GENERAL,
+                                              VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+
+  insert_image_memory_barrier(cmd_buffer, image_barrier);
+
+  // tweak stage masks to make it more optimal
+  VkSemaphoreSubmitInfo wait_semaphore_si =
+      create_semaphore_submit_info(current_frame.present_semaphore, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
+
+  VkSemaphoreSubmitInfo signal_semaphore_si =
+      create_semaphore_submit_info(current_frame.render_semaphore, VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT);
+
+  current_frame.command_context.submit_primary_buffer(_device_context.queues.graphics, &wait_semaphore_si,
+                                                      &signal_semaphore_si, current_frame.render_fence);
+
+  VkPresentInfoKHR present_info{};
+  present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+  present_info.pNext = nullptr;
+  present_info.pSwapchains = &_swapchain_context.swapchain;
+  present_info.swapchainCount = 1;
+  present_info.pImageIndices = &swapchain_image_index;
+  present_info.pWaitSemaphores = &current_frame.render_semaphore;
+  present_info.waitSemaphoreCount = 1;
+
+  VK_CHECK(vkQueuePresentKHR(_device_context.queues.graphics, &present_info));
+
+  _frame_num++;
+}
+
+void VkBackend::destroy() {
+  vkDeviceWaitIdle(_device_context.logical_device);
+  DEBUG_PRINT("destroying Vulkan Backend");
   if constexpr (use_validation_layers) {
     _debugger.destroy();
   }
 
+  for (Frame& frame : _frames) {
+    frame.destroy();
+  }
   _swapchain_context.destroy();
   _device_context.destroy();
 

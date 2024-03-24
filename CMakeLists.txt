@@ -27,6 +27,9 @@ add_executable(
   src/vk_backend/vk_device.cpp
   src/vk_backend/vk_command.cpp
   src/vk_backend/vk_swapchain.cpp
+  src/vk_backend/vk_sync.cpp
+  src/vk_backend/vk_frame.cpp
+  src/vk_backend/vk_descriptor.cpp
   src/vk_backend/resources/vk_image.cpp)
 
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_23)

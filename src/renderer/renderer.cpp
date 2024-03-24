@@ -6,12 +6,13 @@ Renderer* active_renderer = nullptr;
 
 Renderer& get() { return *active_renderer; }
 
-void Renderer::init(Window& window) {
+void Renderer::create(Window& window) {
   assert(active_renderer == nullptr);
   active_renderer = this;
 
-  _vk_backend.init(window);
+  _vk_backend.create(window);
 }
 
-void Renderer::run() {}
-void Renderer::cleanup() {}
+void Renderer::render() { _vk_backend.draw(); }
+
+void Renderer::destroy() {}

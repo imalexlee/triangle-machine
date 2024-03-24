@@ -1,10 +1,8 @@
 #pragma once
-#include "vk_backend/vk_utils.h"
+
 #include <array>
 #include <vk_backend/vk_types.h>
-#include <vulkan/vulkan_core.h>
 
-// Sets up debug information to be used with validation layers
 class Debugger {
 public:
   VkDebugUtilsMessengerEXT messenger;

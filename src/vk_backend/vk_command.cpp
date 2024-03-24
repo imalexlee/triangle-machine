@@ -1,9 +1,8 @@
 #include "vk_command.h"
-#include "vk_backend/vk_types.h"
+#include "vk_backend/vk_utils.h"
 #include <vulkan/vulkan_core.h>
 
-void CommandBufferController::create_command_buffers(VkDevice device, uint32_t queue_index,
-                                                     VkCommandPoolCreateFlags flags) {
+void CommandContext::create(VkDevice device, uint32_t queue_index, VkCommandPoolCreateFlags flags) {
   VkCommandPoolCreateInfo command_pool_ci{};
   command_pool_ci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
   command_pool_ci.pNext = nullptr;
@@ -20,11 +19,13 @@ void CommandBufferController::create_command_buffers(VkDevice device, uint32_t q
   command_buffer_ai.commandPool = _pool;
 
   VK_CHECK(vkAllocateCommandBuffers(device, &command_buffer_ai, &primary_buffer));
+
+  _deletion_queue.push_function([=, this]() { vkDestroyCommandPool(device, _pool, nullptr); });
 }
 
-void CommandBufferController::destroy_command_buffers(VkDevice device) { vkDestroyCommandPool(device, _pool, nullptr); }
+void CommandContext::destroy() { _deletion_queue.flush(); }
 
-void CommandBufferController::begin_primary_buffer(VkCommandBufferUsageFlags flags) {
+void CommandContext::begin_primary_buffer(VkCommandBufferUsageFlags flags) {
   VkCommandBufferBeginInfo command_buffer_bi{};
   command_buffer_bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
   command_buffer_bi.pNext = nullptr;
@@ -34,8 +35,10 @@ void CommandBufferController::begin_primary_buffer(VkCommandBufferUsageFlags fla
   VK_CHECK(vkBeginCommandBuffer(primary_buffer, &command_buffer_bi));
 }
 
-void CommandBufferController::submit_primary_buffer(VkQueue queue, VkSemaphoreSubmitInfo* wait_semaphore_info,
-                                                    VkSemaphoreSubmitInfo* signal_semaphore_info, VkFence fence) {
+void CommandContext::submit_primary_buffer(VkQueue queue, VkSemaphoreSubmitInfo* wait_semaphore_info,
+                                           VkSemaphoreSubmitInfo* signal_semaphore_info, VkFence fence) {
+
+  VK_CHECK(vkEndCommandBuffer(primary_buffer));
 
   VkCommandBufferSubmitInfo command_buffer_si{};
   command_buffer_si.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
