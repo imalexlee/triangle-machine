@@ -81,11 +81,10 @@ std::vector<const char*> VkBackend::get_instance_extensions(GLFWwindow* window) 
 void VkBackend::draw() {
 
   Frame& current_frame = _frames[get_frame_index()];
-
   auto frame_indexxx = get_frame_index();
-
   VkCommandBuffer cmd_buffer = current_frame.command_context.primary_buffer;
 
+  // wait for previous command buffer to finish executing
   VK_CHECK(vkWaitForFences(_device_context.logical_device, 1, &current_frame.render_fence, VK_TRUE, TIMEOUT_DURATION));
 
   uint32_t swapchain_image_index;
@@ -135,6 +134,18 @@ void VkBackend::draw() {
 
   _frame_num++;
 }
+
+// void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32_t swapchain_img_idx) {
+//   VkRenderingInfo rendering_info{};
+//   VkRenderingAttachmentInfo color_attachment =
+//       create_rendering_attachment(_swapchain_context.image_views[swapchain_img_idx], nullptr);
+//   rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+//   rendering_info.renderArea = VkRect2D{
+//       .offset = VkOffset2D{0, 0},
+//       .extent = extent,
+//   };
+//   rendering_info.pDepthAttachment = depth_attachment
+// }
 
 void VkBackend::destroy() {
   vkDeviceWaitIdle(_device_context.logical_device);
