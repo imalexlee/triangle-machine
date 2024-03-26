@@ -1,5 +1,4 @@
 #include "renderer.h"
-#include "core/window.h"
 #include <cassert>
 
 Renderer* active_renderer = nullptr;

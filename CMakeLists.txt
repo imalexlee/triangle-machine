@@ -27,9 +27,11 @@ add_executable(
   src/vk_backend/vk_device.cpp
   src/vk_backend/vk_command.cpp
   src/vk_backend/vk_swapchain.cpp
+  src/vk_backend/vk_pipeline.cpp
   src/vk_backend/vk_sync.cpp
   src/vk_backend/vk_frame.cpp
-  src/vk_backend/vk_descriptor.cpp
+  src/vk_backend/resources/vk_descriptor.cpp
+  src/vk_backend/resources/vk_allocate.cpp
   src/vk_backend/resources/vk_image.cpp)
 
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_23)
@@ -61,7 +63,6 @@ target_link_directories(
   # PUBLIC thirdparty/fastgltf/src
   PUBLIC
   thirdparty/VulkanMemoryAllocator/src)
-# PUBLIC $ENV{VULKAN_SDK_PATH}/lib
 
 target_link_libraries(
   ${PROJECT_NAME}

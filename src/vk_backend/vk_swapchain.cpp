@@ -93,7 +93,6 @@ void SwapchainContext::create_swapchain(DeviceContext& device_context, uint32_t 
   uint32_t actual_image_count;
   VK_CHECK(vkGetSwapchainImagesKHR(device_context.logical_device, swapchain, &actual_image_count, nullptr));
 
-  // fmt::println("created {} swapchain images", actual_image_count);
   DEBUG_PRINT("created %d images", actual_image_count);
 
   images.resize(actual_image_count);

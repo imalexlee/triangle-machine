@@ -26,16 +26,21 @@ private:
   Debugger _debugger;
   DeviceContext _device_context;
   SwapchainContext _swapchain_context;
+  VmaAllocator _allocator;
   AllocatedImage _draw_image;
-
   std::array<Frame, FRAME_NUM> _frames;
   uint64_t _frame_num{1};
 
+  // initialization
   void create_instance(GLFWwindow* window);
-  inline uint64_t get_frame_index() { return _frame_num % FRAME_NUM; }
 
+  // core functions
   void draw_geometry(VkCommandBuffer cmd_buf);
 
+  // deinitialization
   void destroy();
+
+  // utils
+  inline uint64_t get_frame_index() { return _frame_num % FRAME_NUM; }
   std::vector<const char*> get_instance_extensions(GLFWwindow* window);
 };

@@ -2,7 +2,6 @@
 
 #include "core/window.h"
 #include "vk_backend/vk_backend.h"
-#include <renderer/types.h>
 
 class Renderer {
 public:

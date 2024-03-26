@@ -1,10 +1,9 @@
-#include "vk_backend/vk_backend.h"
-#include "global_utils.h"
+#include "vk_backend/resources/vk_allocate.h"
+
 #include "vk_backend/resources/vk_image.h"
+#include "vk_backend/vk_backend.h"
 #include "vk_backend/vk_sync.h"
-#include "vk_backend/vk_utils.h"
-#include <cstdint>
-#include <vulkan/vulkan_core.h>
+#include "vk_mem_alloc.h"
 
 #ifdef NDEBUG
 constexpr bool use_validation_layers = false;
@@ -16,14 +15,28 @@ constexpr uint64_t TIMEOUT_DURATION = 1'000'000'000;
 
 void VkBackend::create(Window& window) {
   create_instance(window.glfw_window);
-  if (use_validation_layers) {
-    _debugger.create(_instance);
-  }
   VkSurfaceKHR surface = window.get_vulkan_surface(_instance);
+
   _device_context.create(_instance, surface);
+  _allocator = create_allocator(_instance, _device_context);
   _swapchain_context.create(_instance, _device_context, surface, window.width, window.height, VK_PRESENT_MODE_FIFO_KHR);
+
   for (Frame& frame : _frames) {
     frame.create(_device_context.logical_device, _device_context.queues.graphics_family_index);
+  }
+
+  VkExtent2D image_extent{
+      .width = window.width,
+      .height = window.height,
+  };
+
+  _draw_image =
+      create_image(_device_context.logical_device, _allocator,
+                   VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                   image_extent, VK_FORMAT_R16G16B16A16_SFLOAT);
+
+  if (use_validation_layers) {
+    _debugger.create(_instance);
   }
 }
 
@@ -130,7 +143,7 @@ void VkBackend::draw() {
   present_info.pWaitSemaphores = &current_frame.render_semaphore;
   present_info.waitSemaphoreCount = 1;
 
-  VK_CHECK(vkQueuePresentKHR(_device_context.queues.graphics, &present_info));
+  VK_CHECK(vkQueuePresentKHR(_device_context.queues.present, &present_info));
 
   _frame_num++;
 }
@@ -158,7 +171,10 @@ void VkBackend::destroy() {
     frame.destroy();
   }
   _swapchain_context.destroy();
-  _device_context.destroy();
 
+  destroy_image(_device_context.logical_device, _allocator, _draw_image);
+  vmaDestroyAllocator(_allocator);
+
+  _device_context.destroy();
   vkDestroyInstance(_instance, nullptr);
 }
