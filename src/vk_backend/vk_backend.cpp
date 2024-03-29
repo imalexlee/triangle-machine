@@ -1,6 +1,4 @@
-#include "vk_backend/resources/vk_allocate.h"
-
-#include "vk_backend/resources/vk_image.h"
+#define VMA_IMPLEMENTATION
 #include "vk_backend/vk_backend.h"
 #include "vk_backend/vk_sync.h"
 #include "vk_mem_alloc.h"
@@ -18,8 +16,8 @@ void VkBackend::create(Window& window) {
   VkSurfaceKHR surface = window.get_vulkan_surface(_instance);
 
   _device_context.create(_instance, surface);
-  _allocator = create_allocator(_instance, _device_context);
   _swapchain_context.create(_instance, _device_context, surface, window.width, window.height, VK_PRESENT_MODE_FIFO_KHR);
+  create_allocator();
 
   for (Frame& frame : _frames) {
     frame.create(_device_context.logical_device, _device_context.queues.graphics_family_index);
@@ -38,6 +36,16 @@ void VkBackend::create(Window& window) {
   if (use_validation_layers) {
     _debugger.create(_instance);
   }
+}
+
+void VkBackend::create_allocator() {
+  VmaAllocatorCreateInfo allocator_info{};
+  allocator_info.device = _device_context.logical_device;
+  allocator_info.physicalDevice = _device_context.physical_device;
+  allocator_info.instance = _instance;
+  allocator_info.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+
+  VK_CHECK(vmaCreateAllocator(&allocator_info, &_allocator));
 }
 
 void VkBackend::create_instance(GLFWwindow* window) {
@@ -148,17 +156,25 @@ void VkBackend::draw() {
   _frame_num++;
 }
 
-// void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32_t swapchain_img_idx) {
-//   VkRenderingInfo rendering_info{};
-//   VkRenderingAttachmentInfo color_attachment =
-//       create_rendering_attachment(_swapchain_context.image_views[swapchain_img_idx], nullptr);
-//   rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-//   rendering_info.renderArea = VkRect2D{
-//       .offset = VkOffset2D{0, 0},
-//       .extent = extent,
-//   };
-//   rendering_info.pDepthAttachment = depth_attachment
-// }
+void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32_t swapchain_img_idx) {
+
+  VkRenderingAttachmentInfo color_attachment =
+      create_color_attachment_info(_swapchain_context.image_views[swapchain_img_idx], nullptr);
+  VkRenderingAttachmentInfo depth_attachment =
+      create_depth_attachment_info(_swapchain_context.image_views[swapchain_img_idx]);
+
+  VkRenderingInfo rendering_info{};
+  rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+  rendering_info.renderArea = VkRect2D{
+      .offset = VkOffset2D{0, 0},
+      .extent = extent,
+  };
+  rendering_info.pColorAttachments = &color_attachment;
+  rendering_info.colorAttachmentCount = 1;
+  rendering_info.pDepthAttachment = &depth_attachment;
+  rendering_info.layerCount = 1;
+  rendering_info.pStencilAttachment = nullptr;
+}
 
 void VkBackend::destroy() {
   vkDeviceWaitIdle(_device_context.logical_device);

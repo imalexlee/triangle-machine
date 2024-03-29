@@ -33,9 +33,10 @@ private:
 
   // initialization
   void create_instance(GLFWwindow* window);
+  void create_allocator();
 
   // core functions
-  void draw_geometry(VkCommandBuffer cmd_buf);
+  void draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32_t swapchain_img_idx);
 
   // deinitialization
   void destroy();

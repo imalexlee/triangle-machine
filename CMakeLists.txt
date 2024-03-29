@@ -31,7 +31,7 @@ add_executable(
   src/vk_backend/vk_sync.cpp
   src/vk_backend/vk_frame.cpp
   src/vk_backend/resources/vk_descriptor.cpp
-  src/vk_backend/resources/vk_allocate.cpp
+  src/vk_backend/resources/vk_loader.cpp
   src/vk_backend/resources/vk_image.cpp)
 
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_23)
