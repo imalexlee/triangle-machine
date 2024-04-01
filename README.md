@@ -1,2 +1,2 @@
-# Weird
-Weird renderer
+# Triangle Machine
+triangle machine
