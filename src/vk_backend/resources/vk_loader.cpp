@@ -1,14 +1,11 @@
 #include "vk_loader.h"
-#include <cstdint>
 #include <fstream>
 #include <ios>
-#include <vector>
-#include <vulkan/vulkan_core.h>
 
 VkShaderModule load_shader_module(VkDevice device, const char* file_path) {
 
   std::ifstream file(file_path, std::ios::ate | std::ios::binary);
-  size_t file_size = file.tellg();
+  size_t file_size = (size_t)file.tellg();
   std::vector<uint32_t> buffer(file_size / sizeof(uint32_t));
 
   file.seekg(0);

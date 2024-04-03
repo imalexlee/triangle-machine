@@ -4,5 +4,5 @@ int main() {
   Engine engine;
   engine.create();
 
-  engine.start();
+  engine.run();
 }

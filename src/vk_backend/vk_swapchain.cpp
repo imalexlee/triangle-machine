@@ -1,4 +1,5 @@
 #include "vk_swapchain.h"
+#include "global_utils.h"
 #include "resources/vk_image.h"
 #include "vk_backend/vk_device.h"
 #include "vk_backend/vk_utils.h"
@@ -98,7 +99,6 @@ void SwapchainContext::create_swapchain(DeviceContext& device_context, uint32_t 
   images.resize(actual_image_count);
   VK_CHECK(vkGetSwapchainImagesKHR(device_context.logical_device, swapchain, &actual_image_count, images.data()));
 
-  image_views.resize(images.size());
   for (auto& image : images) {
     image_views.push_back(create_image_view(device_context.logical_device, image, format, VK_IMAGE_ASPECT_COLOR_BIT));
   }

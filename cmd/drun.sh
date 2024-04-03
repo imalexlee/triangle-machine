@@ -1,2 +1,2 @@
 #!/bin/sh
-cd ../out/debug ; ./weird
+cd ../out/debug ; ./triangle-machine

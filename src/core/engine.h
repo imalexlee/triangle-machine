@@ -1,18 +1,20 @@
 #pragma once
 
 #include "core/window.h"
-#include "renderer/renderer.h"
+#include "vk_backend/vk_backend.h"
 
 class Engine {
 public:
   Engine(){};
-  ~Engine();
+  ~Engine() { destroy(); };
 
   void create();
-  void start();
+  void run();
+
+  static Engine& get();
 
 private:
   void destroy();
-  Renderer _renderer;
+  VkBackend _vk_backend;
   Window _window;
 };

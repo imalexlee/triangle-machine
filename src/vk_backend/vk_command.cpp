@@ -53,9 +53,9 @@ void CommandContext::submit_primary_buffer(VkQueue queue, VkSemaphoreSubmitInfo*
   submit_info.pCommandBufferInfos = &command_buffer_si;
   submit_info.commandBufferInfoCount = 1;
   submit_info.pWaitSemaphoreInfos = wait_semaphore_info;
-  submit_info.waitSemaphoreInfoCount = 1;
+  submit_info.waitSemaphoreInfoCount = wait_semaphore_info != nullptr ? 1 : 0;
   submit_info.pSignalSemaphoreInfos = signal_semaphore_info;
-  submit_info.signalSemaphoreInfoCount = 1;
+  submit_info.signalSemaphoreInfoCount = signal_semaphore_info != nullptr ? 1 : 0;
 
   VK_CHECK(vkQueueSubmit2(queue, 1, &submit_info, fence));
 }

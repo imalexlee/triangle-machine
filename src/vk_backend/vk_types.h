@@ -2,6 +2,8 @@
 
 #include <GLFW/glfw3.h>
 #include <fmt/base.h>
+#include <glm/mat4x4.hpp>
+#include <glm/vec4.hpp>
 #include <global_utils.h>
 #include <vk_backend/vk_utils.h>
 #include <vk_mem_alloc.h>

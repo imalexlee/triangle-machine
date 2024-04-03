@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(weird)
+project(triangle-machine)
 find_package(glfw3)
 find_package(Vulkan REQUIRED)
 
@@ -21,7 +21,6 @@ add_executable(
   src/entry.cpp
   src/core/engine.cpp
   src/core/window.cpp
-  src/renderer/renderer.cpp
   src/vk_backend/vk_backend.cpp
   src/vk_backend/vk_debug.cpp
   src/vk_backend/vk_device.cpp
@@ -30,8 +29,10 @@ add_executable(
   src/vk_backend/vk_pipeline.cpp
   src/vk_backend/vk_sync.cpp
   src/vk_backend/vk_frame.cpp
+  src/vk_backend/vk_draw_object.cpp
   src/vk_backend/resources/vk_descriptor.cpp
   src/vk_backend/resources/vk_loader.cpp
+  src/vk_backend/resources/vk_buffer.cpp
   src/vk_backend/resources/vk_image.cpp)
 
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_23)
@@ -79,18 +80,32 @@ find_program(
   HINTS /usr/bin /usr/local/bin $ENV{VULKAN_SDK_PATH}/Bin/
         $ENV{VULKAN_SDK_PATH}/Bin32/)
 
-file(GLOB_RECURSE GLSL_SOURCE_FILES "${PROJECT_SOURCE_DIR}/shaders/*.frag"
-     "${PROJECT_SOURCE_DIR}/shaders/*.vert"
-     "${PROJECT_SOURCE_DIR}/shaders/*.comp")
+file(GLOB_RECURSE GLSL_SOURCE_FILES_VERTEX
+     "${PROJECT_SOURCE_DIR}/assets/shaders/vertex/*.vert.glsl")
 
-foreach(GLSL ${GLSL_SOURCE_FILES})
+foreach(GLSL ${GLSL_SOURCE_FILES_VERTEX})
   message(STATUS "BUILDING SHADER")
   get_filename_component(FILE_NAME ${GLSL} NAME)
-  set(SPIRV "${PROJECT_SOURCE_DIR}/shaders/${FILE_NAME}.spv")
+  set(SPIRV "${PROJECT_SOURCE_DIR}/assets/shaders/vertex/${FILE_NAME}.spv")
   message(STATUS ${GLSL})
   add_custom_command(
     OUTPUT ${SPIRV}
-    COMMAND ${GLSL_VALIDATOR} -V ${GLSL} -o ${SPIRV}
+    COMMAND ${GLSL_VALIDATOR} -V ${GLSL} -gVS -o ${SPIRV}
+    DEPENDS ${GLSL})
+  list(APPEND SPIRV_BINARY_FILES ${SPIRV})
+endforeach(GLSL)
+
+file(GLOB_RECURSE GLSL_SOURCE_FILES_FRAGMENT
+     "${PROJECT_SOURCE_DIR}/assets/shaders/fragment/*.frag.glsl")
+
+foreach(GLSL ${GLSL_SOURCE_FILES_FRAGMENT})
+  message(STATUS "BUILDING SHADER")
+  get_filename_component(FILE_NAME ${GLSL} NAME)
+  set(SPIRV "${PROJECT_SOURCE_DIR}/assets/shaders/fragment/${FILE_NAME}.spv")
+  message(STATUS ${GLSL})
+  add_custom_command(
+    OUTPUT ${SPIRV}
+    COMMAND ${GLSL_VALIDATOR} -V ${GLSL} -gVS -o ${SPIRV}
     DEPENDS ${GLSL})
   list(APPEND SPIRV_BINARY_FILES ${SPIRV})
 endforeach(GLSL)

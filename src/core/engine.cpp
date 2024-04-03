@@ -3,18 +3,20 @@
 
 constexpr int WIDTH = 800;
 constexpr int HEIGHT = 600;
-
-Engine::~Engine() { destroy(); };
+Engine* active_engine = nullptr;
 
 void Engine::create() {
   _window.create(WIDTH, HEIGHT, "my engine!");
-  _renderer.create(_window);
+  assert(active_engine == nullptr);
+  active_engine = this;
+
+  _vk_backend.create(_window);
 }
 
-void Engine::start() {
+void Engine::run() {
   while (!glfwWindowShouldClose(_window.glfw_window)) {
     glfwPollEvents();
-    _renderer.render();
+    _vk_backend.draw();
   };
 }
 

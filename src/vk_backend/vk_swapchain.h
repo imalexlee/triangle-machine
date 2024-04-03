@@ -1,11 +1,7 @@
 #pragma once
 
 #include "vk_backend/vk_device.h"
-#include "vk_backend/vk_utils.h"
-#include <cstdint>
-#include <vector>
 #include <vk_backend/vk_types.h>
-#include <vulkan/vulkan_core.h>
 
 struct SwapChainSupportDetails {
   VkSurfaceCapabilitiesKHR capabilities;

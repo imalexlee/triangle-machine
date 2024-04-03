@@ -25,7 +25,8 @@ AllocatedImage create_image(VkDevice device, VmaAllocator allocator, VkImageUsag
   image_ci.mipLevels = 1;
   image_ci.imageType = VK_IMAGE_TYPE_2D;
   image_ci.arrayLayers = 1;
-  // image_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+  image_ci.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  //  image_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
   VmaAllocationCreateInfo allocation_ci{};
   allocation_ci.usage = VMA_MEMORY_USAGE_GPU_ONLY;
@@ -90,6 +91,7 @@ VkRenderingAttachmentInfo create_color_attachment_info(VkImageView view, VkClear
   colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
   colorAttachment.loadOp = clear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
   colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+
   if (clear) {
     colorAttachment.clearValue = *clear;
   }
