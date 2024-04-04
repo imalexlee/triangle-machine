@@ -16,6 +16,12 @@ void Engine::create() {
 void Engine::run() {
   while (!glfwWindowShouldClose(_window.glfw_window)) {
     glfwPollEvents();
+
+    if (_window.resized) {
+      _vk_backend.resize(_window.width, _window.height);
+      _window.resized = false;
+    }
+
     _vk_backend.draw();
   };
 }

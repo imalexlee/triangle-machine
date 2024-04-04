@@ -1,9 +1,11 @@
+#include "fmt/base.h"
 #include "global_utils.h"
 #include "vk_backend/resources/vk_buffer.h"
 #include "vk_backend/resources/vk_loader.h"
 #include "vk_backend/vk_draw_object.h"
 #include "vk_backend/vk_pipeline.h"
 #include <array>
+#include <cstdint>
 #include <cstring>
 #include <vulkan/vulkan_core.h>
 #define VMA_IMPLEMENTATION
@@ -240,8 +242,13 @@ void VkBackend::draw() {
   VK_CHECK(vkWaitForFences(_device_context.logical_device, 1, &current_frame.render_fence, VK_TRUE, TIMEOUT_DURATION));
 
   uint32_t swapchain_image_index;
-  VK_CHECK(vkAcquireNextImageKHR(_device_context.logical_device, _swapchain_context.swapchain, TIMEOUT_DURATION,
-                                 current_frame.present_semaphore, nullptr, &swapchain_image_index));
+  VkResult result =
+      vkAcquireNextImageKHR(_device_context.logical_device, _swapchain_context.swapchain, TIMEOUT_DURATION,
+                            current_frame.present_semaphore, nullptr, &swapchain_image_index);
+
+  if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+    return;
+  }
 
   VK_CHECK(vkResetFences(_device_context.logical_device, 1, &current_frame.render_fence));
 
@@ -251,14 +258,6 @@ void VkBackend::draw() {
       create_image_memory_barrier(_swapchain_context.images[swapchain_image_index], VK_IMAGE_LAYOUT_UNDEFINED,
                                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
   insert_image_memory_barrier(cmd_buffer, image_barrier);
-
-  // VkClearColorValue clear_color = {{0, 1, 1, 1}};
-
-  // VkImageSubresourceRange subresource_range = create_image_subresource_range(VK_IMAGE_ASPECT_COLOR_BIT);
-
-  // vkCmdClearColorImage(cmd_buffer, _swapchain_context.images[swapchain_image_index], VK_IMAGE_LAYOUT_GENERAL,
-  //                      &clear_color, 1, &subresource_range);
-  //
 
   draw_geometry(cmd_buffer, _swapchain_context.extent, swapchain_image_index);
 
@@ -287,9 +286,21 @@ void VkBackend::draw() {
   present_info.pWaitSemaphores = &current_frame.render_semaphore;
   present_info.waitSemaphoreCount = 1;
 
-  VK_CHECK(vkQueuePresentKHR(_device_context.queues.present, &present_info));
+  result = vkQueuePresentKHR(_device_context.queues.present, &present_info);
+  if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+    return;
+  }
 
   _frame_num++;
+}
+
+void VkBackend::resize(uint32_t width, uint32_t height) {
+  vkDeviceWaitIdle(_device_context.logical_device);
+  _swapchain_context.destroy_swapchain(_device_context.logical_device);
+  _swapchain_context.create_swapchain(_device_context, width, height);
+  for (Frame& frame : _frames) {
+    frame.reset_sync_structures(_device_context.logical_device);
+  }
 }
 
 void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32_t swapchain_img_idx) {

@@ -7,6 +7,7 @@
 #include <set>
 #include <vulkan/vulkan_core.h>
 
+// not to be used when resizing as it inits the entire context
 void SwapchainContext::create(VkInstance& instance, DeviceContext& device_context, VkSurfaceKHR surface, uint32_t width,
                               uint32_t height, VkPresentModeKHR desired_present_mode) {
   this->surface = surface;
@@ -42,7 +43,7 @@ void SwapchainContext::create_swapchain(DeviceContext& device_context, uint32_t 
   }
   format = surface_format.format;
 
-  // i want triple buffering
+  // I want triple buffering
   uint32_t desired_image_count{3};
   // max image count of 0 means it's unbounded, so ignore this and go with the 3 images
   if (_support_details.capabilities.maxImageCount != 0) {
@@ -105,9 +106,8 @@ void SwapchainContext::create_swapchain(DeviceContext& device_context, uint32_t 
 }
 
 void SwapchainContext::destroy_swapchain(VkDevice device) {
-  // implicitely destroys the VkImage's it gave us in create_swapchain
+  // this call implicitely destroys the VkImage's it gave us in create_swapchain
   vkDestroySwapchainKHR(device, swapchain, nullptr);
-  // not the image views though
   for (const auto& image_view : image_views) {
     vkDestroyImageView(device, image_view, nullptr);
   }

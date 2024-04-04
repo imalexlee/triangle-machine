@@ -24,6 +24,7 @@ public:
 
   void create(Window& window);
   void draw();
+  void resize(uint32_t width, uint32_t height);
 
 private:
   VkInstance _instance;

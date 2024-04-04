@@ -17,6 +17,20 @@ void Frame::create(VkDevice device, uint32_t graphics_family_index) {
   });
 }
 
+void Frame::reset_sync_structures(VkDevice device) {
+  _deletion_queue.flush();
+
+  render_semaphore = create_semaphore(device);
+  present_semaphore = create_semaphore(device);
+  render_fence = create_fence(device, VK_FENCE_CREATE_SIGNALED_BIT);
+
+  _deletion_queue.push_function([=, this]() {
+    vkDestroySemaphore(device, render_semaphore, nullptr);
+    vkDestroySemaphore(device, present_semaphore, nullptr);
+    vkDestroyFence(device, render_fence, nullptr);
+  });
+}
+
 void Frame::destroy() {
   DEBUG_PRINT("destroying frame");
   command_context.destroy();

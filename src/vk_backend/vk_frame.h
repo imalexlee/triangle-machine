@@ -14,7 +14,7 @@ public:
 
   void create(VkDevice device, uint32_t graphics_family_index);
   void destroy();
-  void present();
+  void reset_sync_structures(VkDevice device);
 
 private:
   DeletionQueue _deletion_queue;
