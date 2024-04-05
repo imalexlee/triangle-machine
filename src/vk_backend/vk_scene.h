@@ -1,8 +1,11 @@
 #pragma once
 
 #include "vk_backend/resources/vk_buffer.h"
-#include "vk_backend/vk_utils.h"
 #include <vk_backend/vk_types.h>
+
+struct SceneData {
+  glm::mat4 view_proj;
+};
 
 struct Vertex {
   glm::vec3 position;
@@ -13,6 +16,7 @@ struct Vertex {
 };
 
 struct DrawObjectPushConstants {
+  glm::mat4 local_transform{1.f};
   VkDeviceAddress vertex_buffer_address;
 };
 

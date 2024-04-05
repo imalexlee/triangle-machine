@@ -1,4 +1,4 @@
-#include "vk_draw_object.h"
+#include "vk_scene.h"
 #include "global_utils.h"
 #include "vk_backend/resources/vk_buffer.h"
 #include <vulkan/vulkan_core.h>

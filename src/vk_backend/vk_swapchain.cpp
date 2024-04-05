@@ -29,6 +29,11 @@ void SwapchainContext::create(VkInstance& instance, DeviceContext& device_contex
   });
 }
 
+void SwapchainContext::reset_swapchain(DeviceContext& device_context, uint32_t width, uint32_t height) {
+  destroy_swapchain(device_context.logical_device);
+  create_swapchain(device_context, width, height);
+}
+
 void SwapchainContext::destroy() { _deletion_queue.flush(); }
 
 void SwapchainContext::create_swapchain(DeviceContext& device_context, uint32_t width, uint32_t height) {
@@ -115,8 +120,8 @@ void SwapchainContext::destroy_swapchain(VkDevice device) {
   image_views.clear();
 }
 
-SwapChainSupportDetails SwapchainContext::query_support_details(VkPhysicalDevice physical_device) {
-  SwapChainSupportDetails swap_chain_details{};
+SwapchainSupportDetails SwapchainContext::query_support_details(VkPhysicalDevice physical_device) {
+  SwapchainSupportDetails swap_chain_details{};
   VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, surface, &swap_chain_details.capabilities));
 
   uint32_t surface_format_count{};

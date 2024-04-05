@@ -14,6 +14,7 @@ layout(buffer_reference, std430) readonly buffer VertexBuffer {
 };
 
 layout(push_constant) uniform PushConstants {
+    mat4 local_transform;
     VertexBuffer vertex_buffer;
 } constants;
 
@@ -21,6 +22,6 @@ layout(location = 0) out vec3 fragColor;
 
 void main() {
     Vertex v = constants.vertex_buffer.vertices[gl_VertexIndex];
-    gl_Position = vec4(v.position, 1.0f);
+    gl_Position = constants.local_transform * vec4(v.position, 1.0f);
     fragColor = v.color.xyz;
 }

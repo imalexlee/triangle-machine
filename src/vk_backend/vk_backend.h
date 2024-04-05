@@ -10,7 +10,7 @@
 #include "vk_backend/vk_utils.h"
 #include <cstdint>
 #include <vector>
-#include <vk_backend/vk_draw_object.h>
+#include <vk_backend/vk_scene.h>
 #include <vk_backend/vk_swapchain.h>
 #include <vk_backend/vk_types.h>
 #include <vulkan/vulkan_core.h>
@@ -55,6 +55,7 @@ private:
   // core functions
   void draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32_t swapchain_img_idx);
   void upload_mesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
+  void update_scene();
 
   // deinitialization
   void destroy();

@@ -1,17 +1,12 @@
-#include "fmt/base.h"
-#include "global_utils.h"
-#include "vk_backend/resources/vk_buffer.h"
-#include "vk_backend/resources/vk_loader.h"
-#include "vk_backend/vk_draw_object.h"
-#include "vk_backend/vk_pipeline.h"
-#include <array>
-#include <cstdint>
-#include <cstring>
-#include <vulkan/vulkan_core.h>
+#include "glm/ext/matrix_clip_space.hpp"
+#include "glm/ext/matrix_transform.hpp"
 #define VMA_IMPLEMENTATION
+
+#include "vk_backend/resources/vk_loader.h"
 #include "vk_backend/vk_backend.h"
 #include "vk_backend/vk_sync.h"
 #include "vk_mem_alloc.h"
+#include <glm/gtx/transform.hpp>
 
 #ifdef NDEBUG
 constexpr bool use_validation_layers = false;
@@ -80,6 +75,20 @@ void VkBackend::create_default_data() {
   upload_mesh(rect_indices, rect_vertices);
 }
 
+void VkBackend::update_scene() {
+
+  glm::mat4 projection =
+      glm::perspective(glm::radians(45.f),
+                       (float)_swapchain_context.extent.width / (float)_swapchain_context.extent.height, 0.1f, 200.0f);
+
+  glm::vec3 cam_pos = {-0.f, -0.f, -3.f};
+
+  glm::mat4 view = glm::translate(glm::mat4(1.f), cam_pos);
+
+  _draw_objects[0].push_constants.local_transform =
+      projection * view * glm::rotate(glm::mat4{1.f}, glm::radians(_frame_num * 1.f), glm::vec3{0.f, 1.f, 0.f});
+}
+
 void VkBackend::upload_mesh(std::span<uint32_t> indices, std::span<Vertex> vertices) {
   const size_t vertex_buffer_bytes = vertices.size() * sizeof(Vertex);
   const size_t index_buffer_bytes = indices.size() * sizeof(uint32_t);
@@ -101,7 +110,6 @@ void VkBackend::upload_mesh(std::span<uint32_t> indices, std::span<Vertex> verti
     vertex_buffer_region.srcOffset = 0;
     vertex_buffer_region.dstOffset = 0;
 
-    // copy vertex data
     vkCmdCopyBuffer(cmd, staging_buf.buffer, new_object.vertex_buffer.buffer, 1, &vertex_buffer_region);
 
     VkBufferCopy index_buffer_region{};
@@ -109,11 +117,9 @@ void VkBackend::upload_mesh(std::span<uint32_t> indices, std::span<Vertex> verti
     index_buffer_region.srcOffset = vertex_buffer_bytes;
     index_buffer_region.dstOffset = 0;
 
-    // copy index data
     vkCmdCopyBuffer(cmd, staging_buf.buffer, new_object.index_buffer.buffer, 1, &index_buffer_region);
   });
 
-  // todo: destroy buffer
   _draw_objects.push_back(new_object);
   destroy_buffer(_allocator, staging_buf);
 }
@@ -198,7 +204,7 @@ void VkBackend::create_pipelines() {
   builder.set_render_info(_swapchain_context.format, VK_FORMAT_UNDEFINED);
 
   VkPushConstantRange push_constant_range{};
-  push_constant_range.size = sizeof(VkDeviceAddress);
+  push_constant_range.size = sizeof(DrawObjectPushConstants);
   push_constant_range.offset = 0;
   push_constant_range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
   std::array<VkPushConstantRange, 1> push_constant_ranges{push_constant_range};
@@ -233,6 +239,7 @@ std::vector<const char*> VkBackend::get_instance_extensions(GLFWwindow* window) 
 }
 
 void VkBackend::draw() {
+  update_scene();
 
   Frame& current_frame = _frames[get_frame_index()];
   auto frame_indexxx = get_frame_index();
@@ -253,10 +260,20 @@ void VkBackend::draw() {
   VK_CHECK(vkResetFences(_device_context.logical_device, 1, &current_frame.render_fence));
 
   current_frame.command_context.begin_primary_buffer(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-
   VkImageMemoryBarrier2 image_barrier =
       create_image_memory_barrier(_swapchain_context.images[swapchain_image_index], VK_IMAGE_LAYOUT_UNDEFINED,
-                                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+                                  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+  insert_image_memory_barrier(cmd_buffer, image_barrier);
+
+  VkClearColorValue clear_color{{0, 0, 0, 1}};
+  VkImageSubresourceRange sub_range = create_image_subresource_range(VK_IMAGE_ASPECT_COLOR_BIT);
+
+  vkCmdClearColorImage(cmd_buffer, _swapchain_context.images[swapchain_image_index],
+                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clear_color, 1, &sub_range);
+
+  image_barrier =
+      create_image_memory_barrier(_swapchain_context.images[swapchain_image_index],
+                                  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
   insert_image_memory_barrier(cmd_buffer, image_barrier);
 
   draw_geometry(cmd_buffer, _swapchain_context.extent, swapchain_image_index);
@@ -296,8 +313,7 @@ void VkBackend::draw() {
 
 void VkBackend::resize(uint32_t width, uint32_t height) {
   vkDeviceWaitIdle(_device_context.logical_device);
-  _swapchain_context.destroy_swapchain(_device_context.logical_device);
-  _swapchain_context.create_swapchain(_device_context, width, height);
+  _swapchain_context.reset_swapchain(_device_context, width, height);
   for (Frame& frame : _frames) {
     frame.reset_sync_structures(_device_context.logical_device);
   }
