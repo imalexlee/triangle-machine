@@ -23,7 +23,7 @@ void SwapchainContext::create(VkInstance& instance, DeviceContext& device_contex
   }
   create_swapchain(device_context, width, height);
 
-  _deletion_queue.push_function([=, this]() {
+  _deletion_queue.push_persistant([=, this]() {
     destroy_swapchain(device_context.logical_device);
     vkDestroySurfaceKHR(instance, surface, nullptr);
   });
@@ -34,7 +34,7 @@ void SwapchainContext::reset_swapchain(DeviceContext& device_context, uint32_t w
   create_swapchain(device_context, width, height);
 }
 
-void SwapchainContext::destroy() { _deletion_queue.flush(); }
+void SwapchainContext::destroy() { _deletion_queue.flush_persistant(); }
 
 void SwapchainContext::create_swapchain(DeviceContext& device_context, uint32_t width, uint32_t height) {
   _support_details = query_support_details(device_context.physical_device);

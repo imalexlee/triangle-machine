@@ -20,7 +20,7 @@ void CommandContext::create(VkDevice device, uint32_t queue_index, VkCommandPool
 
   VK_CHECK(vkAllocateCommandBuffers(device, &command_buffer_ai, &primary_buffer));
 
-  _deletion_queue.push_function([=, this]() { vkDestroyCommandPool(device, _pool, nullptr); });
+  _deletion_queue.push_persistant([=, this]() { vkDestroyCommandPool(device, _pool, nullptr); });
 }
 
 void CommandContext::destroy() { _deletion_queue.flush(); }

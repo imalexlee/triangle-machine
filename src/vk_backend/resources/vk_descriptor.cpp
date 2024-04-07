@@ -1,4 +1,5 @@
 #include "vk_descriptor.h"
+#include "global_utils.h"
 #include <vector>
 #include <vulkan/vulkan_core.h>
 void DescriptorLayoutBuilder::add_binding(uint32_t binding, VkDescriptorType type) {
@@ -140,15 +141,18 @@ void DescriptorAllocator::destroy_pools(VkDevice device) {
 
 // gets a ready pool or allocates another with more sets
 VkDescriptorPool DescriptorAllocator::get_pool(VkDevice device) {
-  VkDescriptorPool new_pool;
 
+  VkDescriptorPool new_pool;
   if (_ready_pools.size() != 0) {
     new_pool = _ready_pools.back();
     _ready_pools.pop_back();
   } else {
 
     new_pool = create_pool(device, _sets_per_pool, _ratios);
-    _sets_per_pool = _sets_per_pool * 1.5 > 4092 ? 4092 : _sets_per_pool * 1.5;
+    _sets_per_pool = _sets_per_pool * 1.5;
+    if (_sets_per_pool > 4092) {
+      _sets_per_pool = 4092;
+    }
   }
 
   return new_pool;

@@ -30,7 +30,7 @@ VkResult Debugger::create(VkInstance& instance) {
   if (func != nullptr) {
     VkResult result = func(instance, &messenger_ci, nullptr, &messenger);
     if (result == VK_SUCCESS) {
-      _deletion_queue.push_function([&]() {
+      _deletion_queue.push_persistant([&]() {
         DEBUG_PRINT("destroying debugger");
         auto func =
             (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");

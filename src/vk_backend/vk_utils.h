@@ -12,16 +12,39 @@
     }                                                                                                                  \
   } while (0)
 
-struct DeletionQueue {
-  std::deque<std::function<void()>> deletors;
+// allows the pushing and flushing of consistently updating data and long living data
+class DeletionQueue {
+public:
+  void push_volatile(std::function<void()>&& function) { _volatile_deletors.push_back(function); }
+  void push_persistant(std::function<void()>&& function) { _persistant_deletors.push_back(function); }
 
-  void push_function(std::function<void()>&& function) { deletors.push_back(function); }
-
+  // flushes everything
   void flush() {
-    for (auto it = deletors.rbegin(); it != deletors.rend(); it++) {
+    for (auto it = _volatile_deletors.rbegin(); it != _volatile_deletors.rend(); it++) {
       (*it)();
     }
-
-    deletors.clear();
+    _volatile_deletors.clear();
+    for (auto it = _persistant_deletors.rbegin(); it != _persistant_deletors.rend(); it++) {
+      (*it)();
+    }
+    _persistant_deletors.clear();
   }
+
+  void flush_persistant() {
+    for (auto it = _persistant_deletors.rbegin(); it != _persistant_deletors.rend(); it++) {
+      (*it)();
+    }
+    _persistant_deletors.clear();
+  }
+
+  void flush_volatile() {
+    for (auto it = _volatile_deletors.rbegin(); it != _volatile_deletors.rend(); it++) {
+      (*it)();
+    }
+    _volatile_deletors.clear();
+  }
+
+private:
+  std::deque<std::function<void()>> _volatile_deletors;
+  std::deque<std::function<void()>> _persistant_deletors;
 };

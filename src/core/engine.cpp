@@ -6,7 +6,7 @@ constexpr int HEIGHT = 600;
 Engine* active_engine = nullptr;
 
 void Engine::create() {
-  _window.create(WIDTH, HEIGHT, "my engine!");
+  _window.create(WIDTH, HEIGHT, "Triangle Machine");
   assert(active_engine == nullptr);
   active_engine = this;
 

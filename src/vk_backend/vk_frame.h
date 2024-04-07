@@ -1,9 +1,15 @@
 #pragma once
 
+#include "vk_backend/resources/vk_buffer.h"
+#include "vk_backend/resources/vk_descriptor.h"
 #include "vk_backend/vk_command.h"
-#include "vk_backend/vk_utils.h"
-#include <cstdint>
 #include <vk_backend/vk_types.h>
+#include <vulkan/vulkan_core.h>
+
+// contains per-frame shader information
+struct SceneData {
+  glm::mat4 view_proj{1.f};
+};
 
 class Frame {
 public:
@@ -11,8 +17,13 @@ public:
   VkSemaphore render_semaphore;
   VkSemaphore present_semaphore;
   VkFence render_fence;
+  AllocatedBuffer scene_data_buffer;
+  VkDescriptorSetLayout desc_set_layout;
+  DescriptorAllocator desc_allocator;
 
-  void create(VkDevice device, uint32_t graphics_family_index);
+  void create(VkDevice device, VmaAllocator allocator, uint32_t graphics_family_index);
+  VkDescriptorSet create_desc_set(VkDevice device);
+  void clear_desc_set(VkDevice device);
   void destroy();
   void reset_sync_structures(VkDevice device);
 

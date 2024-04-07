@@ -45,37 +45,52 @@ VkSemaphoreSubmitInfo create_semaphore_submit_info(VkSemaphore semaphore, VkPipe
   return semaphore_si;
 }
 
-VkImageMemoryBarrier2 create_image_memory_barrier(VkImage image, VkImageLayout current_layout, VkImageLayout new_layout,
-                                                  VkPipelineStageFlags2 src_stages, VkPipelineStageFlags2 dst_stages) {
+// VkImageMemoryBarrier2 create_image_memory_barrier(VkImage image, VkImageLayout current_layout, VkImageLayout
+// new_layout,
+//                                                   VkPipelineStageFlags2 src_stages, VkPipelineStageFlags2 dst_stages)
+//                                                   {
+//
+//   VkImageMemoryBarrier2 image_mem_barrer{};
+//   image_mem_barrer.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+//   image_mem_barrer.pNext = nullptr;
+//   image_mem_barrer.image = image;
+//   image_mem_barrer.srcStageMask = src_stages;
+//   image_mem_barrer.srcAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT;
+//   image_mem_barrer.dstStageMask = dst_stages;
+//   image_mem_barrer.dstAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT | VK_ACCESS_2_MEMORY_READ_BIT;
+//   image_mem_barrer.oldLayout = current_layout;
+//   image_mem_barrer.newLayout = new_layout;
+//
+//   return image_mem_barrer;
+// }
 
-  VkImageMemoryBarrier2 image_mem_barrer{};
-  image_mem_barrer.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-  image_mem_barrer.pNext = nullptr;
-  image_mem_barrer.image = image;
-  image_mem_barrer.srcStageMask = src_stages;
-  image_mem_barrer.srcAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT;
-  image_mem_barrer.dstStageMask = dst_stages;
-  image_mem_barrer.dstAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT | VK_ACCESS_2_MEMORY_READ_BIT;
-  image_mem_barrer.oldLayout = current_layout;
-  image_mem_barrer.newLayout = new_layout;
+void insert_image_memory_barrier(VkCommandBuffer cmd_buf, VkImage image, VkImageLayout current_layout,
+                                 VkImageLayout new_layout, VkPipelineStageFlags2 src_stages,
+                                 VkPipelineStageFlags2 dst_stages) {
+  VkImageMemoryBarrier2 image_mem_barrier{};
+  image_mem_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+  image_mem_barrier.pNext = nullptr;
+  image_mem_barrier.image = image;
+  image_mem_barrier.srcStageMask = src_stages;
+  image_mem_barrier.srcAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT;
+  image_mem_barrier.dstStageMask = dst_stages;
+  image_mem_barrier.dstAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT | VK_ACCESS_2_MEMORY_READ_BIT;
+  image_mem_barrier.oldLayout = current_layout;
+  image_mem_barrier.newLayout = new_layout;
 
-  return image_mem_barrer;
-}
-
-void insert_image_memory_barrier(VkCommandBuffer cmd_buf, VkImageMemoryBarrier2& image_barrier) {
   VkDependencyInfo dep_info{};
   dep_info.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
   dep_info.pNext = nullptr;
 
   VkImageAspectFlags aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT;
-  if (image_barrier.newLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL) {
+  if (image_mem_barrier.newLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL) {
     aspect_flags = VK_IMAGE_ASPECT_DEPTH_BIT;
   }
 
   VkImageSubresourceRange subresource_range = create_image_subresource_range(aspect_flags);
-  image_barrier.subresourceRange = subresource_range;
+  image_mem_barrier.subresourceRange = subresource_range;
 
-  dep_info.pImageMemoryBarriers = &image_barrier;
+  dep_info.pImageMemoryBarriers = &image_mem_barrier;
   dep_info.imageMemoryBarrierCount = 1;
 
   vkCmdPipelineBarrier2(cmd_buf, &dep_info);

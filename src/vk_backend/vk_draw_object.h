@@ -3,10 +3,6 @@
 #include "vk_backend/resources/vk_buffer.h"
 #include <vk_backend/vk_types.h>
 
-struct SceneData {
-  glm::mat4 view_proj;
-};
-
 struct Vertex {
   glm::vec3 position;
   float uv_x;

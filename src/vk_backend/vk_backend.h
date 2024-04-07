@@ -10,7 +10,7 @@
 #include "vk_backend/vk_utils.h"
 #include <cstdint>
 #include <vector>
-#include <vk_backend/vk_scene.h>
+#include <vk_backend/vk_draw_object.h>
 #include <vk_backend/vk_swapchain.h>
 #include <vk_backend/vk_types.h>
 #include <vulkan/vulkan_core.h>
@@ -40,6 +40,8 @@ private:
 
   uint64_t _frame_num{1};
   std::array<Frame, FRAME_NUM> _frames;
+  // the per-frame data we will write to the frames' descriptor sets
+  SceneData _scene_data;
 
   std::vector<PipelineInfo> _pipeline_infos;
   std::vector<DrawObject> _draw_objects;
@@ -61,7 +63,8 @@ private:
   void destroy();
 
   // utils
-  inline uint64_t get_frame_index() { return _frame_num % FRAME_NUM; }
+  // inline uint64_t get_frame_index() { return _frame_num % FRAME_NUM; }
+  inline Frame& get_current_frame() { return _frames[_frame_num % FRAME_NUM]; };
   std::vector<const char*> get_instance_extensions(GLFWwindow* window);
   void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
 };

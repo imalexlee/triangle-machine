@@ -1,4 +1,4 @@
-#include "vk_scene.h"
+#include "vk_draw_object.h"
 #include "global_utils.h"
 #include "vk_backend/resources/vk_buffer.h"
 #include <vulkan/vulkan_core.h>
@@ -9,7 +9,7 @@ void DrawObject::create(VkDevice& device, VmaAllocator& allocator, uint32_t indi
   vertex_buffer = create_buffer(vertices_byte_len, allocator,
                                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
                                     VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                                VMA_MEMORY_USAGE_GPU_ONLY);
+                                VMA_MEMORY_USAGE_GPU_ONLY, 0);
   DEBUG_PRINT("vertex buffer size: %d", (int)vertex_buffer.info.size);
 
   VkBufferDeviceAddressInfo device_address_info{};
@@ -20,6 +20,6 @@ void DrawObject::create(VkDevice& device, VmaAllocator& allocator, uint32_t indi
 
   index_buffer =
       create_buffer(indices_byte_len, allocator, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                    VMA_MEMORY_USAGE_GPU_ONLY);
+                    VMA_MEMORY_USAGE_GPU_ONLY, 0);
   DEBUG_PRINT("index buffer size: %d", (int)index_buffer.info.size);
 }
