@@ -9,8 +9,9 @@
 #include "vk_backend/vk_pipeline.h"
 #include "vk_backend/vk_utils.h"
 #include <cstdint>
+#include <filesystem>
 #include <vector>
-#include <vk_backend/vk_draw_object.h>
+#include <vk_backend/vk_scene.h>
 #include <vk_backend/vk_swapchain.h>
 #include <vk_backend/vk_types.h>
 #include <vulkan/vulkan_core.h>
@@ -35,16 +36,18 @@ private:
   VmaAllocator _allocator;
   AllocatedImage _draw_image;
 
+  GLTFScene _scene;
+
   CommandContext _imm_cmd_context;
   VkFence _imm_fence;
+
+  AllocatedImage _depth_image;
 
   uint64_t _frame_num{1};
   std::array<Frame, FRAME_NUM> _frames;
   // the per-frame data we will write to the frames' descriptor sets
   SceneData _scene_data;
-
-  std::vector<PipelineInfo> _pipeline_infos;
-  std::vector<DrawObject> _draw_objects;
+  PipelineInfo _default_pipeline_info;
 
   DeletionQueue _deletion_queue;
 
@@ -56,15 +59,16 @@ private:
 
   // core functions
   void draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32_t swapchain_img_idx);
-  void upload_mesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
   void update_scene();
 
   // deinitialization
   void destroy();
 
   // utils
-  // inline uint64_t get_frame_index() { return _frame_num % FRAME_NUM; }
-  inline Frame& get_current_frame() { return _frames[_frame_num % FRAME_NUM]; };
+  inline Frame& get_current_frame() { return _frames[_frame_num % FRAME_NUM]; }
   std::vector<const char*> get_instance_extensions(GLFWwindow* window);
   void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
+  Primitive upload_mesh_primitives(std::span<uint32_t> indices, std::span<Vertex> vertices);
+
+  friend GLTFScene load_scene(VkBackend* backend, std::filesystem::path path);
 };

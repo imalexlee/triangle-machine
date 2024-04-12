@@ -1,17 +1,19 @@
 #include "glm/ext/matrix_clip_space.hpp"
+#include "glm/ext/matrix_float4x4.hpp"
 #include "glm/ext/matrix_transform.hpp"
 #include "global_utils.h"
 #include "vk_backend/resources/vk_buffer.h"
 #include "vk_backend/resources/vk_descriptor.h"
-#include "vk_backend/vk_draw_object.h"
+#include "vk_backend/vk_scene.h"
 #include <array>
+#include <cstdint>
 #include <vulkan/vulkan_core.h>
 #define VMA_IMPLEMENTATION
+#include "vk_mem_alloc.h"
 
 #include "vk_backend/resources/vk_loader.h"
 #include "vk_backend/vk_backend.h"
 #include "vk_backend/vk_sync.h"
-#include "vk_mem_alloc.h"
 #include <glm/gtx/transform.hpp>
 
 #ifdef NDEBUG
@@ -55,80 +57,24 @@ void VkBackend::create(Window& window) {
   }
 }
 
-void VkBackend::create_default_data() {
-  DrawObject rectangle;
-
-  std::array<Vertex, 4> rect_vertices;
-
-  rect_vertices[0].position = {0.5, -0.5, 0};
-  rect_vertices[1].position = {0.5, 0.5, 0};
-  rect_vertices[2].position = {-0.5, -0.5, 0};
-  rect_vertices[3].position = {-0.5, 0.5, 0};
-
-  rect_vertices[0].color = {0, 0, 1, 1};
-  rect_vertices[1].color = {0.5, 0.5, 0.5, 1};
-  rect_vertices[2].color = {1, 0, 0, 1};
-  rect_vertices[3].color = {0, 1, 0, 1};
-
-  std::array<uint32_t, 6> rect_indices;
-  rect_indices[0] = 0;
-  rect_indices[1] = 1;
-  rect_indices[2] = 2;
-  rect_indices[3] = 2;
-  rect_indices[4] = 1;
-  rect_indices[5] = 3;
-
-  upload_mesh(rect_indices, rect_vertices);
-}
+void VkBackend::create_default_data() { _scene = load_scene(this, "../../assets/3d/basicmesh.glb"); }
 
 void VkBackend::update_scene() {
 
+  glm::mat4 upside_down = glm::mat4{1.f};
+  upside_down[1][1] = -1;
+  _scene.update(glm::rotate(glm::mat4{1.f}, glm::radians(0.4f), glm::vec3{0, 1, 0}));
   glm::mat4 projection =
       glm::perspective(glm::radians(45.f),
-                       (float)_swapchain_context.extent.width / (float)_swapchain_context.extent.height, 0.1f, 200.0f);
+                       (float)_swapchain_context.extent.width / (float)_swapchain_context.extent.height, 0.1f, 1000.0f);
 
-  glm::vec3 cam_pos = {-0.f, -0.f, -3.f};
+  glm::vec3 cam_pos = {-0.f, -0.f, -5.f};
+
+  glm::mat4 model_matrix =
+      upside_down * glm::rotate(glm::mat4{1.f}, glm::radians(_frame_num * 1.f), glm::vec3{0.f, 1.f, 0.f});
 
   glm::mat4 view = glm::translate(glm::mat4(1.f), cam_pos);
-  _scene_data.view_proj =
-      projection * view * glm::rotate(glm::mat4{1.f}, glm::radians(_frame_num * 1.f), glm::vec3{0.f, 1.f, 0.f});
-}
-
-void VkBackend::upload_mesh(std::span<uint32_t> indices, std::span<Vertex> vertices) {
-  const size_t vertex_buffer_bytes = vertices.size() * sizeof(Vertex);
-  const size_t index_buffer_bytes = indices.size() * sizeof(uint32_t);
-
-  AllocatedBuffer staging_buf =
-      create_buffer(vertex_buffer_bytes + index_buffer_bytes, _allocator, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                    VMA_MEMORY_USAGE_CPU_ONLY, VMA_ALLOCATION_CREATE_MAPPED_BIT);
-
-  void* staging_data = staging_buf.allocation->GetMappedData();
-
-  // share staging buffer for vertices and indices
-  memcpy(staging_data, vertices.data(), vertex_buffer_bytes);
-  memcpy((char*)staging_data + vertex_buffer_bytes, indices.data(), index_buffer_bytes);
-
-  DrawObject new_object;
-  new_object.create(_device_context.logical_device, _allocator, index_buffer_bytes, vertex_buffer_bytes);
-
-  immediate_submit([&](VkCommandBuffer cmd) {
-    VkBufferCopy vertex_buffer_region{};
-    vertex_buffer_region.size = vertex_buffer_bytes;
-    vertex_buffer_region.srcOffset = 0;
-    vertex_buffer_region.dstOffset = 0;
-
-    vkCmdCopyBuffer(cmd, staging_buf.buffer, new_object.vertex_buffer.buffer, 1, &vertex_buffer_region);
-
-    VkBufferCopy index_buffer_region{};
-    index_buffer_region.size = index_buffer_bytes;
-    index_buffer_region.srcOffset = vertex_buffer_bytes;
-    index_buffer_region.dstOffset = 0;
-
-    vkCmdCopyBuffer(cmd, staging_buf.buffer, new_object.index_buffer.buffer, 1, &index_buffer_region);
-  });
-
-  _draw_objects.push_back(new_object);
-  destroy_buffer(_allocator, staging_buf);
+  _scene_data.view_proj = projection * view * upside_down;
 }
 
 void VkBackend::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function) {
@@ -204,7 +150,7 @@ void VkBackend::create_pipelines() {
   builder.set_shader_stages(vert_shader, frag_shader);
   builder.disable_blending();
   builder.set_input_assembly(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-  builder.set_raster_culling(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
+  builder.set_raster_culling(VK_CULL_MODE_FRONT_BIT, VK_FRONT_FACE_CLOCKWISE);
   builder.set_raster_poly_mode(VK_POLYGON_MODE_FILL);
   builder.set_multisample_state(VK_SAMPLE_COUNT_1_BIT);
   builder.set_depth_stencil_state(VK_FALSE, VK_FALSE, VK_COMPARE_OP_NEVER);
@@ -221,15 +167,13 @@ void VkBackend::create_pipelines() {
   builder.set_layout(set_layoutrs, push_constant_ranges, 0);
 
   PipelineInfo new_pipeline_info = builder.build_pipeline(_device_context.logical_device);
-  _pipeline_infos.push_back(new_pipeline_info);
+  _default_pipeline_info = new_pipeline_info;
 
   _deletion_queue.push_persistant([=, this]() {
     vkDestroyShaderModule(_device_context.logical_device, vert_shader, nullptr);
     vkDestroyShaderModule(_device_context.logical_device, frag_shader, nullptr);
-    for (auto& pipeline_info : _pipeline_infos) {
-      vkDestroyPipelineLayout(_device_context.logical_device, pipeline_info.pipeline_layout, nullptr);
-      vkDestroyPipeline(_device_context.logical_device, pipeline_info.pipeline, nullptr);
-    }
+    vkDestroyPipelineLayout(_device_context.logical_device, _default_pipeline_info.pipeline_layout, nullptr);
+    vkDestroyPipeline(_device_context.logical_device, _default_pipeline_info.pipeline, nullptr);
   });
 }
 
@@ -260,7 +204,7 @@ void VkBackend::draw() {
       vkAcquireNextImageKHR(_device_context.logical_device, _swapchain_context.swapchain, TIMEOUT_DURATION,
                             current_frame.present_semaphore, nullptr, &swapchain_image_index);
 
-  if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+  if (result == VK_ERROR_OUT_OF_DATE_KHR) {
     return;
   }
 
@@ -324,8 +268,8 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
   // make this use _draw_image.image after blit image is done
   VkRenderingAttachmentInfo color_attachment =
       create_color_attachment_info(_swapchain_context.image_views[swapchain_img_idx], nullptr);
-  // VkRenderingAttachmentInfo depth_attachment =
-  //    create_depth_attachment_info(_swapchain_context.image_views[swapchain_img_idx]);
+  //  VkRenderingAttachmentInfo depth_attachment =
+  //      create_depth_attachment_info(_swapchain_context.image_views[swapchain_img_idx]);
 
   VkRenderingInfo rendering_info{};
   rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -337,56 +281,109 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
   rendering_info.colorAttachmentCount = 1;
   rendering_info.layerCount = 1;
   rendering_info.pStencilAttachment = nullptr;
+  //  rendering_info.pDepthAttachment = &depth_attachment;
 
-  auto draw = [&](DrawObject& draw_object) {
-    vkCmdBeginRendering(cmd_buf, &rendering_info);
+  vkCmdBeginRendering(cmd_buf, &rendering_info);
 
-    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline_infos[0].pipeline);
+  get_current_frame().clear_scene_desc_set(_device_context.logical_device);
+  // allocate an empty set with the layout to hold our global scene data
+  VkDescriptorSet scene_desc_set = get_current_frame().create_scene_desc_set(_device_context.logical_device);
 
-    VkViewport viewport{};
-    viewport.x = 0.0f;
-    viewport.y = 0.0f;
-    viewport.width = static_cast<float>(_swapchain_context.extent.width);
-    viewport.height = static_cast<float>(_swapchain_context.extent.height);
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
-    vkCmdSetViewport(cmd_buf, 0, 1, &viewport);
+  // fill in the buffer with the updated scene data
+  SceneData* scene_data = (SceneData*)get_current_frame().scene_data_buffer.allocation->GetMappedData();
+  *scene_data = _scene_data;
 
-    VkRect2D scissor{};
-    scissor.extent = _swapchain_context.extent;
-    scissor.offset = {0, 0};
-    vkCmdSetScissor(cmd_buf, 0, 1, &scissor);
+  // connect buffer that was just filled to a binding then hook it up to the allocated desc set
+  DescriptorWriter writer;
+  writer.write_buffer(0, get_current_frame().scene_data_buffer.buffer, sizeof(SceneData), 0,
+                      VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+  writer.update_set(_device_context.logical_device, scene_desc_set);
+  writer.clear();
 
-    get_current_frame().clear_desc_set(_device_context.logical_device);
-    // allocate an empty set with the layout to hold our global scene data
-    VkDescriptorSet scene_desc_set = get_current_frame().create_desc_set(_device_context.logical_device);
+  auto draw = [&](DrawNode& draw_node) {
+    for (Primitive& primitive : draw_node.mesh->primitives) {
+      vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, _default_pipeline_info.pipeline);
 
-    // fill in the buffer with the updated scene data
-    SceneData* scene_data = (SceneData*)get_current_frame().scene_data_buffer.allocation->GetMappedData();
-    *scene_data = _scene_data;
+      VkViewport viewport{};
+      viewport.x = 0.0f;
+      viewport.y = 0.0f;
+      viewport.width = static_cast<float>(_swapchain_context.extent.width);
+      viewport.height = static_cast<float>(_swapchain_context.extent.height);
+      viewport.minDepth = 0.0f;
+      viewport.maxDepth = 1.0f;
+      vkCmdSetViewport(cmd_buf, 0, 1, &viewport);
 
-    DescriptorWriter writer;
-    writer.write_buffer(0, get_current_frame().scene_data_buffer.buffer, sizeof(SceneData), 0,
-                        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-    writer.update_set(_device_context.logical_device, scene_desc_set);
-    writer.clear();
+      VkRect2D scissor{};
+      scissor.extent = _swapchain_context.extent;
+      scissor.offset = {0, 0};
+      vkCmdSetScissor(cmd_buf, 0, 1, &scissor);
 
-    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline_infos[0].pipeline_layout, 0, 1,
-                            &scene_desc_set, 0, nullptr);
+      vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, _default_pipeline_info.pipeline_layout, 0, 1,
+                              &scene_desc_set, 0, nullptr);
 
-    vkCmdPushConstants(cmd_buf, _pipeline_infos[0].pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
-                       sizeof(DrawObjectPushConstants), &draw_object.push_constants);
+      DrawObjectPushConstants push_constants{
+          .local_transform = draw_node.local_transform,
+          .vertex_buffer_address = primitive.vertex_buffer_address,
+      };
 
-    vkCmdBindIndexBuffer(cmd_buf, draw_object.index_buffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+      vkCmdPushConstants(cmd_buf, _default_pipeline_info.pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
+                         sizeof(DrawObjectPushConstants), &push_constants);
 
-    vkCmdDrawIndexed(cmd_buf, 6, 1, 0, 0, 0);
+      vkCmdBindIndexBuffer(cmd_buf, primitive.indices.buffer, 0, VK_INDEX_TYPE_UINT32);
 
-    vkCmdEndRendering(cmd_buf);
+      uint32_t indices_count = primitive.indices.info.size / sizeof(uint32_t);
+      vkCmdDrawIndexed(cmd_buf, indices_count, 1, 0, 0, 0);
+    }
   };
 
-  for (auto& draw_object : _draw_objects) {
-    draw(draw_object);
-  }
+  // for (DrawNode& node : _scene.draw_ctx.opaque_nodes) {
+  draw(_scene.draw_ctx.opaque_nodes[2]);
+  // }
+
+  vkCmdEndRendering(cmd_buf);
+}
+
+Primitive VkBackend::upload_mesh_primitives(std::span<uint32_t> indices, std::span<Vertex> vertices) {
+  const size_t vertex_buffer_bytes = vertices.size() * sizeof(Vertex);
+  const size_t index_buffer_bytes = indices.size() * sizeof(uint32_t);
+
+  AllocatedBuffer staging_buf =
+      create_buffer(vertex_buffer_bytes + index_buffer_bytes, _allocator, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                    VMA_MEMORY_USAGE_CPU_ONLY, VMA_ALLOCATION_CREATE_MAPPED_BIT);
+
+  void* staging_data = staging_buf.allocation->GetMappedData();
+
+  // share staging buffer for vertices and indices
+  memcpy(staging_data, vertices.data(), vertex_buffer_bytes);
+  memcpy((char*)staging_data + vertex_buffer_bytes, indices.data(), index_buffer_bytes);
+
+  Primitive new_primitive;
+  new_primitive.vertices = create_buffer(vertex_buffer_bytes, _allocator,
+                                         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                                             VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                                         VMA_MEMORY_USAGE_GPU_ONLY, 0);
+  new_primitive.indices =
+      create_buffer(index_buffer_bytes, _allocator, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                    VMA_MEMORY_USAGE_GPU_ONLY, 0);
+
+  immediate_submit([&](VkCommandBuffer cmd) {
+    VkBufferCopy vertex_buffer_region{};
+    vertex_buffer_region.size = vertex_buffer_bytes;
+    vertex_buffer_region.srcOffset = 0;
+    vertex_buffer_region.dstOffset = 0;
+
+    vkCmdCopyBuffer(cmd, staging_buf.buffer, new_primitive.vertices.buffer, 1, &vertex_buffer_region);
+
+    VkBufferCopy index_buffer_region{};
+    index_buffer_region.size = index_buffer_bytes;
+    index_buffer_region.srcOffset = vertex_buffer_bytes;
+    index_buffer_region.dstOffset = 0;
+
+    vkCmdCopyBuffer(cmd, staging_buf.buffer, new_primitive.indices.buffer, 1, &index_buffer_region);
+  });
+
+  destroy_buffer(_allocator, staging_buf);
+  return new_primitive;
 }
 
 void VkBackend::destroy() {
@@ -403,10 +400,10 @@ void VkBackend::destroy() {
     destroy_buffer(_allocator, frame.scene_data_buffer);
   }
 
-  for (DrawObject& obj : _draw_objects) {
-    destroy_buffer(_allocator, obj.index_buffer);
-    destroy_buffer(_allocator, obj.vertex_buffer);
-  }
+  // for (DrawNode& obj : _draw_nodes) {
+  //   destroy_buffer(_allocator, obj.mesh->indices);
+  //   destroy_buffer(_allocator, obj.mesh->vertices);
+  // }
 
   destroy_image(_device_context.logical_device, _allocator, _draw_image);
   vmaDestroyAllocator(_allocator);

@@ -5,8 +5,11 @@
 
 #include <GLFW/glfw3.h>
 #include <fmt/base.h>
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/quaternion.hpp>
 #include <glm/gtx/transform.hpp>
 #include <glm/mat4x4.hpp>
+
 #include <glm/vec4.hpp>
 #include <global_utils.h>
 #include <vk_backend/vk_utils.h>

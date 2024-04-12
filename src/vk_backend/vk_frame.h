@@ -18,12 +18,13 @@ public:
   VkSemaphore present_semaphore;
   VkFence render_fence;
   AllocatedBuffer scene_data_buffer;
+  // descriptor layout and allocator for the overall scene data
   VkDescriptorSetLayout desc_set_layout;
   DescriptorAllocator desc_allocator;
 
   void create(VkDevice device, VmaAllocator allocator, uint32_t graphics_family_index);
-  VkDescriptorSet create_desc_set(VkDevice device);
-  void clear_desc_set(VkDevice device);
+  VkDescriptorSet create_scene_desc_set(VkDevice device);
+  void clear_scene_desc_set(VkDevice device);
   void destroy();
   void reset_sync_structures(VkDevice device);
 

@@ -30,7 +30,8 @@ add_executable(
   src/vk_backend/vk_pipeline.cpp
   src/vk_backend/vk_sync.cpp
   src/vk_backend/vk_frame.cpp
-  src/vk_backend/vk_draw_object.cpp
+  src/vk_backend/vk_scene.cpp
+  src/vk_backend/vk_vma_usage.cpp
   src/vk_backend/resources/vk_descriptor.cpp
   src/vk_backend/resources/vk_loader.cpp
   src/vk_backend/resources/vk_buffer.cpp
@@ -43,7 +44,7 @@ endif()
 
 add_subdirectory(thirdparty/fmt)
 add_subdirectory(thirdparty/VulkanMemoryAllocator)
-# add_subdirectory(thirdparty/fastgltf)
+add_subdirectory(thirdparty/fastgltf)
 add_subdirectory(thirdparty)
 
 target_include_directories(
@@ -52,7 +53,7 @@ target_include_directories(
   PUBLIC thirdparty/glm
   PUBLIC thirdparty/fmt/include
   PUBLIC thirdparty/stb_image
-  # PUBLIC thirdparty/fastgltf/include
+  PUBLIC thirdparty/fastgltf/include
   PUBLIC thirdparty/VulkanMemoryAllocator/include)
 # PUBLIC $ENV{VULKAN_SDK_PATH}/include
 
@@ -69,7 +70,7 @@ target_link_directories(
 target_link_libraries(
   ${PROJECT_NAME}
   PRIVATE glfw
-  # PRIVATE fastgltf
+  PRIVATE fastgltf
   PRIVATE fmt
   PRIVATE VulkanMemoryAllocator
   PRIVATE Vulkan::Vulkan

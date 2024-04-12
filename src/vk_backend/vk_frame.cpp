@@ -35,9 +35,11 @@ void Frame::create(VkDevice device, VmaAllocator allocator, uint32_t graphics_fa
   });
 }
 
-VkDescriptorSet Frame::create_desc_set(VkDevice device) { return desc_allocator.allocate(device, desc_set_layout); }
+VkDescriptorSet Frame::create_scene_desc_set(VkDevice device) {
+  return desc_allocator.allocate(device, desc_set_layout);
+}
 
-void Frame::clear_desc_set(VkDevice device) { desc_allocator.clear_pools(device); }
+void Frame::clear_scene_desc_set(VkDevice device) { desc_allocator.clear_pools(device); }
 
 void Frame::reset_sync_structures(VkDevice device) {
   _deletion_queue.flush_volatile();
