@@ -2,20 +2,9 @@
 #include "fastgltf/core.hpp"
 #include "fastgltf/tools.hpp"
 #include "fastgltf/types.hpp"
-#include "fmt/base.h"
-#include "glm/ext/matrix_float4x4.hpp"
-#include "global_utils.h"
 #include "vk_backend/resources/vk_buffer.h"
-#include "vk_backend/vk_scene.h"
-#include <cassert>
-#include <cstdint>
-#include <cstdlib>
 #include <fastgltf/glm_element_traits.hpp>
 #include <fstream>
-#include <ios>
-#include <memory>
-#include <utility>
-#include <vector>
 #include <vulkan/vulkan_core.h>
 
 static int node_count = 0;
@@ -65,10 +54,8 @@ DrawNode create_node_tree(fastgltf::Asset& asset, GLTFScene& scene, uint32_t roo
   DrawNode root_node;
   auto& root_gltf_node = asset.nodes[root_node_idx];
   root_node.local_transform = get_transform_matrix(root_gltf_node, parent_matrix);
-  DEBUG_PRINT("%d direct children", (int)root_gltf_node.children.size());
   for (uint32_t child_node_idx : root_gltf_node.children) {
     DrawNode new_child_node = create_node_tree(asset, scene, child_node_idx, root_node.local_transform);
-    DEBUG_PRINT("adding a child node to children vector");
     root_node.children.push_back(new_child_node);
   }
 
@@ -155,13 +142,19 @@ GLTFScene load_scene(VkBackend* backend, std::filesystem::path path) {
   // only deal with first scene in the gltf for now
   std::vector<DrawNode> top_nodes(asset.scenes[0].nodeIndices.size());
   for (uint32_t root_node_idx : asset.scenes[0].nodeIndices) {
-    DEBUG_PRINT("adding a root node");
     DrawNode root_node = create_node_tree(asset, new_scene, root_node_idx);
-
     new_scene.root_nodes.push_back(root_node);
-    // DEBUG_PRINT("children length: %d", (int)root_node.children.size());
   }
-  DEBUG_PRINT("node count: %d", node_count);
 
   return new_scene;
+}
+
+void destroy_scene(VkDevice device, VmaAllocator allocator, GLTFScene& scene) {
+  DEBUG_PRINT("Destroying Scene");
+  for (auto& mesh : scene.meshes) {
+    destroy_buffer(allocator, mesh->buffers.indices);
+    destroy_buffer(allocator, mesh->buffers.vertices);
+  }
+  vkDestroyPipelineLayout(device, scene.opaque_pipeline_info->pipeline_layout, nullptr);
+  vkDestroyPipeline(device, scene.opaque_pipeline_info->pipeline, nullptr);
 }

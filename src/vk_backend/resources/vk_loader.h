@@ -10,3 +10,5 @@
 VkShaderModule load_shader_module(VkDevice device, const char* file_path);
 
 GLTFScene load_scene(VkBackend* backend, std::filesystem::path path);
+
+void destroy_scene(VkDevice device, VmaAllocator allocator, GLTFScene& scene);

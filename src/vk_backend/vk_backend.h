@@ -6,7 +6,6 @@
 #include "vk_backend/vk_debug.h"
 #include "vk_backend/vk_device.h"
 #include "vk_backend/vk_frame.h"
-#include "vk_backend/vk_pipeline.h"
 #include "vk_backend/vk_utils.h"
 #include <cstdint>
 #include <filesystem>
@@ -47,7 +46,7 @@ private:
   std::array<Frame, FRAME_NUM> _frames;
   // the per-frame data we will write to the frames' descriptor sets
   SceneData _scene_data;
-  PipelineInfo _default_pipeline_info;
+  //  PipelineInfo _default_pipeline_info;
 
   DeletionQueue _deletion_queue;
 

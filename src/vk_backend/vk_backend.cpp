@@ -1,3 +1,4 @@
+#include "vk_backend/vk_pipeline.h"
 #include <chrono>
 #define VMA_IMPLEMENTATION
 #include "global_utils.h"
@@ -6,9 +7,6 @@
 #include "vk_backend/resources/vk_image.h"
 #include "vk_backend/vk_scene.h"
 #include "vk_mem_alloc.h"
-#include <array>
-#include <cstdint>
-#include <vulkan/vulkan_core.h>
 
 #include "vk_backend/resources/vk_loader.h"
 #include "vk_backend/vk_backend.h"
@@ -49,8 +47,8 @@ void VkBackend::create(Window& window) {
   _imm_fence = create_fence(_device_context.logical_device, VK_FENCE_CREATE_SIGNALED_BIT);
   _imm_cmd_context.create(_device_context.logical_device, _device_context.queues.graphics_family_index,
                           VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
-  create_pipelines();
   create_default_data();
+  create_pipelines();
 
   if (use_validation_layers) {
     _debugger.create(_instance);
@@ -62,7 +60,7 @@ void VkBackend::create_default_data() { _scene = load_scene(this, "../../assets/
 void VkBackend::update_scene() {
   using namespace std::chrono;
   static auto t1 = high_resolution_clock::now();
-  auto time_span = duration_cast<duration<float>>(std::chrono::high_resolution_clock::now() - t1);
+  auto time_span = duration_cast<duration<float>>(high_resolution_clock::now() - t1);
 
   glm::mat4 upside_down = glm::mat4{1.f};
   upside_down[1][1] *= -1;
@@ -169,13 +167,12 @@ void VkBackend::create_pipelines() {
   builder.set_layout(set_layoutrs, push_constant_ranges, 0);
 
   PipelineInfo new_pipeline_info = builder.build_pipeline(_device_context.logical_device);
-  _default_pipeline_info = new_pipeline_info;
+
+  _scene.opaque_pipeline_info = std::make_shared<PipelineInfo>(new_pipeline_info);
 
   _deletion_queue.push_persistant([=, this]() {
     vkDestroyShaderModule(_device_context.logical_device, vert_shader, nullptr);
     vkDestroyShaderModule(_device_context.logical_device, frag_shader, nullptr);
-    vkDestroyPipelineLayout(_device_context.logical_device, _default_pipeline_info.pipeline_layout, nullptr);
-    vkDestroyPipeline(_device_context.logical_device, _default_pipeline_info.pipeline, nullptr);
   });
 }
 
@@ -262,7 +259,11 @@ void VkBackend::draw() {
 void VkBackend::resize(uint32_t width, uint32_t height) {
   vkDeviceWaitIdle(_device_context.logical_device);
   _swapchain_context.reset_swapchain(_device_context, width, height);
-  // TODO: recreate depth image with new extent
+
+  destroy_image(_device_context.logical_device, _allocator, _depth_image);
+  _depth_image = create_image(_device_context.logical_device, _allocator, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                              _swapchain_context.extent, VK_FORMAT_D32_SFLOAT);
+
   for (Frame& frame : _frames) {
     frame.reset_sync_structures(_device_context.logical_device);
   }
@@ -305,10 +306,11 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
   writer.update_set(_device_context.logical_device, scene_desc_set);
   writer.clear();
 
-  auto draw = [&](DrawNode& draw_node) {
+  auto draw = [&](const DrawNode& draw_node) {
+    // TODO: attach either opaque or transparent pipeline based on primitive flag
     for (Primitive& primitive : draw_node.mesh.value()->primitives) {
-      vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, _default_pipeline_info.pipeline);
-      auto mesh = draw_node.mesh->get();
+      vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, _scene.opaque_pipeline_info->pipeline);
+      const auto mesh = draw_node.mesh->get();
 
       VkViewport viewport{};
       viewport.x = 0.0f;
@@ -324,15 +326,15 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
       scissor.offset = {0, 0};
       vkCmdSetScissor(cmd_buf, 0, 1, &scissor);
 
-      vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, _default_pipeline_info.pipeline_layout, 0, 1,
-                              &scene_desc_set, 0, nullptr);
+      vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, _scene.opaque_pipeline_info->pipeline_layout, 0,
+                              1, &scene_desc_set, 0, nullptr);
 
       DrawObjectPushConstants push_constants{
           .local_transform = draw_node.local_transform,
           .vertex_buffer_address = mesh->buffers.vertex_buffer_address,
       };
 
-      vkCmdPushConstants(cmd_buf, _default_pipeline_info.pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
+      vkCmdPushConstants(cmd_buf, _scene.opaque_pipeline_info->pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
                          sizeof(DrawObjectPushConstants), &push_constants);
 
       vkCmdBindIndexBuffer(cmd_buf, mesh->buffers.indices.buffer, 0, VK_INDEX_TYPE_UINT32);
@@ -342,7 +344,7 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
     }
   };
 
-  for (DrawNode& node : _scene.draw_ctx.opaque_nodes) {
+  for (const DrawNode& node : _scene.draw_ctx.opaque_nodes) {
     draw(node);
   }
 
@@ -406,12 +408,10 @@ void VkBackend::destroy() {
     destroy_buffer(_allocator, frame.scene_data_buffer);
   }
 
-  // for (DrawNode& obj : _draw_nodes) {
-  //   destroy_buffer(_allocator, obj.mesh->indices);
-  //   destroy_buffer(_allocator, obj.mesh->vertices);
-  // }
-
+  destroy_scene(_device_context.logical_device, _allocator, _scene);
   destroy_image(_device_context.logical_device, _allocator, _draw_image);
+  destroy_image(_device_context.logical_device, _allocator, _depth_image);
+
   vmaDestroyAllocator(_allocator);
 
   vkDestroyFence(_device_context.logical_device, _imm_fence, nullptr);

@@ -1,6 +1,5 @@
 #include "vk_sync.h"
 #include "vk_backend/resources/vk_image.h"
-#include <vulkan/vulkan_core.h>
 
 VkSemaphore create_semaphore(VkDevice device, VkSemaphoreType type, uint64_t initial_timeline_value) {
   VkSemaphore semaphore;
