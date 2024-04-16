@@ -10,7 +10,7 @@ endif()
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
-set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+# set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -Ofast")
 
 if(UNIX AND NOT APPLE)
   add_link_options("-lglfw;-lvulkan;-lXxf86vm;-lXrandr;-lXi")
@@ -38,6 +38,10 @@ add_executable(
   src/vk_backend/resources/vk_image.cpp)
 
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_23)
+target_compile_options(${PROJECT_NAME} PUBLIC "$<$<CONFIG:DEBUG>:-g>")
+target_compile_options(${PROJECT_NAME}
+                       PUBLIC "$<$<CONFIG:RELEASE>:-Ofast;-flto>")
+
 if(APPLE)
   enable_language(OBJC)
 endif()

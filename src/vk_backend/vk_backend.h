@@ -68,7 +68,7 @@ private:
   inline Frame& get_current_frame() { return _frames[_frame_num % FRAME_NUM]; }
   std::vector<const char*> get_instance_extensions(GLFWwindow* window);
   void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
-  Primitive upload_mesh_primitives(std::span<uint32_t> indices, std::span<Vertex> vertices);
+  MeshBuffers upload_mesh_buffers(std::span<uint32_t> indices, std::span<Vertex> vertices);
 
   friend GLTFScene load_scene(VkBackend* backend, std::filesystem::path path);
 };

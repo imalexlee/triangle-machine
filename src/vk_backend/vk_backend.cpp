@@ -57,7 +57,7 @@ void VkBackend::create(Window& window) {
   }
 }
 
-void VkBackend::create_default_data() { _scene = load_scene(this, "../../assets/3d/basicmesh.glb"); }
+void VkBackend::create_default_data() { _scene = load_scene(this, "../../assets/3d/porsche_large.glb"); }
 
 void VkBackend::update_scene() {
   using namespace std::chrono;
@@ -67,15 +67,16 @@ void VkBackend::update_scene() {
   glm::mat4 upside_down = glm::mat4{1.f};
   upside_down[1][1] *= -1;
 
-  glm::vec3 cam_pos = {-0.f, -0.f, -5.f};
+  glm::vec3 cam_pos = {0, 1, -8};
 
-  glm::mat4 model = upside_down * glm::rotate(glm::mat4{1.f}, glm::radians(time_span.count() * 30), glm::vec3{0, 1, 1});
+  glm::mat4 model = upside_down * glm::rotate(glm::mat4{1.f}, glm::radians(time_span.count() * 30), glm::vec3{0, 1, 0});
   glm::mat4 view = glm::translate(glm::mat4(1.f), cam_pos);
   glm::mat4 projection = glm::perspective(
-      glm::radians(45.f), (float)_swapchain_context.extent.width / (float)_swapchain_context.extent.height, 10000.0f,
+      glm::radians(60.f), (float)_swapchain_context.extent.width / (float)_swapchain_context.extent.height, 10000.0f,
       0.1f);
 
   _scene_data.view_proj = projection * view * model;
+  _scene.update(0);
 }
 
 void VkBackend::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function) {
@@ -305,8 +306,9 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
   writer.clear();
 
   auto draw = [&](DrawNode& draw_node) {
-    for (Primitive& primitive : draw_node.mesh->primitives) {
+    for (Primitive& primitive : draw_node.mesh.value()->primitives) {
       vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, _default_pipeline_info.pipeline);
+      auto mesh = draw_node.mesh->get();
 
       VkViewport viewport{};
       viewport.x = 0.0f;
@@ -327,27 +329,27 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
 
       DrawObjectPushConstants push_constants{
           .local_transform = draw_node.local_transform,
-          .vertex_buffer_address = primitive.vertex_buffer_address,
+          .vertex_buffer_address = mesh->buffers.vertex_buffer_address,
       };
 
       vkCmdPushConstants(cmd_buf, _default_pipeline_info.pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
                          sizeof(DrawObjectPushConstants), &push_constants);
 
-      vkCmdBindIndexBuffer(cmd_buf, primitive.indices.buffer, 0, VK_INDEX_TYPE_UINT32);
+      vkCmdBindIndexBuffer(cmd_buf, mesh->buffers.indices.buffer, 0, VK_INDEX_TYPE_UINT32);
 
-      uint32_t indices_count = primitive.indices.info.size / sizeof(uint32_t);
-      vkCmdDrawIndexed(cmd_buf, indices_count, 1, 0, 0, 0);
+      uint32_t indices_count = mesh->buffers.indices.info.size / sizeof(uint32_t);
+      vkCmdDrawIndexed(cmd_buf, indices_count, 1, primitive.indices_start, 0, 0);
     }
   };
 
-  // for (DrawNode& node : _scene.draw_ctx.opaque_nodes) {
-  draw(_scene.draw_ctx.opaque_nodes[2]);
-  // }
+  for (DrawNode& node : _scene.draw_ctx.opaque_nodes) {
+    draw(node);
+  }
 
   vkCmdEndRendering(cmd_buf);
 }
 
-Primitive VkBackend::upload_mesh_primitives(std::span<uint32_t> indices, std::span<Vertex> vertices) {
+MeshBuffers VkBackend::upload_mesh_buffers(std::span<uint32_t> indices, std::span<Vertex> vertices) {
   const size_t vertex_buffer_bytes = vertices.size() * sizeof(Vertex);
   const size_t index_buffer_bytes = indices.size() * sizeof(uint32_t);
 
@@ -361,12 +363,12 @@ Primitive VkBackend::upload_mesh_primitives(std::span<uint32_t> indices, std::sp
   memcpy(staging_data, vertices.data(), vertex_buffer_bytes);
   memcpy((char*)staging_data + vertex_buffer_bytes, indices.data(), index_buffer_bytes);
 
-  Primitive new_primitive;
-  new_primitive.vertices = create_buffer(vertex_buffer_bytes, _allocator,
-                                         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                                             VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                                         VMA_MEMORY_USAGE_GPU_ONLY, 0);
-  new_primitive.indices =
+  MeshBuffers new_mesh_buffer;
+  new_mesh_buffer.vertices = create_buffer(vertex_buffer_bytes, _allocator,
+                                           VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                                               VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                                           VMA_MEMORY_USAGE_GPU_ONLY, 0);
+  new_mesh_buffer.indices =
       create_buffer(index_buffer_bytes, _allocator, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                     VMA_MEMORY_USAGE_GPU_ONLY, 0);
 
@@ -376,18 +378,18 @@ Primitive VkBackend::upload_mesh_primitives(std::span<uint32_t> indices, std::sp
     vertex_buffer_region.srcOffset = 0;
     vertex_buffer_region.dstOffset = 0;
 
-    vkCmdCopyBuffer(cmd, staging_buf.buffer, new_primitive.vertices.buffer, 1, &vertex_buffer_region);
+    vkCmdCopyBuffer(cmd, staging_buf.buffer, new_mesh_buffer.vertices.buffer, 1, &vertex_buffer_region);
 
     VkBufferCopy index_buffer_region{};
     index_buffer_region.size = index_buffer_bytes;
     index_buffer_region.srcOffset = vertex_buffer_bytes;
     index_buffer_region.dstOffset = 0;
 
-    vkCmdCopyBuffer(cmd, staging_buf.buffer, new_primitive.indices.buffer, 1, &index_buffer_region);
+    vkCmdCopyBuffer(cmd, staging_buf.buffer, new_mesh_buffer.indices.buffer, 1, &index_buffer_region);
   });
 
   destroy_buffer(_allocator, staging_buf);
-  return new_primitive;
+  return new_mesh_buffer;
 }
 
 void VkBackend::destroy() {
