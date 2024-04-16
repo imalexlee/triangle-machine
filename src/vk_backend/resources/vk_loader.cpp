@@ -3,9 +3,6 @@
 #include "fastgltf/tools.hpp"
 #include "fastgltf/types.hpp"
 #include "fmt/base.h"
-#include "glm/ext/matrix_float4x4.hpp"
-#include "glm/gtc/type_ptr.hpp"
-#include "global_utils.h"
 #include "vk_backend/resources/vk_buffer.h"
 #include "vk_backend/vk_scene.h"
 #include <cassert>
@@ -98,7 +95,6 @@ GLTFScene load_scene(VkBackend* backend, std::filesystem::path path) {
   for (auto& mesh : asset.meshes) {
     auto new_mesh = std::make_shared<Mesh>();
     new_mesh->name = mesh.name.c_str();
-    DEBUG_PRINT("MESH");
 
     for (auto& primitive : mesh.primitives) {
       Primitive new_primitive;

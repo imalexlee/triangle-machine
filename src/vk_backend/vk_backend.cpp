@@ -1,20 +1,18 @@
-#include "glm/ext/matrix_clip_space.hpp"
-#include "glm/ext/matrix_float4x4.hpp"
-#include "glm/ext/matrix_transform.hpp"
+#include <chrono>
+#define VMA_IMPLEMENTATION
 #include "global_utils.h"
 #include "vk_backend/resources/vk_buffer.h"
 #include "vk_backend/resources/vk_descriptor.h"
+#include "vk_backend/resources/vk_image.h"
 #include "vk_backend/vk_scene.h"
+#include "vk_mem_alloc.h"
 #include <array>
 #include <cstdint>
 #include <vulkan/vulkan_core.h>
-#define VMA_IMPLEMENTATION
-#include "vk_mem_alloc.h"
 
 #include "vk_backend/resources/vk_loader.h"
 #include "vk_backend/vk_backend.h"
 #include "vk_backend/vk_sync.h"
-#include <glm/gtx/transform.hpp>
 
 #ifdef NDEBUG
 constexpr bool use_validation_layers = false;
@@ -45,6 +43,8 @@ void VkBackend::create(Window& window) {
       create_image(_device_context.logical_device, _allocator,
                    VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
                    image_extent, VK_FORMAT_R16G16B16A16_SFLOAT);
+  _depth_image = create_image(_device_context.logical_device, _allocator, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                              _swapchain_context.extent, VK_FORMAT_D32_SFLOAT);
 
   _imm_fence = create_fence(_device_context.logical_device, VK_FENCE_CREATE_SIGNALED_BIT);
   _imm_cmd_context.create(_device_context.logical_device, _device_context.queues.graphics_family_index,
@@ -60,21 +60,22 @@ void VkBackend::create(Window& window) {
 void VkBackend::create_default_data() { _scene = load_scene(this, "../../assets/3d/basicmesh.glb"); }
 
 void VkBackend::update_scene() {
+  using namespace std::chrono;
+  static auto t1 = high_resolution_clock::now();
+  auto time_span = duration_cast<duration<float>>(std::chrono::high_resolution_clock::now() - t1);
 
   glm::mat4 upside_down = glm::mat4{1.f};
-  upside_down[1][1] = -1;
-  _scene.update(glm::rotate(glm::mat4{1.f}, glm::radians(0.4f), glm::vec3{0, 1, 0}));
-  glm::mat4 projection =
-      glm::perspective(glm::radians(45.f),
-                       (float)_swapchain_context.extent.width / (float)_swapchain_context.extent.height, 0.1f, 1000.0f);
+  upside_down[1][1] *= -1;
 
   glm::vec3 cam_pos = {-0.f, -0.f, -5.f};
 
-  glm::mat4 model_matrix =
-      upside_down * glm::rotate(glm::mat4{1.f}, glm::radians(_frame_num * 1.f), glm::vec3{0.f, 1.f, 0.f});
-
+  glm::mat4 model = upside_down * glm::rotate(glm::mat4{1.f}, glm::radians(time_span.count() * 30), glm::vec3{0, 1, 1});
   glm::mat4 view = glm::translate(glm::mat4(1.f), cam_pos);
-  _scene_data.view_proj = projection * view * upside_down;
+  glm::mat4 projection = glm::perspective(
+      glm::radians(45.f), (float)_swapchain_context.extent.width / (float)_swapchain_context.extent.height, 10000.0f,
+      0.1f);
+
+  _scene_data.view_proj = projection * view * model;
 }
 
 void VkBackend::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function) {
@@ -143,9 +144,9 @@ void VkBackend::create_pipelines() {
 
   // cosider passing the shader locations in from the renderer instead of here
   VkShaderModule vert_shader =
-      load_shader_module(_device_context.logical_device, "../../assets/shaders/vertex/indexed_triangle.vert.glsl.spv");
+      load_shader_module(_device_context.logical_device, "../../shaders/vertex/indexed_triangle.vert.glsl.spv");
   VkShaderModule frag_shader =
-      load_shader_module(_device_context.logical_device, "../../assets/shaders/fragment/triangle.frag.glsl.spv");
+      load_shader_module(_device_context.logical_device, "../../shaders/fragment/triangle.frag.glsl.spv");
 
   builder.set_shader_stages(vert_shader, frag_shader);
   builder.disable_blending();
@@ -153,8 +154,8 @@ void VkBackend::create_pipelines() {
   builder.set_raster_culling(VK_CULL_MODE_FRONT_BIT, VK_FRONT_FACE_CLOCKWISE);
   builder.set_raster_poly_mode(VK_POLYGON_MODE_FILL);
   builder.set_multisample_state(VK_SAMPLE_COUNT_1_BIT);
-  builder.set_depth_stencil_state(VK_FALSE, VK_FALSE, VK_COMPARE_OP_NEVER);
-  builder.set_render_info(_swapchain_context.format, VK_FORMAT_UNDEFINED);
+  builder.set_depth_stencil_state(true, true, VK_COMPARE_OP_GREATER_OR_EQUAL);
+  builder.set_render_info(_swapchain_context.format, _depth_image.image_format);
 
   VkPushConstantRange push_constant_range{};
   push_constant_range.size = sizeof(DrawObjectPushConstants);
@@ -222,6 +223,8 @@ void VkBackend::draw() {
 
   insert_image_memory_barrier(cmd_buffer, _swapchain_context.images[swapchain_image_index],
                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+  insert_image_memory_barrier(cmd_buffer, _depth_image.image, VK_IMAGE_LAYOUT_UNDEFINED,
+                              VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
   draw_geometry(cmd_buffer, _swapchain_context.extent, swapchain_image_index);
 
@@ -258,6 +261,7 @@ void VkBackend::draw() {
 void VkBackend::resize(uint32_t width, uint32_t height) {
   vkDeviceWaitIdle(_device_context.logical_device);
   _swapchain_context.reset_swapchain(_device_context, width, height);
+  // TODO: recreate depth image with new extent
   for (Frame& frame : _frames) {
     frame.reset_sync_structures(_device_context.logical_device);
   }
@@ -268,8 +272,8 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
   // make this use _draw_image.image after blit image is done
   VkRenderingAttachmentInfo color_attachment =
       create_color_attachment_info(_swapchain_context.image_views[swapchain_img_idx], nullptr);
-  //  VkRenderingAttachmentInfo depth_attachment =
-  //      create_depth_attachment_info(_swapchain_context.image_views[swapchain_img_idx]);
+
+  VkRenderingAttachmentInfo depth_attachment = create_depth_attachment_info(_depth_image.image_view);
 
   VkRenderingInfo rendering_info{};
   rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -281,7 +285,7 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
   rendering_info.colorAttachmentCount = 1;
   rendering_info.layerCount = 1;
   rendering_info.pStencilAttachment = nullptr;
-  //  rendering_info.pDepthAttachment = &depth_attachment;
+  rendering_info.pDepthAttachment = &depth_attachment;
 
   vkCmdBeginRendering(cmd_buf, &rendering_info);
 

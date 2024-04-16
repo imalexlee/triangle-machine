@@ -34,13 +34,13 @@ private:
   Debugger _debugger;
   SwapchainContext _swapchain_context;
   VmaAllocator _allocator;
-  AllocatedImage _draw_image;
 
   GLTFScene _scene;
 
   CommandContext _imm_cmd_context;
   VkFence _imm_fence;
 
+  AllocatedImage _draw_image;
   AllocatedImage _depth_image;
 
   uint64_t _frame_num{1};

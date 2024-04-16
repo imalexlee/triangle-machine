@@ -83,12 +83,12 @@ find_program(
         $ENV{VULKAN_SDK_PATH}/Bin32/)
 
 file(GLOB_RECURSE GLSL_SOURCE_FILES_VERTEX
-     "${PROJECT_SOURCE_DIR}/assets/shaders/vertex/*.vert.glsl")
+     "${PROJECT_SOURCE_DIR}/shaders/vertex/*.vert.glsl")
 
 foreach(GLSL ${GLSL_SOURCE_FILES_VERTEX})
   message(STATUS "BUILDING SHADER")
   get_filename_component(FILE_NAME ${GLSL} NAME)
-  set(SPIRV "${PROJECT_SOURCE_DIR}/assets/shaders/vertex/${FILE_NAME}.spv")
+  set(SPIRV "${PROJECT_SOURCE_DIR}/shaders/vertex/${FILE_NAME}.spv")
   message(STATUS ${GLSL})
   add_custom_command(
     OUTPUT ${SPIRV}
@@ -98,12 +98,12 @@ foreach(GLSL ${GLSL_SOURCE_FILES_VERTEX})
 endforeach(GLSL)
 
 file(GLOB_RECURSE GLSL_SOURCE_FILES_FRAGMENT
-     "${PROJECT_SOURCE_DIR}/assets/shaders/fragment/*.frag.glsl")
+     "${PROJECT_SOURCE_DIR}/shaders/fragment/*.frag.glsl")
 
 foreach(GLSL ${GLSL_SOURCE_FILES_FRAGMENT})
   message(STATUS "BUILDING SHADER")
   get_filename_component(FILE_NAME ${GLSL} NAME)
-  set(SPIRV "${PROJECT_SOURCE_DIR}/assets/shaders/fragment/${FILE_NAME}.spv")
+  set(SPIRV "${PROJECT_SOURCE_DIR}/shaders/fragment/${FILE_NAME}.spv")
   message(STATUS ${GLSL})
   add_custom_command(
     OUTPUT ${SPIRV}
