@@ -2,7 +2,7 @@
 #include <vulkan/vk_enum_string_helper.h>
 #include <vulkan/vulkan_core.h>
 
-// creates a 2D image
+// creates a 2D image along with its image_view
 AllocatedImage create_image(VkDevice device, VmaAllocator allocator, VkImageUsageFlags usage, VkExtent2D extent,
                             VkFormat format) {
 

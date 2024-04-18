@@ -11,10 +11,6 @@ void GLTFScene::update(uint32_t root_node_idx, glm::mat4 top_matrix) {
   }
 }
 
-void GLTFScene::set_pipelines(PipelineInfo opaque_pipeline) {
-  // TODO: conditionally attach transparent pipelines too
-}
-
 void GLTFScene::add_nodes_to_context(DrawNode& root_node) {
 
   for (auto& child_node : root_node.children) {

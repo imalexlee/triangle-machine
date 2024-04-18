@@ -68,6 +68,8 @@ private:
   std::vector<const char*> get_instance_extensions(GLFWwindow* window);
   void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
   MeshBuffers upload_mesh_buffers(std::span<uint32_t> indices, std::span<Vertex> vertices);
+  AllocatedImage upload_texture_image(void* data, VkImageUsageFlags usage, uint32_t height, uint32_t width);
 
   friend GLTFScene load_scene(VkBackend* backend, std::filesystem::path path);
+  friend AllocatedImage generate_texture(VkBackend* backend, fastgltf::Asset& asset, fastgltf::Texture& gltf_texture);
 };

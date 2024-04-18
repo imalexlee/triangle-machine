@@ -4,7 +4,6 @@
 #include "vk_backend/resources/vk_descriptor.h"
 #include "vk_backend/vk_command.h"
 #include <vk_backend/vk_types.h>
-#include <vulkan/vulkan_core.h>
 
 // contains per-frame shader information
 struct SceneData {

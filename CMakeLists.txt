@@ -59,7 +59,6 @@ target_include_directories(
   PUBLIC thirdparty/stb_image
   PUBLIC thirdparty/fastgltf/include
   PUBLIC thirdparty/VulkanMemoryAllocator/include)
-# PUBLIC $ENV{VULKAN_SDK_PATH}/include
 
 target_link_directories(
   ${PROJECT_NAME}
@@ -67,7 +66,8 @@ target_link_directories(
   ${PROJECT_NAME}
   PUBLIC
   thirdparty/fmt/src
-  # PUBLIC thirdparty/fastgltf/src
+  PUBLIC
+  thirdparty/fastgltf/src
   PUBLIC
   thirdparty/VulkanMemoryAllocator/src)
 

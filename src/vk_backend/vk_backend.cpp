@@ -1,5 +1,8 @@
 #include "vk_backend/vk_pipeline.h"
 #include <chrono>
+#include <cstdint>
+#include <cstring>
+#include <vulkan/vulkan_core.h>
 #define VMA_IMPLEMENTATION
 #include "global_utils.h"
 #include "vk_backend/resources/vk_buffer.h"
@@ -41,6 +44,7 @@ void VkBackend::create(Window& window) {
       create_image(_device_context.logical_device, _allocator,
                    VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
                    image_extent, VK_FORMAT_R16G16B16A16_SFLOAT);
+
   _depth_image = create_image(_device_context.logical_device, _allocator, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
                               _swapchain_context.extent, VK_FORMAT_D32_SFLOAT);
 
@@ -48,6 +52,7 @@ void VkBackend::create(Window& window) {
   _imm_cmd_context.create(_device_context.logical_device, _device_context.queues.graphics_family_index,
                           VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
   create_default_data();
+
   create_pipelines();
 
   if (use_validation_layers) {
@@ -221,6 +226,7 @@ void VkBackend::draw() {
 
   insert_image_memory_barrier(cmd_buffer, _swapchain_context.images[swapchain_image_index],
                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
   insert_image_memory_barrier(cmd_buffer, _depth_image.image, VK_IMAGE_LAYOUT_UNDEFINED,
                               VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
@@ -392,6 +398,45 @@ MeshBuffers VkBackend::upload_mesh_buffers(std::span<uint32_t> indices, std::spa
 
   destroy_buffer(_allocator, staging_buf);
   return new_mesh_buffer;
+}
+
+AllocatedImage VkBackend::upload_texture_image(void* data, VkImageUsageFlags usage, uint32_t height, uint32_t width) {
+  VkExtent2D extent{.width = width, .height = height};
+
+  uint32_t data_size = width * height * sizeof(uint32_t);
+
+  AllocatedBuffer staging_buf = create_buffer(data_size, _allocator, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                                              VMA_MEMORY_USAGE_CPU_ONLY, VMA_ALLOCATION_CREATE_MAPPED_BIT);
+
+  memcpy(staging_buf.allocation->GetMappedData(), data, data_size);
+
+  AllocatedImage new_texture;
+  new_texture = create_image(_device_context.logical_device, _allocator, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                             extent, VK_FORMAT_R8G8B8A8_UNORM);
+
+  VkBufferImageCopy copy_region;
+  copy_region.bufferOffset = 0;
+  copy_region.bufferRowLength = 0;
+  copy_region.bufferImageHeight = 0;
+
+  copy_region.imageOffset = {.x = 0, .y = 0, .z = 0};
+  copy_region.imageExtent = {.width = extent.width, .height = extent.height, .depth = 1};
+
+  copy_region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  copy_region.imageSubresource.mipLevel = 0;
+  copy_region.imageSubresource.baseArrayLayer = 0;
+  copy_region.imageSubresource.layerCount = 1;
+
+  immediate_submit([&](VkCommandBuffer cmd) {
+    insert_image_memory_barrier(cmd, new_texture.image, VK_IMAGE_LAYOUT_UNDEFINED,
+                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+    vkCmdCopyBufferToImage(cmd, staging_buf.buffer, new_texture.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
+                           &copy_region);
+  });
+  destroy_buffer(_allocator, staging_buf);
+
+  return new_texture;
 }
 
 void VkBackend::destroy() {

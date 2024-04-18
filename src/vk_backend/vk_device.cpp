@@ -1,5 +1,4 @@
 #include "vk_device.h"
-#include "global_utils.h"
 #include <array>
 #include <iostream>
 #include <optional>
@@ -81,9 +80,6 @@ void DeviceContext::get_queue_family_indices(VkSurfaceKHR surface) {
 
   queues.graphics_family_index = graphics_index.value();
   queues.present_family_index = present_index.value();
-
-  DEBUG_PRINT("graphics queue family index: %d", queues.graphics_family_index);
-  DEBUG_PRINT("present queue family index: %d", queues.present_family_index);
 }
 
 void DeviceContext::create_logical_device() {
