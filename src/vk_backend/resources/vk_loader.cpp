@@ -1,4 +1,8 @@
+#include "vk_backend/resources/vk_descriptor.h"
+#include "vk_backend/vk_scene.h"
+#include <array>
 #include <cstdio>
+#include <string>
 #define STB_IMAGE_IMPLEMENTATION
 #include "fastgltf/core.hpp"
 #include "fastgltf/tools.hpp"
@@ -18,8 +22,8 @@
 constexpr uint32_t CHECKER_WIDTH = 32;
 
 static constexpr std::array<uint32_t, CHECKER_WIDTH * CHECKER_WIDTH> purple_checkerboard = []() {
-  // fix endianness
   std::array<uint32_t, CHECKER_WIDTH * CHECKER_WIDTH> result{};
+  // fix endianness
   uint32_t black = __builtin_bswap32(0x000000FF);
   uint32_t magenta = __builtin_bswap32(0xFF00FFFF);
 
@@ -68,8 +72,62 @@ glm::mat4 get_transform_matrix(const fastgltf::Node& node, glm::mat4x4& base) {
   return base;
 }
 
+std::vector<std::shared_ptr<VkSampler>> get_samplers(VkDevice device, GLTFScene& scene, fastgltf::Asset& asset) {
+  std::vector<std::shared_ptr<VkSampler>> samplers;
+  for (auto& gltf_sampler : asset.samplers) {
+    auto sampler = std::make_shared<VkSampler>();
+
+    VkSamplerCreateInfo sampler_ci{};
+    sampler_ci.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    switch (gltf_sampler.magFilter.value()) {
+    case fastgltf::Filter::Nearest:
+    case fastgltf::Filter::NearestMipMapNearest:
+    case fastgltf::Filter::LinearMipMapNearest:
+      sampler_ci.magFilter = VK_FILTER_NEAREST;
+      break;
+    default:
+      sampler_ci.magFilter = VK_FILTER_LINEAR;
+    }
+
+    switch (gltf_sampler.minFilter.value()) {
+    case fastgltf::Filter::Nearest:
+    case fastgltf::Filter::NearestMipMapNearest:
+    case fastgltf::Filter::LinearMipMapNearest:
+      sampler_ci.minFilter = VK_FILTER_NEAREST;
+      break;
+    default:
+      sampler_ci.minFilter = VK_FILTER_LINEAR;
+    }
+
+    switch (gltf_sampler.wrapS) {
+    case fastgltf::Wrap::ClampToEdge:
+      sampler_ci.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+      break;
+    case fastgltf::Wrap::Repeat:
+      sampler_ci.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+      break;
+    default:
+      sampler_ci.addressModeU = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    }
+    switch (gltf_sampler.wrapT) {
+    case fastgltf::Wrap::ClampToEdge:
+      sampler_ci.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+      break;
+    case fastgltf::Wrap::Repeat:
+      sampler_ci.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+      break;
+    default:
+      sampler_ci.addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+    }
+
+    VK_CHECK(vkCreateSampler(device, &sampler_ci, nullptr, sampler.get()));
+    samplers.push_back(sampler);
+  }
+
+  return samplers;
+}
+
 // returns a root node to a tree of nodes with appropriate data filled into them
-// only adds nodes with a mesh to the draw context
 DrawNode create_node_tree(fastgltf::Asset& asset, GLTFScene& scene, uint32_t root_node_idx,
                           glm::mat4 parent_matrix = glm::mat4{1.f}) {
 
@@ -159,8 +217,24 @@ GLTFScene load_scene(VkBackend* backend, std::filesystem::path path) {
   }
   asset = std::move(load.get());
 
-  // fill in material data
-  fmt::println("Loading textures...");
+  // SAMPLER DATA
+  new_scene.samplers = get_samplers(backend->_device_context.logical_device, new_scene, asset);
+
+  // MATERIAL DATA
+  // 1. create desc layout
+  // 2. create pool from layout with [material_count] sets
+  // 3. allocate and fill material desc sets for each material object
+  DescriptorLayoutBuilder layout_builder;
+  layout_builder.add_binding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+  new_scene.desc_set_layout =
+      layout_builder.build(backend->_device_context.logical_device, VK_SHADER_STAGE_FRAGMENT_BIT);
+
+  std::array<PoolSizeRatio, 1> pool_sizes{{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1}};
+  new_scene.desc_allocator.create(backend->_device_context.logical_device, asset.materials.size(), pool_sizes);
+
+  DescriptorWriter desc_writer;
+
+  fmt::println("Loading materials...");
   for (auto& material : asset.materials) {
     auto new_material = std::make_shared<Material>();
     new_material->name = material.name.c_str();
@@ -173,11 +247,16 @@ GLTFScene load_scene(VkBackend* backend, std::filesystem::path path) {
       auto& color_texture = asset.textures[material.pbrData.baseColorTexture.value().textureIndex];
       new_material->metallic_roughness.color_tex_coord = material.pbrData.baseColorTexture.value().texCoordIndex;
       new_material->metallic_roughness.color_texture = generate_texture(backend, asset, color_texture);
+      desc_writer.write_image(0, new_material->metallic_roughness.color_texture.image_view,
+                              *new_scene.samplers[color_texture.samplerIndex.value()],
+                              VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
     } else {
       // use default texture
       new_material->metallic_roughness.color_tex_coord = 0;
       new_material->metallic_roughness.color_texture = backend->upload_texture_image(
           (void*)purple_checkerboard.data(), VK_IMAGE_USAGE_SAMPLED_BIT, CHECKER_WIDTH, CHECKER_WIDTH);
+      desc_writer.write_image(0, new_material->metallic_roughness.color_texture.image_view, *new_scene.samplers[0],
+                              VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
     }
 
     if (material.pbrData.metallicRoughnessTexture.has_value()) {
@@ -186,19 +265,26 @@ GLTFScene load_scene(VkBackend* backend, std::filesystem::path path) {
           material.pbrData.metallicRoughnessTexture.value().texCoordIndex;
       new_material->metallic_roughness.metallic_rough_texture =
           generate_texture(backend, asset, metallic_rough_texture);
+      // desc_writer.write_image(1, new_material->metallic_roughness.color_texture.image_view,
+      //                         *new_scene.samplers[metallic_rough_texture.samplerIndex.value()],
+      //                         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
     } else {
       // use default texture
       new_material->metallic_roughness.metallic_rough_tex_coord = 0;
       new_material->metallic_roughness.metallic_rough_texture = backend->upload_texture_image(
           (void*)purple_checkerboard.data(), VK_IMAGE_USAGE_SAMPLED_BIT, CHECKER_WIDTH, CHECKER_WIDTH);
     }
+    new_material->desc_set =
+        new_scene.desc_allocator.allocate(backend->_device_context.logical_device, new_scene.desc_set_layout);
+    desc_writer.update_set(backend->_device_context.logical_device, new_material->desc_set);
+
     new_scene.materials.push_back(new_material);
   }
-  fmt::println("Textures loaded");
+  fmt::println("Materials loaded");
 
+  // MESH DATA
   std::vector<Vertex> vertices;
   std::vector<uint32_t> indices;
-  // load vertex and index data first
   for (auto& mesh : asset.meshes) {
     auto new_mesh = std::make_shared<Mesh>();
     new_mesh->name = mesh.name.c_str();
@@ -209,39 +295,60 @@ GLTFScene load_scene(VkBackend* backend, std::filesystem::path path) {
     for (auto& primitive : mesh.primitives) {
       Primitive new_primitive;
 
-      // first get vertex positions
-      // gltf primitives guarantee POSITION attribute is present. no null checking
-      auto* position_it = primitive.findAttribute("POSITION");
-      fastgltf::Accessor& position_accessor = asset.accessors[position_it->second];
-      assert(position_accessor.bufferViewIndex.has_value() && "gltf file did not have standard position data");
-
-      // reserve enough for how many we have and how many more we need
+      // VERTEX POSITION DATA
       uint32_t vertex_start_pos = vertices.size();
-      vertices.resize(vertex_start_pos + position_accessor.count);
+      {
+        // gltf primitives guarantee POSITION attribute is present. no null checking
+        auto* position_it = primitive.findAttribute("POSITION");
+        fastgltf::Accessor& position_accessor = asset.accessors[position_it->second];
+        assert(position_accessor.bufferViewIndex.has_value() && "gltf file did not have standard position data");
+        vertices.resize(vertex_start_pos + position_accessor.count);
+        fastgltf::iterateAccessorWithIndex<glm::vec3>(asset, position_accessor, [&](glm::vec3 pos, std::size_t idx) {
+          vertices[idx + vertex_start_pos].position = pos;
+          // set default color to white
+          vertices[idx + vertex_start_pos].color = glm::vec4{1.f};
+        });
+      }
 
-      // pull out only the position information for now
-      fastgltf::iterateAccessorWithIndex<glm::vec3>(asset, position_accessor, [&](glm::vec3 pos, std::size_t idx) {
-        vertices[idx + vertex_start_pos].position = pos;
-        // default to white
-        vertices[idx + vertex_start_pos].color = glm::vec4{1.f};
-      });
+      // VERTEX NORMAL DATA
+      {
+        auto* normal_it = primitive.findAttribute("NORMAL");
+        fastgltf::Accessor& normal_accessor = asset.accessors[normal_it->second];
+        fastgltf::iterateAccessorWithIndex<glm::vec3>(
+            asset, normal_accessor, [&](glm::vec3 normal, std::size_t idx) { vertices[idx].normal = normal; });
+      }
 
-      auto* normal_it = primitive.findAttribute("NORMAL");
-      fastgltf::Accessor& normal_accessor = asset.accessors[normal_it->second];
-      fastgltf::iterateAccessorWithIndex<glm::vec3>(
-          asset, normal_accessor, [&](glm::vec3 normal, std::size_t idx) { vertices[idx].normal = normal; });
+      // VERTEX INDEX DATA
+      {
+        assert(primitive.indicesAccessor.has_value() && "gltf file does not have indices accessor");
+        auto& index_accessor = asset.accessors[primitive.indicesAccessor.value()];
+        assert(index_accessor.bufferViewIndex.has_value() && "gltf file did not have standard index data");
 
-      // then get index data
-      assert(primitive.indicesAccessor.has_value() && "gltf file does not have indices accessor");
-      auto& index_accessor = asset.accessors[primitive.indicesAccessor.value()];
-      assert(index_accessor.bufferViewIndex.has_value() && "gltf file did not have standard index data");
+        new_primitive.indices_start = indices.size();
+        indices.resize(new_primitive.indices_start + index_accessor.count);
 
-      new_primitive.indices_start = indices.size();
-      indices.resize(new_primitive.indices_start + index_accessor.count);
+        // index will be offset by vertex_start_pos since all primitives are interleaved into one overall mesh buffer
+        fastgltf::iterateAccessorWithIndex<uint32_t>(
+            asset, index_accessor, [&](uint32_t index, std::size_t i) { indices[i + vertex_start_pos] = index; });
+      }
+      // VERTEX UV TEXTURE DATA
+      {
+        if (primitive.materialIndex.has_value()) {
+          new_primitive.material = new_scene.materials[primitive.materialIndex.value()];
+          // this is the N associated with TEXCOORD_N
+          uint32_t uv_color_tex_idx = new_primitive.material.value()->metallic_roughness.color_tex_coord;
+          std::string uv_attribute_key = "TEXCOORD_";
+          // 48 is ASCII for '0'
+          uv_attribute_key.push_back(48 + uv_color_tex_idx);
 
-      // index will be offset by vertex_start_pos since all primitives are interleaved into one overall mesh buffer
-      fastgltf::iterateAccessorWithIndex<uint32_t>(
-          asset, index_accessor, [&](uint32_t index, std::size_t i) { indices[i + vertex_start_pos] = index; });
+          auto* color_uv_it = primitive.findAttribute(uv_attribute_key);
+          fastgltf::Accessor& color_uv_accessor = asset.accessors[color_uv_it->second];
+          fastgltf::iterateAccessorWithIndex<glm::vec2>(asset, color_uv_accessor, [&](glm::vec2 uv, std::size_t idx) {
+            vertices[idx + vertex_start_pos].uv_x = uv.x;
+            vertices[idx + vertex_start_pos].uv_y = uv.y;
+          });
+        }
+      }
 
       new_mesh->primitives.push_back(new_primitive);
     }
@@ -251,6 +358,7 @@ GLTFScene load_scene(VkBackend* backend, std::filesystem::path path) {
 
     new_scene.meshes.push_back(new_mesh);
   }
+
   // only deal with first scene in the gltf for now
   std::vector<DrawNode> top_nodes(asset.scenes[0].nodeIndices.size());
   for (uint32_t root_node_idx : asset.scenes[0].nodeIndices) {
@@ -263,18 +371,22 @@ GLTFScene load_scene(VkBackend* backend, std::filesystem::path path) {
 
 void destroy_scene(VkDevice device, VmaAllocator allocator, GLTFScene& scene) {
   DEBUG_PRINT("Destroying Scene");
+  scene.desc_allocator.destroy_pools(device);
+
+  for (auto& sampler : scene.samplers) {
+    vkDestroySampler(device, *sampler, nullptr);
+  }
   for (auto& mesh : scene.meshes) {
     destroy_buffer(allocator, mesh->buffers.indices);
     destroy_buffer(allocator, mesh->buffers.vertices);
   }
   for (auto& material : scene.materials) {
-    if (material->metallic_roughness.color_texture.has_value()) {
-      destroy_image(device, allocator, material->metallic_roughness.color_texture.value());
-    }
+    destroy_image(device, allocator, material->metallic_roughness.color_texture);
     if (material->metallic_roughness.metallic_rough_texture.has_value()) {
       destroy_image(device, allocator, material->metallic_roughness.metallic_rough_texture.value());
     }
   }
+  vkDestroyDescriptorSetLayout(device, scene.desc_set_layout, nullptr);
   vkDestroyPipelineLayout(device, scene.opaque_pipeline_info->pipeline_layout, nullptr);
   vkDestroyPipeline(device, scene.opaque_pipeline_info->pipeline, nullptr);
 }

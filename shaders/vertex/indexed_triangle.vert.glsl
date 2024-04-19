@@ -23,10 +23,14 @@ layout(set = 0, binding = 0) uniform SceneData {
     mat4 view_proj;
 } scene_data;
 
-layout(location = 0) out vec3 fragColor;
+layout(set = 1, binding = 1) uniform sampler2D color_tex;
+
+layout(location = 0) out vec3 frag_color;
+layout(location = 1) out vec2 uv;
 
 void main() {
     Vertex v = constants.vertex_buffer.vertices[gl_VertexIndex];
     gl_Position = scene_data.view_proj * constants.local_transform * vec4(v.position, 1.0f);
-    fragColor = (constants.local_transform * vec4(v.normal, 0)).xyz;
+    frag_color = (constants.local_transform * vec4(v.normal, 0)).xyz;
+    uv = vec2(v.uv_x, v.uv_y);
 }

@@ -60,7 +60,7 @@ void VkBackend::create(Window& window) {
   }
 }
 
-void VkBackend::create_default_data() { _scene = load_scene(this, "../../assets/3d/porsche_large.glb"); }
+void VkBackend::create_default_data() { _scene = load_scene(this, "../../assets/3d/matilda.glb"); }
 
 void VkBackend::update_scene() {
   using namespace std::chrono;
@@ -70,7 +70,7 @@ void VkBackend::update_scene() {
   glm::mat4 upside_down = glm::mat4{1.f};
   upside_down[1][1] *= -1;
 
-  glm::vec3 cam_pos = {0, 1, -8};
+  glm::vec3 cam_pos = {0, 90, -200};
 
   glm::mat4 model = upside_down * glm::rotate(glm::mat4{1.f}, glm::radians(time_span.count() * 30), glm::vec3{0, 1, 0});
   glm::mat4 view = glm::translate(glm::mat4(1.f), cam_pos);
@@ -145,8 +145,7 @@ void VkBackend::create_instance(GLFWwindow* window) {
 
 void VkBackend::create_pipelines() {
   PipelineBuilder builder;
-
-  // cosider passing the shader locations in from the renderer instead of here
+  // cosider passing the shader locations in from the engine instead of here
   VkShaderModule vert_shader =
       load_shader_module(_device_context.logical_device, "../../shaders/vertex/indexed_triangle.vert.glsl.spv");
   VkShaderModule frag_shader =
@@ -167,7 +166,7 @@ void VkBackend::create_pipelines() {
   push_constant_range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
   std::array<VkPushConstantRange, 1> push_constant_ranges{push_constant_range};
   // all frames have the same layout so you can use the first one's layout
-  std::array<VkDescriptorSetLayout, 1> set_layoutrs{_frames[0].desc_set_layout};
+  std::array<VkDescriptorSetLayout, 2> set_layoutrs{_frames[0].desc_set_layout, _scene.desc_set_layout};
 
   builder.set_layout(set_layoutrs, push_constant_ranges, 0);
 
@@ -313,7 +312,6 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
   writer.clear();
 
   auto draw = [&](const DrawNode& draw_node) {
-    // TODO: attach either opaque or transparent pipeline based on primitive flag
     for (Primitive& primitive : draw_node.mesh.value()->primitives) {
       vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, _scene.opaque_pipeline_info->pipeline);
       const auto mesh = draw_node.mesh->get();
@@ -334,6 +332,9 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
 
       vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, _scene.opaque_pipeline_info->pipeline_layout, 0,
                               1, &scene_desc_set, 0, nullptr);
+
+      vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, _scene.opaque_pipeline_info->pipeline_layout, 1,
+                              1, &primitive.material.value()->desc_set, 0, nullptr);
 
       DrawObjectPushConstants push_constants{
           .local_transform = draw_node.local_transform,
@@ -433,6 +434,9 @@ AllocatedImage VkBackend::upload_texture_image(void* data, VkImageUsageFlags usa
 
     vkCmdCopyBufferToImage(cmd, staging_buf.buffer, new_texture.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
                            &copy_region);
+
+    insert_image_memory_barrier(cmd, new_texture.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
   });
   destroy_buffer(_allocator, staging_buf);
 
