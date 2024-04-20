@@ -79,6 +79,7 @@ void VkBackend::update_scene() {
       0.1f);
 
   _scene_data.view_proj = projection * view * model;
+  _scene_data.eye_pos = cam_pos;
   _scene.update(0);
 }
 

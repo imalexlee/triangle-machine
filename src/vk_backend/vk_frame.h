@@ -8,6 +8,7 @@
 // contains per-frame shader information
 struct SceneData {
   glm::mat4 view_proj{1.f};
+  glm::vec3 eye_pos;
 };
 
 class Frame {
