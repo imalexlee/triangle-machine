@@ -24,11 +24,11 @@ constexpr bool use_validation_layers = true;
 constexpr uint64_t TIMEOUT_DURATION = 1'000'000'000;
 
 void VkBackend::create(Window& window) {
-  create_instance(window.glfw_window);
+  create_instance();
   VkSurfaceKHR surface = window.get_vulkan_surface(_instance);
 
   _device_context.create(_instance, surface);
-  _swapchain_context.create(_instance, _device_context, surface, window.width, window.height, VK_PRESENT_MODE_FIFO_KHR);
+  _swapchain_context.create(_instance, _device_context, surface, VK_PRESENT_MODE_FIFO_KHR);
   create_allocator();
 
   for (Frame& frame : _frames) {
@@ -106,7 +106,7 @@ void VkBackend::create_allocator() {
   VK_CHECK(vmaCreateAllocator(&allocator_info, &_allocator));
 }
 
-void VkBackend::create_instance(GLFWwindow* window) {
+void VkBackend::create_instance() {
 
   VkApplicationInfo app_info{};
   app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -117,7 +117,7 @@ void VkBackend::create_instance(GLFWwindow* window) {
   app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
   app_info.apiVersion = VK_API_VERSION_1_3;
 
-  std::vector<const char*> instance_extensions = get_instance_extensions(window);
+  std::vector<const char*> instance_extensions = get_instance_extensions();
 
   VkInstanceCreateInfo instance_ci{};
   instance_ci.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -181,7 +181,7 @@ void VkBackend::create_pipelines() {
   });
 }
 
-std::vector<const char*> VkBackend::get_instance_extensions(GLFWwindow* window) {
+std::vector<const char*> VkBackend::get_instance_extensions() {
   uint32_t count{0};
   const char** glfw_extensions = glfwGetRequiredInstanceExtensions(&count);
   std::vector<const char*> extensions;
@@ -217,12 +217,6 @@ void VkBackend::draw() {
   current_frame.command_context.begin_primary_buffer(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
   insert_image_memory_barrier(cmd_buffer, _swapchain_context.images[swapchain_image_index], VK_IMAGE_LAYOUT_UNDEFINED,
                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-
-  VkClearColorValue clear_color{{0, 0, 0, 1}};
-  VkImageSubresourceRange sub_range = create_image_subresource_range(VK_IMAGE_ASPECT_COLOR_BIT);
-
-  vkCmdClearColorImage(cmd_buffer, _swapchain_context.images[swapchain_image_index],
-                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clear_color, 1, &sub_range);
 
   insert_image_memory_barrier(cmd_buffer, _swapchain_context.images[swapchain_image_index],
                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
@@ -262,9 +256,9 @@ void VkBackend::draw() {
   _frame_num++;
 }
 
-void VkBackend::resize(uint32_t width, uint32_t height) {
+void VkBackend::resize() {
   vkDeviceWaitIdle(_device_context.logical_device);
-  _swapchain_context.reset_swapchain(_device_context, width, height);
+  _swapchain_context.reset_swapchain(_device_context);
 
   destroy_image(_device_context.logical_device, _allocator, _depth_image);
   _depth_image = create_image(_device_context.logical_device, _allocator, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
@@ -278,6 +272,8 @@ void VkBackend::resize(uint32_t width, uint32_t height) {
 void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32_t swapchain_img_idx) {
 
   // make this use _draw_image.image after blit image is done
+  // VkClearColorValue clear_color{{0, 0, 1, 1}};
+  // VkClearValue clear{.color = clear_color};
   VkRenderingAttachmentInfo color_attachment =
       create_color_attachment_info(_swapchain_context.image_views[swapchain_img_idx], nullptr);
 
@@ -320,8 +316,8 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
       VkViewport viewport{};
       viewport.x = 0.0f;
       viewport.y = 0.0f;
-      viewport.width = static_cast<float>(_swapchain_context.extent.width);
-      viewport.height = static_cast<float>(_swapchain_context.extent.height);
+      viewport.width = _swapchain_context.extent.width;
+      viewport.height = _swapchain_context.extent.height;
       viewport.minDepth = 0.0f;
       viewport.maxDepth = 1.0f;
       vkCmdSetViewport(cmd_buf, 0, 1, &viewport);

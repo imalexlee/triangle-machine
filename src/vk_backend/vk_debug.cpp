@@ -6,14 +6,14 @@
 static constexpr std::array<VkValidationFeatureEnableEXT, 3> enabled_validation_features{
     VkValidationFeatureEnableEXT::VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
     VkValidationFeatureEnableEXT::VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
-    //    VkValidationFeatureEnableEXT::VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT,
     VkValidationFeatureEnableEXT::VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
 };
 static constexpr std::array<const char*, 1> validation_layers{"VK_LAYER_KHRONOS_validation"};
 
 VkBool32 Debugger::debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-                                  VkDebugUtilsMessageTypeFlagsEXT messageTypes,
-                                  const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData) {
+                                  [[maybe_unused]] VkDebugUtilsMessageTypeFlagsEXT messageTypes,
+                                  const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+                                  [[maybe_unused]] void* pUserData) {
 
   // only print info, warnings, and errors
   if (messageSeverity > VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) {

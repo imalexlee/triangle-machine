@@ -49,7 +49,6 @@ VkImageView create_image_view(VkDevice device, VkImage image, VkFormat format, V
 
   VkImageView image_view;
   VkImageViewCreateInfo image_view_ci{};
-  uint32_t mip_level_count{1};
 
   image_view_ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
   image_view_ci.pNext = nullptr;
@@ -89,7 +88,8 @@ VkRenderingAttachmentInfo create_color_attachment_info(VkImageView view, VkClear
 
   colorAttachment.imageView = view;
   colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-  colorAttachment.loadOp = clear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
+
+  colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
   colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 
   if (clear) {

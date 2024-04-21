@@ -18,7 +18,7 @@ void Engine::run() {
     glfwPollEvents();
 
     if (_window.resized) {
-      _vk_backend.resize(_window.width, _window.height);
+      _vk_backend.resize();
       _window.resized = false;
     }
 

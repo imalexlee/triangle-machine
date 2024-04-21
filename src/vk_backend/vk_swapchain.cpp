@@ -8,8 +8,8 @@
 #include <vulkan/vulkan_core.h>
 
 // not to be used when resizing as it inits the entire context
-void SwapchainContext::create(VkInstance& instance, DeviceContext& device_context, VkSurfaceKHR surface, uint32_t width,
-                              uint32_t height, VkPresentModeKHR desired_present_mode) {
+void SwapchainContext::create(VkInstance& instance, DeviceContext& device_context, VkSurfaceKHR surface,
+                              VkPresentModeKHR desired_present_mode) {
   this->surface = surface;
   _present_mode = desired_present_mode;
 
@@ -21,7 +21,7 @@ void SwapchainContext::create(VkInstance& instance, DeviceContext& device_contex
       }
     }
   }
-  create_swapchain(device_context, width, height);
+  create_swapchain(device_context);
 
   _deletion_queue.push_persistant([=, this]() {
     destroy_swapchain(device_context.logical_device);
@@ -29,14 +29,14 @@ void SwapchainContext::create(VkInstance& instance, DeviceContext& device_contex
   });
 }
 
-void SwapchainContext::reset_swapchain(DeviceContext& device_context, uint32_t width, uint32_t height) {
+void SwapchainContext::reset_swapchain(DeviceContext& device_context) {
   destroy_swapchain(device_context.logical_device);
-  create_swapchain(device_context, width, height);
+  create_swapchain(device_context);
 }
 
 void SwapchainContext::destroy() { _deletion_queue.flush_persistant(); }
 
-void SwapchainContext::create_swapchain(DeviceContext& device_context, uint32_t width, uint32_t height) {
+void SwapchainContext::create_swapchain(DeviceContext& device_context) {
   _support_details = query_support_details(device_context.physical_device);
   extent = _support_details.capabilities.currentExtent;
 

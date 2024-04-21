@@ -5,7 +5,6 @@
 
 class Engine {
 public:
-  Engine(){};
   ~Engine() { destroy(); };
 
   void create();

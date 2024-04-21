@@ -18,9 +18,9 @@ public:
   std::vector<VkImage> images;
   std::vector<VkImageView> image_views;
 
-  void create(VkInstance& instance, DeviceContext& device_controller, VkSurfaceKHR surface, uint32_t width,
-              uint32_t height, VkPresentModeKHR desired_present_mode = VK_PRESENT_MODE_FIFO_KHR);
-  void reset_swapchain(DeviceContext& device_context, uint32_t width, uint32_t height);
+  void create(VkInstance& instance, DeviceContext& device_controller, VkSurfaceKHR surface,
+              VkPresentModeKHR desired_present_mode = VK_PRESENT_MODE_FIFO_KHR);
+  void reset_swapchain(DeviceContext& device_context);
   void destroy();
 
 private:
@@ -29,6 +29,6 @@ private:
   DeletionQueue _deletion_queue;
 
   SwapchainSupportDetails query_support_details(VkPhysicalDevice physical_device);
-  void create_swapchain(DeviceContext& device_context, uint32_t width, uint32_t height);
+  void create_swapchain(DeviceContext& device_context);
   void destroy_swapchain(VkDevice device);
 };

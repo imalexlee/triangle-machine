@@ -41,14 +41,17 @@ VkSurfaceKHR Window::get_vulkan_surface(const VkInstance instance) {
   return surface;
 }
 
-void Window::key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+void Window::key_callback(GLFWwindow* window, int key, [[maybe_unused]] int scancode, int action,
+                          [[maybe_unused]] int mods) {
   if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
     glfwSetWindowShouldClose(window, GLFW_TRUE);
 }
 
-void Window::error_callback(int error, const char* description) { fmt::println("GLFW errow: {}", description); }
+void Window::error_callback([[maybe_unused]] int error, const char* description) {
+  fmt::println("GLFW errow: {}", description);
+}
 
-void Window::resize_callback(GLFWwindow* window, int new_width, int new_height) {
+void Window::resize_callback([[maybe_unused]] GLFWwindow* window, int new_width, int new_height) {
   width = new_width;
   height = new_height;
   resized = true;

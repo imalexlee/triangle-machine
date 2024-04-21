@@ -10,7 +10,6 @@ endif()
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
-# set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -Ofast")
 
 if(UNIX AND NOT APPLE)
   add_link_options("-lglfw;-lvulkan;-lXxf86vm;-lXrandr;-lXi")
@@ -37,10 +36,16 @@ add_executable(
   src/vk_backend/resources/vk_buffer.cpp
   src/vk_backend/resources/vk_image.cpp)
 
+target_compile_options(
+  ${PROJECT_NAME}
+  PRIVATE "$<$<CONFIG:DEBUG>:-g;-Wall;-Wextra>;-Wno-missing-field-initializers")
+
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_23)
-target_compile_options(${PROJECT_NAME} PUBLIC "$<$<CONFIG:DEBUG>:-g>")
-target_compile_options(${PROJECT_NAME}
-                       PUBLIC "$<$<CONFIG:RELEASE>:-Ofast;-flto>")
+target_compile_options(
+  ${PROJECT_NAME}
+  PUBLIC
+    "$<$<CONFIG:RELEASE>:-Ofast;-flto;-Wall;-Wextra>;-Wno-missing-field-initializers>"
+)
 
 if(APPLE)
   enable_language(OBJC)
@@ -52,17 +57,15 @@ add_subdirectory(thirdparty/fastgltf)
 add_subdirectory(thirdparty)
 
 target_include_directories(
-  ${PROJECT_NAME}
-  PUBLIC src
-  PUBLIC thirdparty/glm
-  PUBLIC thirdparty/fmt/include
-  PUBLIC thirdparty/stb_image
-  PUBLIC thirdparty/fastgltf/include
-  PUBLIC thirdparty/VulkanMemoryAllocator/include)
+  ${PROJECT_NAME} SYSTEM
+  PRIVATE src
+  PRIVATE thirdparty/glm
+  PRIVATE thirdparty/fmt/include
+  PRIVATE thirdparty/stb_image
+  PRIVATE thirdparty/fastgltf/include
+  PRIVATE thirdparty/VulkanMemoryAllocator/include)
 
 target_link_directories(
-  ${PROJECT_NAME}
-  PUBLIC
   ${PROJECT_NAME}
   PUBLIC
   thirdparty/fmt/src
@@ -78,7 +81,7 @@ target_link_libraries(
   PRIVATE fmt
   PRIVATE VulkanMemoryAllocator
   PRIVATE Vulkan::Vulkan
-  # PRIVATE imgui
+  # PRIVATE engine PRIVATE imgui
 )
 
 find_program(

@@ -24,7 +24,7 @@ public:
 
   void create(Window& window);
   void draw();
-  void resize(uint32_t width, uint32_t height);
+  void resize();
 
 private:
   VkInstance _instance;
@@ -51,7 +51,7 @@ private:
   DeletionQueue _deletion_queue;
 
   // initialization
-  void create_instance(GLFWwindow* window);
+  void create_instance();
   void create_allocator();
   void create_pipelines();
   void create_default_data();
@@ -65,7 +65,7 @@ private:
 
   // utils
   inline Frame& get_current_frame() { return _frames[_frame_num % FRAME_NUM]; }
-  std::vector<const char*> get_instance_extensions(GLFWwindow* window);
+  std::vector<const char*> get_instance_extensions();
   void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
   MeshBuffers upload_mesh_buffers(std::span<uint32_t> indices, std::span<Vertex> vertices);
   AllocatedImage upload_texture_image(void* data, VkImageUsageFlags usage, uint32_t height, uint32_t width);

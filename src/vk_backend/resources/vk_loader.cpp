@@ -27,8 +27,8 @@ static constexpr std::array<uint32_t, CHECKER_WIDTH * CHECKER_WIDTH> purple_chec
   uint32_t black = __builtin_bswap32(0x000000FF);
   uint32_t magenta = __builtin_bswap32(0xFF00FFFF);
 
-  for (int x = 0; x < CHECKER_WIDTH; x++) {
-    for (int y = 0; y < CHECKER_WIDTH; y++) {
+  for (uint32_t x = 0; x < CHECKER_WIDTH; x++) {
+    for (uint32_t y = 0; y < CHECKER_WIDTH; y++) {
       result[y * CHECKER_WIDTH + x] = ((x % 2) ^ (y % 2)) ? magenta : black;
     }
   }
@@ -72,7 +72,7 @@ glm::mat4 get_transform_matrix(const fastgltf::Node& node, glm::mat4x4& base) {
   return base;
 }
 
-std::vector<std::shared_ptr<VkSampler>> get_samplers(VkDevice device, GLTFScene& scene, fastgltf::Asset& asset) {
+std::vector<std::shared_ptr<VkSampler>> get_samplers(VkDevice device, fastgltf::Asset& asset) {
   std::vector<std::shared_ptr<VkSampler>> samplers;
   for (auto& gltf_sampler : asset.samplers) {
     auto sampler = std::make_shared<VkSampler>();
@@ -154,7 +154,7 @@ AllocatedImage generate_texture(VkBackend* backend, fastgltf::Asset& asset, fast
   AllocatedImage new_texture;
 
   std::visit(fastgltf::visitor{
-                 [](auto& arg) {},
+                 []([[maybe_unused]] auto& arg) {},
                  [&](fastgltf::sources::URI& file_path) {
                    assert(file_path.fileByteOffset == 0);
                    assert(file_path.uri.isLocalPath());
@@ -175,7 +175,7 @@ AllocatedImage generate_texture(VkBackend* backend, fastgltf::Asset& asset, fast
                    auto& buffer = asset.buffers[buffer_view.bufferIndex];
 
                    std::visit(fastgltf::visitor{
-                                  [](auto& arg) {},
+                                  []([[maybe_unused]] auto& arg) {},
                                   [&](fastgltf::sources::Array& vector) {
                                     uint8_t* data = stbi_load_from_memory(vector.bytes.data() + buffer_view.byteOffset,
                                                                           static_cast<int>(buffer_view.byteLength),
@@ -218,7 +218,7 @@ GLTFScene load_scene(VkBackend* backend, std::filesystem::path path) {
   asset = std::move(load.get());
 
   // SAMPLER DATA
-  new_scene.samplers = get_samplers(backend->_device_context.logical_device, new_scene, asset);
+  new_scene.samplers = get_samplers(backend->_device_context.logical_device, asset);
 
   // MATERIAL DATA
   // 1. create desc layout
@@ -229,7 +229,7 @@ GLTFScene load_scene(VkBackend* backend, std::filesystem::path path) {
   new_scene.desc_set_layout =
       layout_builder.build(backend->_device_context.logical_device, VK_SHADER_STAGE_FRAGMENT_BIT);
 
-  std::array<PoolSizeRatio, 1> pool_sizes{{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1}};
+  std::array<PoolSizeRatio, 1> pool_sizes{{{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1}}};
   new_scene.desc_allocator.create(backend->_device_context.logical_device, asset.materials.size(), pool_sizes);
 
   DescriptorWriter desc_writer;
