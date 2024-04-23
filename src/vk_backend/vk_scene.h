@@ -31,14 +31,19 @@ struct DrawObjectPushConstants {
   VkDeviceAddress vertex_buffer_address;
 };
 
+struct MaterialUniformData {
+  glm::vec4 color_factors;
+};
+
 struct MetallicRoughness {
   AllocatedImage color_texture;
   std::optional<AllocatedImage> metallic_rough_texture;
+  std::optional<AllocatedBuffer> material_uniform_buffer;
   uint32_t color_tex_coord;
   uint32_t metallic_rough_tex_coord;
   float metallic_factor;
   float roughness_factor;
-  glm::vec4 color_factor;
+  glm::vec4 color_factors;
 };
 
 struct Material {
@@ -84,6 +89,7 @@ public:
   std::vector<std::shared_ptr<VkSampler>> samplers;
   std::vector<DrawNode> root_nodes;
   std::shared_ptr<PipelineInfo> opaque_pipeline_info;
+  std::shared_ptr<PipelineInfo> transparent_pipeline_info;
   DrawContext draw_ctx;
 
   VkDescriptorSetLayout desc_set_layout;

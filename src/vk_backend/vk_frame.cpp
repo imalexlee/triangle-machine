@@ -20,7 +20,7 @@ void Frame::create(VkDevice device, VmaAllocator allocator, uint32_t graphics_fa
   DescriptorLayoutBuilder layout_builder;
   layout_builder.add_binding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
   desc_set_layout = layout_builder.build(device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
-  std::array<PoolSizeRatio, 1> pool_sizes{{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1}};
+  std::array<PoolSizeRatio, 1> pool_sizes{{{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1}}};
   desc_allocator.create(device, 1, pool_sizes);
 
   _deletion_queue.push_volatile([=, this]() {

@@ -1,5 +1,9 @@
 #version 450
+
 #extension GL_EXT_buffer_reference : require
+#extension GL_GOOGLE_include_directive : require
+
+#include "../input_structures.glsl"
 
 struct Vertex {
     vec3 position;
@@ -18,13 +22,6 @@ layout(push_constant) uniform PushConstants {
     mat4 local_transform;
     VertexBuffer vertex_buffer;
 } constants;
-
-layout(set = 0, binding = 0) uniform SceneData {
-    mat4 view_proj;
-    vec3 eye_pos;
-} scene_data;
-
-layout(set = 1, binding = 1) uniform sampler2D color_tex;
 
 layout(location = 0) out vec3 frag_color;
 layout(location = 1) out vec2 uv;

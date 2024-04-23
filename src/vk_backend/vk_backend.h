@@ -44,9 +44,11 @@ private:
 
   uint64_t _frame_num{1};
   std::array<Frame, FRAME_NUM> _frames;
-  // the per-frame data we will write to the frames' descriptor sets
   SceneData _scene_data;
-  //  PipelineInfo _default_pipeline_info;
+
+  // defaults
+  VkSampler _default_linear_sampler;
+  VkSampler _default_nearest_sampler;
 
   DeletionQueue _deletion_queue;
 
