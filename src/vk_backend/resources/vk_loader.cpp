@@ -258,7 +258,7 @@ GLTFScene load_scene(VkBackend* backend, std::filesystem::path path) {
   DescriptorWriter desc_writer;
 
   fmt::println("Loading materials...");
-  // DEBUG_PRINT("Material count: %d", (int)asset.materials.size());
+  DEBUG_PRINT("Material count: %d", (int)asset.materials.size());
   for (auto& material : asset.materials) {
     auto new_material = std::make_shared<Material>();
     new_material->name = material.name.c_str();
@@ -377,6 +377,7 @@ GLTFScene load_scene(VkBackend* backend, std::filesystem::path path) {
       // VERTEX UV TEXTURE DATA
       {
         if (primitive.materialIndex.has_value()) {
+          DEBUG_PRINT("primitive has material index");
           new_primitive.material = new_scene.materials[primitive.materialIndex.value()];
           // this is the N associated with TEXCOORD_N
           uint32_t uv_color_tex_idx = new_primitive.material.value()->metallic_roughness.color_tex_coord;
@@ -390,6 +391,9 @@ GLTFScene load_scene(VkBackend* backend, std::filesystem::path path) {
             vertices[idx + vertex_start_pos].uv_x = uv.x;
             vertices[idx + vertex_start_pos].uv_y = uv.y;
           });
+        } else {
+          DEBUG_PRINT("primitive DOES NOT have material index");
+          new_primitive.material = new_scene.materials[0];
         }
       }
       // VERTEX COLOR DATA

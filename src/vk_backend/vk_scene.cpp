@@ -2,14 +2,21 @@
 #include <cstdint>
 
 // fills in the draw context with a specified node
-void GLTFScene::update(uint32_t root_node_idx, glm::mat4 top_matrix) {
-  draw_ctx.opaque_nodes.clear();
+void GLTFScene::update_from_node(uint32_t root_node_idx, glm::mat4 top_matrix) {
   auto& root_node = root_nodes[root_node_idx];
   add_nodes_to_context(root_node);
   for (DrawNode& node : draw_ctx.opaque_nodes) {
     node.local_transform *= top_matrix;
   }
 }
+
+void GLTFScene::update_all_nodes(glm::mat4 top_matrix) {
+  for (uint32_t i = 0; i < root_nodes.size(); i++) {
+    update_from_node(i, top_matrix);
+  }
+}
+
+void GLTFScene::reset_draw_context() { draw_ctx.opaque_nodes.clear(); }
 
 void GLTFScene::add_nodes_to_context(DrawNode& root_node) {
 

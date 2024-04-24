@@ -80,6 +80,7 @@ struct DrawNode {
 
 struct DrawContext {
   std::vector<std::reference_wrapper<DrawNode>> opaque_nodes;
+  std::vector<std::reference_wrapper<DrawNode>> transparent_nodes;
 };
 
 class GLTFScene {
@@ -95,7 +96,9 @@ public:
   VkDescriptorSetLayout desc_set_layout;
   DescriptorAllocator desc_allocator;
 
-  void update(uint32_t root_node_idx, glm::mat4 top_matrix = glm::mat4{1.f});
+  void update_from_node(uint32_t root_node_idx, glm::mat4 top_matrix = glm::mat4{1.f});
+  void update_all_nodes(glm::mat4 top_matrix = glm::mat4{1.f});
+  void reset_draw_context();
 
 private:
   void add_nodes_to_context(DrawNode& root_node);

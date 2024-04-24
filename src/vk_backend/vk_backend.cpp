@@ -72,7 +72,7 @@ void VkBackend::create_default_data() {
   sampler_ci.minFilter = VK_FILTER_NEAREST;
   VK_CHECK(vkCreateSampler(_device_context.logical_device, &sampler_ci, nullptr, &_default_nearest_sampler));
 
-  _scene = load_scene(this, "../../assets/3d/porsche_large.glb");
+  _scene = load_scene(this, "../../assets/3d/porsche.glb");
 }
 
 void VkBackend::update_scene() {
@@ -95,7 +95,9 @@ void VkBackend::update_scene() {
 
   _scene_data.view_proj = projection * view * model;
   _scene_data.eye_pos = cam_pos;
-  _scene.update(0);
+
+  _scene.reset_draw_context();
+  _scene.update_all_nodes();
 }
 
 void VkBackend::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function) {
@@ -292,8 +294,6 @@ void VkBackend::resize() {
 void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32_t swapchain_img_idx) {
 
   // make this use _draw_image.image after blit image is done
-  // VkClearColorValue clear_color{{0, 0, 1, 1}};
-  // VkClearValue clear{.color = clear_color};
   VkRenderingAttachmentInfo color_attachment =
       create_color_attachment_info(_swapchain_context.image_views[swapchain_img_idx], nullptr);
 
