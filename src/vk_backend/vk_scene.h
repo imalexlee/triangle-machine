@@ -12,12 +12,6 @@
 #include <vk_backend/vk_types.h>
 #include <vulkan/vulkan_core.h>
 
-/*
- * A scene in this renderer is heavily tied to the GLTF file format.
- * For that reason, most of these structures are a near 1:1 mapping of
- * the GLTF spec.
- */
-
 struct Vertex {
   glm::vec3 position;
   float uv_x;
@@ -26,7 +20,7 @@ struct Vertex {
   glm::vec4 color;
 };
 
-struct DrawObjectPushConstants {
+struct DrawConstants {
   glm::mat4 local_transform{1.f};
   VkDeviceAddress vertex_buffer_address;
 };
@@ -50,14 +44,7 @@ struct Material {
   std::string name;
   MetallicRoughness metallic_roughness;
   VkDescriptorSet desc_set;
-  std::shared_ptr<PipelineInfo> pipeline_info;
   fastgltf::AlphaMode alpha_mode;
-};
-
-struct Primitive {
-  uint32_t indices_start;
-  std::optional<std::shared_ptr<Material>> material;
-  // references one of the pipeline info's in the overall scene
 };
 
 struct MeshBuffers {
@@ -66,31 +53,36 @@ struct MeshBuffers {
   VkDeviceAddress vertex_buffer_address;
 };
 
-struct Mesh {
-  std::string name;
-  MeshBuffers buffers;
-  std::vector<Primitive> primitives;
+struct Primitive {
+  std::shared_ptr<Material> material;
+  std::shared_ptr<MeshBuffers> mesh_buffers;
+  DrawConstants draw_constants;
+  uint32_t indices_start;
+  uint32_t indices_count;
 };
 
-struct DrawNode {
-  std::optional<std::shared_ptr<Mesh>> mesh;
-  std::vector<DrawNode> children;
+struct Mesh {
+  std::vector<Primitive> primitives;
+  std::shared_ptr<MeshBuffers> buffers;
+};
+
+struct SceneNode {
+  std::vector<SceneNode> children;
   glm::mat4 local_transform{1.f};
 };
 
 struct DrawContext {
-  std::vector<std::reference_wrapper<DrawNode>> opaque_nodes;
-  std::vector<std::reference_wrapper<DrawNode>> transparent_nodes;
+  PipelineInfo opaque_pipeline_info;
+  std::vector<Primitive> opaque_primitives;
+  PipelineInfo transparent_pipeline_info;
+  std::vector<Primitive> transparent_primitives;
 };
 
 class GLTFScene {
 public:
-  std::vector<std::shared_ptr<Mesh>> meshes;
+  std::vector<std::shared_ptr<MeshBuffers>> mesh_buffers;
   std::vector<std::shared_ptr<Material>> materials;
   std::vector<std::shared_ptr<VkSampler>> samplers;
-  std::vector<DrawNode> root_nodes;
-  std::shared_ptr<PipelineInfo> opaque_pipeline_info;
-  std::shared_ptr<PipelineInfo> transparent_pipeline_info;
   DrawContext draw_ctx;
 
   VkDescriptorSetLayout desc_set_layout;
@@ -101,5 +93,5 @@ public:
   void reset_draw_context();
 
 private:
-  void add_nodes_to_context(DrawNode& root_node);
+  void add_nodes_to_context(SceneNode& root_node);
 };

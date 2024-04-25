@@ -1,5 +1,6 @@
 #include "vk_backend/resources/vk_descriptor.h"
 #include "vk_backend/vk_scene.h"
+#include <algorithm>
 #include <array>
 #include <cstdio>
 #include <cstring>
@@ -146,24 +147,22 @@ std::vector<std::shared_ptr<VkSampler>> get_samplers(VkDevice device, fastgltf::
   return samplers;
 }
 
-// returns a root node to a tree of nodes with appropriate data filled into them
-DrawNode create_node_tree(fastgltf::Asset& asset, GLTFScene& scene, uint32_t root_node_idx,
-                          glm::mat4 parent_matrix = glm::mat4{1.f}) {
+//
+void apply_primitive_matrices(std::vector<Mesh>& meshes, fastgltf::Asset& asset, GLTFScene& scene,
+                              uint32_t root_node_idx, glm::mat4 parent_matrix = glm::mat4{1.f}) {
 
-  DrawNode root_node;
+  SceneNode root_node{};
   auto& root_gltf_node = asset.nodes[root_node_idx];
   root_node.local_transform = get_transform_matrix(root_gltf_node, parent_matrix);
   for (uint32_t child_node_idx : root_gltf_node.children) {
-    DrawNode new_child_node = create_node_tree(asset, scene, child_node_idx, root_node.local_transform);
-    root_node.children.push_back(new_child_node);
+    apply_primitive_matrices(meshes, asset, scene, child_node_idx, root_node.local_transform);
   }
 
-  // don't include nodes with no mesh
   if (root_gltf_node.meshIndex.has_value()) {
-    root_node.mesh = scene.meshes[root_gltf_node.meshIndex.value()];
+    for (Primitive& primitive : meshes[root_gltf_node.meshIndex.value()].primitives) {
+      primitive.draw_constants.local_transform = root_node.local_transform;
+    }
   }
-
-  return root_node;
 }
 
 // allocates and fills an AllocatedImage with the textures data
@@ -258,7 +257,6 @@ GLTFScene load_scene(VkBackend* backend, std::filesystem::path path) {
   DescriptorWriter desc_writer;
 
   fmt::println("Loading materials...");
-  DEBUG_PRINT("Material count: %d", (int)asset.materials.size());
   for (auto& material : asset.materials) {
     auto new_material = std::make_shared<Material>();
     new_material->name = material.name.c_str();
@@ -325,17 +323,23 @@ GLTFScene load_scene(VkBackend* backend, std::filesystem::path path) {
   fmt::println("Materials loaded");
 
   // MESH DATA
+  // temporary containers
   std::vector<Vertex> vertices;
   std::vector<uint32_t> indices;
+  std::vector<Primitive> new_primitives;
+  std::vector<Mesh> meshes;
+
   for (auto& mesh : asset.meshes) {
-    auto new_mesh = std::make_shared<Mesh>();
-    new_mesh->name = mesh.name.c_str();
+    auto new_mesh_buffers = std::make_shared<MeshBuffers>();
+    // new_mesh->name = mesh.name.c_str();
 
     vertices.clear();
     indices.clear();
+    new_primitives.clear();
 
     for (auto& primitive : mesh.primitives) {
-      Primitive new_primitive;
+
+      Primitive new_primitive{};
 
       // VERTEX POSITION DATA
       uint32_t vertex_start_pos = vertices.size();
@@ -377,10 +381,9 @@ GLTFScene load_scene(VkBackend* backend, std::filesystem::path path) {
       // VERTEX UV TEXTURE DATA
       {
         if (primitive.materialIndex.has_value()) {
-          DEBUG_PRINT("primitive has material index");
           new_primitive.material = new_scene.materials[primitive.materialIndex.value()];
           // this is the N associated with TEXCOORD_N
-          uint32_t uv_color_tex_idx = new_primitive.material.value()->metallic_roughness.color_tex_coord;
+          uint32_t uv_color_tex_idx = new_primitive.material->metallic_roughness.color_tex_coord;
           std::string uv_attribute_key = "TEXCOORD_";
           // 48 is ASCII for '0'
           uv_attribute_key.push_back(48 + uv_color_tex_idx);
@@ -392,7 +395,6 @@ GLTFScene load_scene(VkBackend* backend, std::filesystem::path path) {
             vertices[idx + vertex_start_pos].uv_y = uv.y;
           });
         } else {
-          DEBUG_PRINT("primitive DOES NOT have material index");
           new_primitive.material = new_scene.materials[0];
         }
       }
@@ -403,21 +405,47 @@ GLTFScene load_scene(VkBackend* backend, std::filesystem::path path) {
           DEBUG_PRINT("FOUND VERTEX COLORS");
         }
       }
-
-      new_mesh->primitives.push_back(new_primitive);
+      new_primitives.push_back(new_primitive);
     }
-    new_mesh->buffers = backend->upload_mesh_buffers(indices, vertices);
-    new_mesh->buffers.vertex_buffer_address =
-        get_buffer_device_address(backend->_device_context.logical_device, new_mesh->buffers.vertices);
+    // upload the vertex and index buffers for this mesh to the scene then attach it all to
+    // the primitives for drawing
+    *new_mesh_buffers = backend->upload_mesh_buffers(indices, vertices);
+    new_scene.mesh_buffers.push_back(new_mesh_buffers);
 
-    new_scene.meshes.push_back(new_mesh);
+    Mesh new_mesh{};
+    new_mesh.primitives = new_primitives;
+    new_mesh.buffers = new_mesh_buffers;
+    meshes.push_back(new_mesh);
   }
 
   // only deal with first scene in the gltf for now
-  std::vector<DrawNode> top_nodes(asset.scenes[0].nodeIndices.size());
+  // generate the node tree to attach all transform matrices to each node
   for (uint32_t root_node_idx : asset.scenes[0].nodeIndices) {
-    DrawNode root_node = create_node_tree(asset, new_scene, root_node_idx);
-    new_scene.root_nodes.push_back(root_node);
+    apply_primitive_matrices(meshes, asset, new_scene, root_node_idx);
+  }
+
+  for (auto& mesh : meshes) {
+    for (auto& new_primitive : mesh.primitives) {
+      new_primitive.mesh_buffers = mesh.buffers;
+      // cache indices count
+      new_primitive.indices_count = mesh.buffers->indices.info.size / sizeof(uint32_t);
+      new_primitive.draw_constants.vertex_buffer_address =
+          get_buffer_device_address(backend->_device_context.logical_device, mesh.buffers->vertices);
+      if (new_primitive.material->alpha_mode == fastgltf::AlphaMode::Blend) {
+        new_scene.draw_ctx.transparent_primitives.push_back(new_primitive);
+      } else {
+        new_scene.draw_ctx.opaque_primitives.push_back(new_primitive);
+      }
+    }
+
+    auto& primitives = new_scene.draw_ctx.opaque_primitives;
+    std::sort(primitives.begin(), primitives.end(), [&](const Primitive& primitive_a, const Primitive& primitive_b) {
+      if (primitive_a.material == primitive_b.material) {
+        return primitive_a.indices_start < primitive_b.indices_start;
+      } else {
+        return primitive_a.material < primitive_b.material;
+      }
+    });
   }
 
   return new_scene;
@@ -430,9 +458,9 @@ void destroy_scene(VkDevice device, VmaAllocator allocator, GLTFScene& scene) {
   for (auto& sampler : scene.samplers) {
     vkDestroySampler(device, *sampler, nullptr);
   }
-  for (auto& mesh : scene.meshes) {
-    destroy_buffer(allocator, mesh->buffers.indices);
-    destroy_buffer(allocator, mesh->buffers.vertices);
+  for (auto& mesh : scene.mesh_buffers) {
+    destroy_buffer(allocator, mesh->indices);
+    destroy_buffer(allocator, mesh->vertices);
   }
   for (auto& material : scene.materials) {
     destroy_image(device, allocator, material->metallic_roughness.color_texture);
@@ -447,9 +475,9 @@ void destroy_scene(VkDevice device, VmaAllocator allocator, GLTFScene& scene) {
 
   vkDestroyDescriptorSetLayout(device, scene.desc_set_layout, nullptr);
 
-  vkDestroyPipelineLayout(device, scene.opaque_pipeline_info->pipeline_layout, nullptr);
-  vkDestroyPipelineLayout(device, scene.transparent_pipeline_info->pipeline_layout, nullptr);
+  vkDestroyPipelineLayout(device, scene.draw_ctx.opaque_pipeline_info.pipeline_layout, nullptr);
+  vkDestroyPipelineLayout(device, scene.draw_ctx.transparent_pipeline_info.pipeline_layout, nullptr);
 
-  vkDestroyPipeline(device, scene.opaque_pipeline_info->pipeline, nullptr);
-  vkDestroyPipeline(device, scene.transparent_pipeline_info->pipeline, nullptr);
+  vkDestroyPipeline(device, scene.draw_ctx.opaque_pipeline_info.pipeline, nullptr);
+  vkDestroyPipeline(device, scene.draw_ctx.transparent_pipeline_info.pipeline, nullptr);
 }

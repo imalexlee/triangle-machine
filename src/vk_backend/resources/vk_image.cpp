@@ -85,13 +85,10 @@ VkRenderingAttachmentInfo create_color_attachment_info(VkImageView view, VkClear
   VkRenderingAttachmentInfo colorAttachment{};
   colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
   colorAttachment.pNext = nullptr;
-
   colorAttachment.imageView = view;
   colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
   colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
   colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-
   if (clear) {
     colorAttachment.clearValue = *clear;
   }
