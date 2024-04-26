@@ -74,7 +74,7 @@ void VkBackend::create_default_data() {
   sampler_ci.minFilter = VK_FILTER_NEAREST;
   VK_CHECK(vkCreateSampler(_device_context.logical_device, &sampler_ci, nullptr, &_default_nearest_sampler));
 
-  _scene = load_scene(this, "../../assets/3d/porsche.glb");
+  _scene = load_scene(this, "../../assets/3d/armour.glb");
 }
 
 void VkBackend::update_scene() {
@@ -87,7 +87,8 @@ void VkBackend::update_scene() {
 
   // glm::vec3 cam_pos = {0, 90, -200}; // matilda
   // glm::vec3 cam_pos = {0, 3, -50}; // house
-  glm::vec3 cam_pos = {0, 1, -8}; // porsche, monkey
+  // glm::vec3 cam_pos = {0, 1, -8}; // porsche, monkey
+  glm::vec3 cam_pos = {1, -16, -20}; // porsche, monkey
 
   glm::mat4 model = upside_down * glm::rotate(glm::mat4{1.f}, glm::radians(time_span.count() * 30), glm::vec3{0, 1, 0});
   glm::mat4 view = glm::translate(glm::mat4(1.f), cam_pos);
