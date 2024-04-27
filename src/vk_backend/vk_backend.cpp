@@ -74,21 +74,20 @@ void VkBackend::create_default_data() {
   sampler_ci.minFilter = VK_FILTER_NEAREST;
   VK_CHECK(vkCreateSampler(_device_context.logical_device, &sampler_ci, nullptr, &_default_nearest_sampler));
 
-  _scene = load_scene(this, "../../assets/3d/armour.glb");
+  _scene = load_scene(this, "../../assets/3d/porsche_large.glb");
 }
 
+auto time1 = std::chrono::high_resolution_clock::now();
 void VkBackend::update_scene() {
-  using namespace std::chrono;
-  static auto t1 = high_resolution_clock::now();
-  auto time_span = duration_cast<duration<float>>(high_resolution_clock::now() - t1);
+  auto time_span = duration_cast<std::chrono::duration<float>>(std::chrono::high_resolution_clock::now() - time1);
 
   glm::mat4 upside_down = glm::mat4{1.f};
   upside_down[1][1] *= -1;
 
   // glm::vec3 cam_pos = {0, 90, -200}; // matilda
   // glm::vec3 cam_pos = {0, 3, -50}; // house
-  // glm::vec3 cam_pos = {0, 1, -8}; // porsche, monkey
-  glm::vec3 cam_pos = {1, -16, -20}; // porsche, monkey
+  glm::vec3 cam_pos = {0, 1, -8}; // porsche, monkey
+  // glm::vec3 cam_pos = {1, -16, -20}; // porsche, monkey
 
   glm::mat4 model = upside_down * glm::rotate(glm::mat4{1.f}, glm::radians(time_span.count() * 30), glm::vec3{0, 1, 0});
   glm::mat4 view = glm::translate(glm::mat4(1.f), cam_pos);
@@ -231,11 +230,7 @@ void VkBackend::draw() {
   VkCommandBuffer cmd_buffer = current_frame.command_context.primary_buffer;
 
   // wait for previous command buffer to finish executing
-  VK_CHECK(vkWaitForFences(_device_context.logical_device, 1, &current_frame.render_fence, VK_TRUE, TIMEOUT_DURATION));
-
-  if (counter > 150) {
-    t1 = std::chrono::high_resolution_clock::now();
-  }
+  vkWaitForFences(_device_context.logical_device, 1, &current_frame.render_fence, VK_TRUE, TIMEOUT_DURATION);
 
   uint32_t swapchain_image_index;
   VkResult result =
@@ -289,25 +284,6 @@ void VkBackend::draw() {
   }
 
   _frame_num++;
-
-  if (counter > 150) {
-    t2 = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration<float>(t2 - t1);
-    auto elapsed_time = std::chrono::duration_cast<std::chrono::microseconds>(duration);
-    average_time += elapsed_time.count();
-    average_time /= 2;
-
-    // if (counter % 75 == 0) {
-    //   fmt::println("draw time: {}", elapsed_time.count());
-    // }
-  } else {
-
-    t2 = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration<float>(t2 - t1);
-    auto elapsed_time = std::chrono::duration_cast<std::chrono::microseconds>(duration);
-    average_time = elapsed_time.count();
-  }
-  counter++;
 }
 
 void VkBackend::resize() {
@@ -360,6 +336,10 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
   writer.update_set(_device_context.logical_device, scene_desc_set);
   writer.clear();
 
+  // if (counter > 150) {
+  //   t1 = std::chrono::high_resolution_clock::now();
+  // }
+
   VkViewport viewport{};
   viewport.x = 0.0f;
   viewport.y = 0.0f;
@@ -388,14 +368,15 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
   VkDescriptorSet current_material_desc_set = nullptr;
 
   auto draw = [&](const Primitive& primitive) {
-    if (current_material_desc_set != primitive.material->desc_set) {
-      current_material_desc_set = primitive.material->desc_set;
+    // i only need the descriptor set handle and the index buffer handle
+    if (current_material_desc_set != primitive.desc_set) {
+      current_material_desc_set = primitive.desc_set;
       vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline.pipeline_layout, 1, 1,
-                              &primitive.material->desc_set, 0, nullptr);
+                              &primitive.desc_set, 0, nullptr);
     }
     vkCmdPushConstants(cmd_buf, current_pipeline.pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(DrawConstants),
                        &primitive.draw_constants);
-    vkCmdBindIndexBuffer(cmd_buf, primitive.mesh_buffers->indices.buffer, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdBindIndexBuffer(cmd_buf, primitive.index_buffer, 0, VK_INDEX_TYPE_UINT32);
     vkCmdDrawIndexed(cmd_buf, primitive.indices_count, 1, primitive.indices_start, 0, 0);
   };
 
@@ -411,6 +392,25 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
   }
 
   vkCmdEndRendering(cmd_buf);
+
+  // if (counter > 150) {
+  //   t2 = std::chrono::high_resolution_clock::now();
+  //   auto duration = std::chrono::duration<float>(t2 - t1);
+  //   auto elapsed_time = std::chrono::duration_cast<std::chrono::microseconds>(duration);
+  //   average_time += elapsed_time.count();
+  //   average_time /= 2;
+
+  //   if (counter % 75 == 0) {
+  //     fmt::println("draw time: {}", elapsed_time.count());
+  //   }
+  // } else {
+
+  //   t2 = std::chrono::high_resolution_clock::now();
+  //   auto duration = std::chrono::duration<float>(t2 - t1);
+  //   auto elapsed_time = std::chrono::duration_cast<std::chrono::microseconds>(duration);
+  //   average_time = elapsed_time.count();
+  // }
+  // counter++;
 }
 
 MeshBuffers VkBackend::upload_mesh_buffers(std::span<uint32_t> indices, std::span<Vertex> vertices) {

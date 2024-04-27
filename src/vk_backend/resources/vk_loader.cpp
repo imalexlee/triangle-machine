@@ -381,9 +381,11 @@ GLTFScene load_scene(VkBackend* backend, std::filesystem::path path) {
       // VERTEX UV TEXTURE DATA
       {
         if (primitive.materialIndex.has_value()) {
-          new_primitive.material = new_scene.materials[primitive.materialIndex.value()];
+          // new_primitive.material = new_scene.materials[primitive.materialIndex.value()];
+          auto& mat = new_scene.materials[primitive.materialIndex.value()];
+          new_primitive.desc_set = mat->desc_set;
           // this is the N associated with TEXCOORD_N
-          uint32_t uv_color_tex_idx = new_primitive.material->metallic_roughness.color_tex_coord;
+          uint32_t uv_color_tex_idx = mat->metallic_roughness.color_tex_coord;
           std::string uv_attribute_key = "TEXCOORD_";
           // 48 is ASCII for '0'
           uv_attribute_key.push_back(48 + uv_color_tex_idx);
@@ -395,7 +397,8 @@ GLTFScene load_scene(VkBackend* backend, std::filesystem::path path) {
             vertices[idx + vertex_start_pos].uv_y = uv.y;
           });
         } else {
-          new_primitive.material = new_scene.materials[0];
+          auto& mat = new_scene.materials[0];
+          new_primitive.desc_set = mat->desc_set;
         }
       }
       // VERTEX COLOR DATA
@@ -426,12 +429,21 @@ GLTFScene load_scene(VkBackend* backend, std::filesystem::path path) {
 
   for (auto& mesh : meshes) {
     for (auto& new_primitive : mesh.primitives) {
-      new_primitive.mesh_buffers = mesh.buffers;
+      new_primitive.index_buffer = mesh.buffers->indices.buffer;
       // cache indices count
       new_primitive.indices_count = mesh.buffers->indices.info.size / sizeof(uint32_t);
       new_primitive.draw_constants.vertex_buffer_address =
           get_buffer_device_address(backend->_device_context.logical_device, mesh.buffers->vertices);
-      if (new_primitive.material->alpha_mode == fastgltf::AlphaMode::Blend) {
+
+      Material* primitive_material;
+
+      for (const auto& material : new_scene.materials) {
+        if (material->desc_set == new_primitive.desc_set) {
+          primitive_material = material.get();
+        }
+      }
+
+      if (primitive_material->alpha_mode == fastgltf::AlphaMode::Blend) {
         new_scene.draw_ctx.transparent_primitives.push_back(new_primitive);
       } else {
         new_scene.draw_ctx.opaque_primitives.push_back(new_primitive);
@@ -440,13 +452,20 @@ GLTFScene load_scene(VkBackend* backend, std::filesystem::path path) {
 
     auto& primitives = new_scene.draw_ctx.opaque_primitives;
     std::sort(primitives.begin(), primitives.end(), [&](const Primitive& primitive_a, const Primitive& primitive_b) {
-      if (primitive_a.material == primitive_b.material) {
+      if (primitive_a.desc_set == primitive_b.desc_set) {
         return primitive_a.indices_start < primitive_b.indices_start;
       } else {
-        return primitive_a.material < primitive_b.material;
+        return primitive_a.desc_set < primitive_b.desc_set;
       }
     });
   }
+  new_scene.draw_ctx.opaque_primitives.shrink_to_fit();
+  new_scene.draw_ctx.transparent_primitives.shrink_to_fit();
+  DEBUG_PRINT("opaque primitive size: %d and capacity: %d", (int)new_scene.draw_ctx.opaque_primitives.size(),
+              (int)new_scene.draw_ctx.opaque_primitives.capacity());
+
+  DEBUG_PRINT("transparent primitive size: %d and capacity: %d", (int)new_scene.draw_ctx.transparent_primitives.size(),
+              (int)new_scene.draw_ctx.transparent_primitives.capacity());
 
   return new_scene;
 }

@@ -54,11 +54,15 @@ struct MeshBuffers {
 };
 
 struct Primitive {
-  std::shared_ptr<Material> material;
-  std::shared_ptr<MeshBuffers> mesh_buffers;
+  // std::shared_ptr<Material> material;
+  VkDescriptorSet desc_set;
+  //   descriptor set from material ^
+  // std::shared_ptr<MeshBuffers> mesh_buffers;
+  //  descriptor set from material ^
   DrawConstants draw_constants;
-  uint32_t indices_start;
+  VkBuffer index_buffer;
   uint32_t indices_count;
+  uint32_t indices_start;
 };
 
 struct Mesh {

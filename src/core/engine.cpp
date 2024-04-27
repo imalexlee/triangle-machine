@@ -20,6 +20,7 @@ void Engine::run() {
     if (_window.resized) {
       _vk_backend.resize();
       _window.resized = false;
+      // continue;
     }
 
     _vk_backend.draw();
