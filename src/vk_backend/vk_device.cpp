@@ -102,10 +102,16 @@ void DeviceContext::create_logical_device() {
       VK_KHR_SWAPCHAIN_EXTENSION_NAME,
   };
 
+  // so that secondary command buffers can inherit the state of the viewport and scissor during rendering
+  VkPhysicalDeviceInheritedViewportScissorFeaturesNV inherited_scissor_feature{};
+  inherited_scissor_feature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INHERITED_VIEWPORT_SCISSOR_FEATURES_NV;
+  inherited_scissor_feature.inheritedViewportScissor2D = VK_TRUE;
+
   VkPhysicalDeviceVulkan13Features features_1_3{};
   features_1_3.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
   features_1_3.synchronization2 = VK_TRUE;
   features_1_3.dynamicRendering = VK_TRUE;
+  features_1_3.pNext = &inherited_scissor_feature;
 
   VkPhysicalDeviceVulkan12Features features_1_2{};
   features_1_2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;

@@ -4,6 +4,10 @@
 #include <cstring>
 #include <fastgltf/types.hpp>
 #include <fmt/base.h>
+#include <fmt/format.h>
+#include <future>
+#include <span>
+#include <unistd.h>
 #include <vulkan/vulkan_core.h>
 #define VMA_IMPLEMENTATION
 #include "global_utils.h"
@@ -34,6 +38,7 @@ void VkBackend::create(Window& window) {
   create_allocator();
 
   for (Frame& frame : _frames) {
+    fmt::println("creating frame");
     frame.create(_device_context.logical_device, _allocator, _device_context.queues.graphics_family_index);
   }
 
@@ -53,8 +58,11 @@ void VkBackend::create(Window& window) {
   _imm_fence = create_fence(_device_context.logical_device, VK_FENCE_CREATE_SIGNALED_BIT);
   _imm_cmd_context.create(_device_context.logical_device, _device_context.queues.graphics_family_index,
                           VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
-  create_default_data();
 
+  uint32_t thread_count = std::thread::hardware_concurrency();
+  _thread_pool.resize(thread_count);
+
+  create_default_data();
   create_pipelines();
 
   if (use_validation_layers) {
@@ -97,9 +105,6 @@ void VkBackend::update_scene() {
 
   _scene_data.view_proj = projection * view * model;
   _scene_data.eye_pos = cam_pos;
-
-  //  _scene.reset_draw_context();
-  //  _scene.update_all_nodes();
 }
 
 void VkBackend::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function) {
@@ -174,7 +179,7 @@ void VkBackend::create_pipelines() {
   builder.set_shader_stages(vert_shader, frag_shader);
   builder.disable_blending();
   builder.set_input_assembly(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-  builder.set_raster_culling(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
+  builder.set_raster_culling(VK_CULL_MODE_FRONT_BIT, VK_FRONT_FACE_CLOCKWISE);
   builder.set_raster_poly_mode(VK_POLYGON_MODE_FILL);
   builder.set_multisample_state(VK_SAMPLE_COUNT_1_BIT);
   builder.set_depth_stencil_state(true, true, VK_COMPARE_OP_GREATER_OR_EQUAL);
@@ -193,11 +198,26 @@ void VkBackend::create_pipelines() {
   PipelineInfo opaque_pipeline_info = builder.build_pipeline(_device_context.logical_device);
   _scene.draw_ctx.opaque_pipeline_info = opaque_pipeline_info;
 
+  for (auto& primitive : _scene.draw_ctx.opaque_primitives) {
+    primitive.pipeline_info = _scene.draw_ctx.opaque_pipeline_info;
+  }
+
   builder.enable_blending_alphablend();
   builder.set_depth_stencil_state(true, false, VK_COMPARE_OP_GREATER_OR_EQUAL);
 
   PipelineInfo transparent_pipeline_info = builder.build_pipeline(_device_context.logical_device);
   _scene.draw_ctx.transparent_pipeline_info = transparent_pipeline_info;
+
+  for (auto& primitive : _scene.draw_ctx.transparent_primitives) {
+    primitive.pipeline_info = _scene.draw_ctx.transparent_pipeline_info;
+  }
+
+  for (auto& new_primitive : _scene.draw_ctx.opaque_primitives) {
+    _scene.draw_ctx.all_primitives.push_back(new_primitive);
+  }
+  for (auto& new_primitive : _scene.draw_ctx.transparent_primitives) {
+    _scene.draw_ctx.all_primitives.push_back(new_primitive);
+  }
 
   _deletion_queue.push_persistant([=, this]() {
     vkDestroyShaderModule(_device_context.logical_device, vert_shader, nullptr);
@@ -243,7 +263,13 @@ void VkBackend::draw() {
 
   VK_CHECK(vkResetFences(_device_context.logical_device, 1, &current_frame.render_fence));
 
-  current_frame.command_context.begin_primary_buffer(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+  VkCommandBufferBeginInfo command_buffer_bi{};
+  command_buffer_bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  command_buffer_bi.pNext = nullptr;
+  command_buffer_bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+  // command_buffer_bi.pInheritanceInfo = &inheritance_info;
+
+  VK_CHECK(vkBeginCommandBuffer(current_frame.command_context.primary_buffer, &command_buffer_bi));
 
   insert_image_memory_barrier(cmd_buffer, _swapchain_context.images[swapchain_image_index], VK_IMAGE_LAYOUT_UNDEFINED,
                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
@@ -312,7 +338,7 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
       .offset = VkOffset2D{0, 0},
       .extent = extent,
   };
-
+  rendering_info.flags = VK_RENDERING_CONTENTS_SECONDARY_COMMAND_BUFFERS_BIT;
   rendering_info.pColorAttachments = &color_attachment;
   rendering_info.colorAttachmentCount = 1;
   rendering_info.layerCount = 1;
@@ -336,81 +362,179 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
   writer.update_set(_device_context.logical_device, scene_desc_set);
   writer.clear();
 
-  // if (counter > 150) {
-  //   t1 = std::chrono::high_resolution_clock::now();
-  // }
+  // both opaque and transparent have the same layout for now
+  VkPipelineLayout current_pipeline_layout = _scene.draw_ctx.opaque_pipeline_info.pipeline_layout;
 
-  VkViewport viewport{};
-  viewport.x = 0.0f;
-  viewport.y = 0.0f;
-  viewport.width = _swapchain_context.extent.width;
-  viewport.height = _swapchain_context.extent.height;
-  viewport.minDepth = 0.0f;
-  viewport.maxDepth = 1.0f;
+  // vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, _scene.draw_ctx.opaque_pipeline_info.pipeline);
 
-  VkRect2D scissor{};
-  scissor.extent = _swapchain_context.extent;
-  scissor.offset = {0, 0};
+  // VkViewport viewport{};
+  // viewport.x = 0.0f;
+  // viewport.y = 0.0f;
+  // viewport.width = _swapchain_context.extent.width;
+  // viewport.height = _swapchain_context.extent.height;
+  // viewport.minDepth = 0.0f;
+  // viewport.maxDepth = 1.0f;
 
-  PipelineInfo current_pipeline = _scene.draw_ctx.opaque_pipeline_info;
+  // VkRect2D scissor{};
+  // scissor.extent = _swapchain_context.extent;
+  // scissor.offset = {0, 0};
 
-  // we have to initially bind a pipeline to set viewport and scissor
-  vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline.pipeline);
+  // vkCmdSetViewport(cmd_buf, 0, 1, &viewport);
 
-  // set for all draws
-  vkCmdSetViewport(cmd_buf, 0, 1, &viewport);
+  // vkCmdSetScissor(cmd_buf, 0, 1, &scissor);
 
-  vkCmdSetScissor(cmd_buf, 0, 1, &scissor);
+  if (counter > 150) {
+    t1 = std::chrono::high_resolution_clock::now();
+  }
 
-  vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline.pipeline_layout, 0, 1,
-                          &scene_desc_set, 0, nullptr);
+  auto draw = [=, this](const std::span<Primitive> primitives, uint32_t primitve_start_idx, uint32_t stride,
+                        uint32_t thread_id) {
+    //    VkCommandBufferInheritanceViewportScissorInfoNV inheritance_view_scissor_info;
+    //    inheritance_view_scissor_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_VIEWPORT_SCISSOR_INFO_NV;
+    //    inheritance_view_scissor_info.pViewportDepths = &viewport;
+    //    inheritance_view_scissor_info.viewportDepthCount = 1;
+    //    inheritance_view_scissor_info.viewportScissor2D = VK_TRUE;
 
-  VkDescriptorSet current_material_desc_set = nullptr;
+    VkCommandBufferInheritanceRenderingInfo inheritance_rendering_info;
+    inheritance_rendering_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_RENDERING_INFO;
+    //    inheritance_rendering_info.pNext = &inheritance_view_scissor_info;
+    inheritance_rendering_info.pNext = nullptr;
+    inheritance_rendering_info.flags = VK_RENDERING_CONTENTS_SECONDARY_COMMAND_BUFFERS_BIT;
+    inheritance_rendering_info.colorAttachmentCount = 1;
+    inheritance_rendering_info.depthAttachmentFormat = _depth_image.image_format;
+    inheritance_rendering_info.pColorAttachmentFormats = &_swapchain_context.format;
+    inheritance_rendering_info.viewMask = 0;
+    inheritance_rendering_info.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+    inheritance_rendering_info.stencilAttachmentFormat = VK_FORMAT_UNDEFINED;
 
-  auto draw = [&](const Primitive& primitive) {
-    // i only need the descriptor set handle and the index buffer handle
-    if (current_material_desc_set != primitive.desc_set) {
-      current_material_desc_set = primitive.desc_set;
-      vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline.pipeline_layout, 1, 1,
-                              &primitive.desc_set, 0, nullptr);
+    VkCommandBufferInheritanceInfo inheritance_info{};
+    inheritance_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
+    inheritance_info.pNext = &inheritance_rendering_info;
+    // inheritance_info.renderPass = VK_NULL_HANDLE;
+
+    VkCommandBufferBeginInfo command_buffer_bi{};
+    command_buffer_bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    command_buffer_bi.pNext = nullptr;
+    command_buffer_bi.pInheritanceInfo = &inheritance_info;
+    command_buffer_bi.flags =
+        VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT | VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT;
+
+    VkCommandBuffer secondary_buf = get_current_frame().command_context.secondary_buffers[thread_id];
+
+    vkBeginCommandBuffer(secondary_buf, &command_buffer_bi);
+
+    VkViewport viewport{};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = _swapchain_context.extent.width;
+    viewport.height = _swapchain_context.extent.height;
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+
+    VkRect2D scissor{};
+    scissor.extent = _swapchain_context.extent;
+    scissor.offset = {0, 0};
+
+    vkCmdSetViewport(secondary_buf, 0, 1, &viewport);
+
+    vkCmdSetScissor(secondary_buf, 0, 1, &scissor);
+
+    vkCmdBindDescriptorSets(secondary_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline_layout, 0, 1,
+                            &scene_desc_set, 0, nullptr);
+
+    VkPipeline current_pipeline = nullptr;
+    VkDescriptorSet material_desc_set = nullptr;
+    uint32_t end_pos = std::min(primitve_start_idx + stride, (uint32_t)primitives.size());
+
+    for (; primitve_start_idx < end_pos; primitve_start_idx++) {
+
+      const auto& primitive = primitives[primitve_start_idx];
+
+      if (current_pipeline != primitive.pipeline_info.pipeline) {
+        current_pipeline = primitive.pipeline_info.pipeline;
+        vkCmdBindPipeline(secondary_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, primitive.pipeline_info.pipeline);
+      }
+
+      if (material_desc_set != primitive.desc_set) {
+        material_desc_set = primitive.desc_set;
+
+        vkCmdBindDescriptorSets(secondary_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, primitive.pipeline_info.pipeline_layout,
+                                1, 1, &primitive.desc_set, 0, nullptr);
+      }
+
+      vkCmdPushConstants(secondary_buf, current_pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(DrawConstants),
+                         &primitive.draw_constants);
+
+      vkCmdBindIndexBuffer(secondary_buf, primitive.index_buffer, 0, VK_INDEX_TYPE_UINT32);
+      vkCmdDrawIndexed(secondary_buf, primitive.indices_count, 1, primitive.indices_start, 0, 0);
     }
-    vkCmdPushConstants(cmd_buf, current_pipeline.pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(DrawConstants),
-                       &primitive.draw_constants);
-    vkCmdBindIndexBuffer(cmd_buf, primitive.index_buffer, 0, VK_INDEX_TYPE_UINT32);
-    vkCmdDrawIndexed(cmd_buf, primitive.indices_count, 1, primitive.indices_start, 0, 0);
+
+    vkEndCommandBuffer(secondary_buf);
+
+    return secondary_buf;
   };
 
-  for (const Primitive& primitive : _scene.draw_ctx.opaque_primitives) {
-    draw(primitive);
+  std::vector<std::future<VkCommandBuffer>> futures;
+  uint32_t thread_count = std::thread::hardware_concurrency();
+  uint32_t primitive_len = _scene.draw_ctx.all_primitives.size();
+  uint32_t stride = primitive_len / thread_count;
+  // if we have leftover primitives, distribute the remainder over many cores instead of
+  // overload the last thread with N MORE primitives where 0 < N < thread_count
+  if (stride * thread_count < primitive_len) {
+    stride++;
   }
 
-  current_pipeline = _scene.draw_ctx.transparent_pipeline_info;
-  vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline.pipeline);
+  //  fmt::println("{}", primitive_len);
+  stride = 5000;
+  for (uint32_t i = 0; i < primitive_len; i += stride) {
+    //   fmt::println("sending {} to {}", i, i + stride);
+    auto future = _thread_pool.push(
+        [=, this](size_t thread_id) { return draw(_scene.draw_ctx.all_primitives, i, stride, thread_id); });
 
-  for (const Primitive& primitive : _scene.draw_ctx.transparent_primitives) {
-    draw(primitive);
+    futures.push_back(std::move(future));
   }
+
+  // std::vector<VkCommandBuffer> recorded_secondary_buffers;
+  // for (auto& fut : futures) {
+  //   recorded_secondary_buffers.push_back(fut.get());
+  // }
+
+  for (auto& future : futures) {
+    VkCommandBuffer buf = future.get();
+    vkCmdExecuteCommands(cmd_buf, 1, &buf);
+  }
+
+  // vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, _scene.draw_ctx.transparent_pipeline_info.pipeline);
+
+  // secondary_buf = get_current_frame().command_context.secondary_buffers[1];
+  // for (const Primitive& primitive : _scene.draw_ctx.transparent_primitives) {
+  // draw(primitive, cmd_buf);
+  // auto future = _thread_pool.push_job(draw, primitive, secondary_buf);
+
+  // futures.push_back(std::move(future));
+  //}
+
+  //  vkCmdExecuteCommands(cmd_buf, 1, &secondary_buf);
 
   vkCmdEndRendering(cmd_buf);
+  if (counter > 150) {
+    t2 = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration<float>(t2 - t1);
+    auto elapsed_time = std::chrono::duration_cast<std::chrono::microseconds>(duration);
+    average_time += elapsed_time.count();
+    average_time /= 2;
 
-  // if (counter > 150) {
-  //   t2 = std::chrono::high_resolution_clock::now();
-  //   auto duration = std::chrono::duration<float>(t2 - t1);
-  //   auto elapsed_time = std::chrono::duration_cast<std::chrono::microseconds>(duration);
-  //   average_time += elapsed_time.count();
-  //   average_time /= 2;
+    if (counter % 75 == 0) {
+      fmt::println("draw time: {}", elapsed_time.count());
+    }
+  } else {
 
-  //   if (counter % 75 == 0) {
-  //     fmt::println("draw time: {}", elapsed_time.count());
-  //   }
-  // } else {
-
-  //   t2 = std::chrono::high_resolution_clock::now();
-  //   auto duration = std::chrono::duration<float>(t2 - t1);
-  //   auto elapsed_time = std::chrono::duration_cast<std::chrono::microseconds>(duration);
-  //   average_time = elapsed_time.count();
-  // }
-  // counter++;
+    t2 = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration<float>(t2 - t1);
+    auto elapsed_time = std::chrono::duration_cast<std::chrono::microseconds>(duration);
+    average_time = elapsed_time.count();
+  }
+  counter++;
 }
 
 MeshBuffers VkBackend::upload_mesh_buffers(std::span<uint32_t> indices, std::span<Vertex> vertices) {

@@ -2,8 +2,10 @@
 #include "vk_backend/vk_scene.h"
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <cstdio>
 #include <cstring>
+#include <fmt/base.h>
 #include <string>
 #define STB_IMAGE_IMPLEMENTATION
 #include "fastgltf/core.hpp"
@@ -147,7 +149,6 @@ std::vector<std::shared_ptr<VkSampler>> get_samplers(VkDevice device, fastgltf::
   return samplers;
 }
 
-//
 void apply_primitive_matrices(std::vector<Mesh>& meshes, fastgltf::Asset& asset, GLTFScene& scene,
                               uint32_t root_node_idx, glm::mat4 parent_matrix = glm::mat4{1.f}) {
 
@@ -331,7 +332,6 @@ GLTFScene load_scene(VkBackend* backend, std::filesystem::path path) {
 
   for (auto& mesh : asset.meshes) {
     auto new_mesh_buffers = std::make_shared<MeshBuffers>();
-    // new_mesh->name = mesh.name.c_str();
 
     vertices.clear();
     indices.clear();
@@ -347,7 +347,9 @@ GLTFScene load_scene(VkBackend* backend, std::filesystem::path path) {
         // gltf primitives guarantee POSITION attribute is present. no null checking
         auto* position_it = primitive.findAttribute("POSITION");
         fastgltf::Accessor& position_accessor = asset.accessors[position_it->second];
+
         assert(position_accessor.bufferViewIndex.has_value() && "gltf file did not have standard position data");
+
         vertices.resize(vertex_start_pos + position_accessor.count);
         fastgltf::iterateAccessorWithIndex<glm::vec3>(asset, position_accessor, [&](glm::vec3 pos, std::size_t idx) {
           vertices[idx + vertex_start_pos].position = pos;
@@ -370,13 +372,15 @@ GLTFScene load_scene(VkBackend* backend, std::filesystem::path path) {
         auto& index_accessor = asset.accessors[primitive.indicesAccessor.value()];
         assert(index_accessor.bufferViewIndex.has_value() && "gltf file did not have standard index data");
 
-        new_primitive.indices_start = indices.size();
-        indices.resize(new_primitive.indices_start + index_accessor.count);
+        uint32_t index_start_pos = indices.size();
+        new_primitive.indices_start = index_start_pos;
+        new_primitive.indices_count = index_accessor.count;
+        indices.reserve(index_start_pos + index_accessor.count);
 
         // index will be offset by vertex_start_pos since all primitives are interleaved into one overall mesh
         // buffer
-        fastgltf::iterateAccessorWithIndex<uint32_t>(
-            asset, index_accessor, [&](uint32_t index, std::size_t i) { indices[i + vertex_start_pos] = index; });
+        fastgltf::iterateAccessor<uint32_t>(asset, index_accessor,
+                                            [&](uint32_t index) { indices.push_back(index + vertex_start_pos); });
       }
       // VERTEX UV TEXTURE DATA
       {
@@ -405,14 +409,14 @@ GLTFScene load_scene(VkBackend* backend, std::filesystem::path path) {
       {
         auto colors = primitive.findAttribute("COLOR_0");
         if (colors != primitive.attributes.end()) {
-          DEBUG_PRINT("FOUND VERTEX COLORS");
+          // DEBUG_PRINT("FOUND VERTEX COLORS");
         }
       }
       new_primitives.push_back(new_primitive);
     }
-    // upload the vertex and index buffers for this mesh to the scene then attach it all to
-    // the primitives for drawing
+
     *new_mesh_buffers = backend->upload_mesh_buffers(indices, vertices);
+
     new_scene.mesh_buffers.push_back(new_mesh_buffers);
 
     Mesh new_mesh{};
@@ -421,17 +425,28 @@ GLTFScene load_scene(VkBackend* backend, std::filesystem::path path) {
     meshes.push_back(new_mesh);
   }
 
-  // only deal with first scene in the gltf for now
-  // generate the node tree to attach all transform matrices to each node
-  for (uint32_t root_node_idx : asset.scenes[0].nodeIndices) {
-    apply_primitive_matrices(meshes, asset, new_scene, root_node_idx);
+  DEBUG_PRINT("scene count: %d", (int)asset.scenes.size());
+
+  DEBUG_PRINT("ALL node count: %d", (int)asset.nodes.size());
+  for (auto& scene : asset.scenes) {
+    DEBUG_PRINT("scene node count: %d", (int)scene.nodeIndices.size());
+    for (uint32_t root_node_idx : scene.nodeIndices) {
+      apply_primitive_matrices(meshes, asset, new_scene, root_node_idx);
+    }
   }
+
+  int count = 0;
+  for (fastgltf::Mesh& mesh : asset.meshes) {
+    count += mesh.primitives.size();
+  }
+  DEBUG_PRINT("primitive count: %d", count);
 
   for (auto& mesh : meshes) {
     for (auto& new_primitive : mesh.primitives) {
       new_primitive.index_buffer = mesh.buffers->indices.buffer;
+
       // cache indices count
-      new_primitive.indices_count = mesh.buffers->indices.info.size / sizeof(uint32_t);
+      // new_primitive.indices_count = mesh.buffers->indices.info.size / sizeof(uint32_t);
       new_primitive.draw_constants.vertex_buffer_address =
           get_buffer_device_address(backend->_device_context.logical_device, mesh.buffers->vertices);
 
@@ -450,7 +465,11 @@ GLTFScene load_scene(VkBackend* backend, std::filesystem::path path) {
       }
     }
 
+    new_scene.draw_ctx.opaque_primitives.shrink_to_fit();
+    new_scene.draw_ctx.transparent_primitives.shrink_to_fit();
+
     auto& primitives = new_scene.draw_ctx.opaque_primitives;
+
     std::sort(primitives.begin(), primitives.end(), [&](const Primitive& primitive_a, const Primitive& primitive_b) {
       if (primitive_a.desc_set == primitive_b.desc_set) {
         return primitive_a.indices_start < primitive_b.indices_start;
@@ -459,13 +478,6 @@ GLTFScene load_scene(VkBackend* backend, std::filesystem::path path) {
       }
     });
   }
-  new_scene.draw_ctx.opaque_primitives.shrink_to_fit();
-  new_scene.draw_ctx.transparent_primitives.shrink_to_fit();
-  DEBUG_PRINT("opaque primitive size: %d and capacity: %d", (int)new_scene.draw_ctx.opaque_primitives.size(),
-              (int)new_scene.draw_ctx.opaque_primitives.capacity());
-
-  DEBUG_PRINT("transparent primitive size: %d and capacity: %d", (int)new_scene.draw_ctx.transparent_primitives.size(),
-              (int)new_scene.draw_ctx.transparent_primitives.capacity());
 
   return new_scene;
 }

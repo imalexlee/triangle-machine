@@ -7,6 +7,8 @@
 #include "vk_backend/vk_device.h"
 #include "vk_backend/vk_frame.h"
 #include "vk_backend/vk_utils.h"
+#include <core/ctpl_stl.h>
+#include <core/thread_pool.h>
 #include <cstdint>
 #include <filesystem>
 #include <vector>
@@ -50,6 +52,9 @@ private:
   VkSampler _default_linear_sampler;
   VkSampler _default_nearest_sampler;
 
+  // ThreadPool _thread_pool;
+
+  ctpl::thread_pool _thread_pool;
   DeletionQueue _deletion_queue;
 
   // initialization

@@ -60,6 +60,8 @@ struct Primitive {
   // std::shared_ptr<MeshBuffers> mesh_buffers;
   //  descriptor set from material ^
   DrawConstants draw_constants;
+  PipelineInfo pipeline_info;
+
   VkBuffer index_buffer;
   uint32_t indices_count;
   uint32_t indices_start;
@@ -79,6 +81,7 @@ struct DrawContext {
   PipelineInfo opaque_pipeline_info;
   std::vector<Primitive> opaque_primitives;
   PipelineInfo transparent_pipeline_info;
+  std::vector<Primitive> all_primitives;
   std::vector<Primitive> transparent_primitives;
 };
 

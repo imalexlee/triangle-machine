@@ -21,6 +21,7 @@ add_executable(
   src/core/engine.cpp
   src/core/window.cpp
   src/core/camera.cpp
+  src/core/thread_pool.cpp
   src/vk_backend/vk_backend.cpp
   src/vk_backend/vk_debug.cpp
   src/vk_backend/vk_device.cpp

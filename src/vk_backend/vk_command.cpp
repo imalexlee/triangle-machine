@@ -1,35 +1,71 @@
 #include "vk_command.h"
 #include "vk_backend/vk_utils.h"
+#include <cstdint>
+#include <fmt/format.h>
+#include <thread>
 #include <vulkan/vulkan_core.h>
 
 void CommandContext::create(VkDevice device, uint32_t queue_index, VkCommandPoolCreateFlags flags) {
+
+  uint32_t thread_count = std::thread::hardware_concurrency();
+  _secondary_pools.resize(thread_count);
+
   VkCommandPoolCreateInfo command_pool_ci{};
   command_pool_ci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
   command_pool_ci.pNext = nullptr;
   command_pool_ci.queueFamilyIndex = queue_index;
   command_pool_ci.flags = flags;
 
-  VK_CHECK(vkCreateCommandPool(device, &command_pool_ci, nullptr, &_pool));
+  VK_CHECK(vkCreateCommandPool(device, &command_pool_ci, nullptr, &_primary_pool));
 
-  VkCommandBufferAllocateInfo command_buffer_ai{};
-  command_buffer_ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-  command_buffer_ai.pNext = nullptr;
-  command_buffer_ai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-  command_buffer_ai.commandBufferCount = 1;
-  command_buffer_ai.commandPool = _pool;
+  for (uint32_t i = 0; i < thread_count; i++) {
+    _secondary_pools[i].thread_idx = i;
+    VK_CHECK(vkCreateCommandPool(device, &command_pool_ci, nullptr, &_secondary_pools[i].vk_pool));
+  }
 
-  VK_CHECK(vkAllocateCommandBuffers(device, &command_buffer_ai, &primary_buffer));
+  VkCommandBufferAllocateInfo primary_buffer_ai{};
+  primary_buffer_ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+  primary_buffer_ai.pNext = nullptr;
+  primary_buffer_ai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+  primary_buffer_ai.commandBufferCount = 1;
+  primary_buffer_ai.commandPool = _primary_pool;
 
-  _deletion_queue.push_persistant([=, this]() { vkDestroyCommandPool(device, _pool, nullptr); });
+  VK_CHECK(vkAllocateCommandBuffers(device, &primary_buffer_ai, &primary_buffer));
+
+  secondary_buffers.resize(thread_count);
+
+  for (uint32_t i = 0; i < thread_count; i++) {
+
+    VkCommandBufferAllocateInfo secondary_buffer_ai{};
+    secondary_buffer_ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    secondary_buffer_ai.pNext = nullptr;
+    secondary_buffer_ai.level = VK_COMMAND_BUFFER_LEVEL_SECONDARY;
+    secondary_buffer_ai.commandBufferCount = 1;
+    secondary_buffer_ai.commandPool = _secondary_pools[i].vk_pool;
+
+    VK_CHECK(vkAllocateCommandBuffers(device, &secondary_buffer_ai, &secondary_buffers[i]));
+  }
+
+  // fmt::println("primary handle: {}", fmt::ptr(_primary_pool));
+  // for (auto& secondary_pool : _secondary_pools) {
+  //   fmt::println("secondary handle: {}", fmt::ptr(secondary_pool.vk_pool));
+  // }
+
+  _deletion_queue.push_persistant([=, this]() {
+    for (const auto& pool : _secondary_pools) {
+      vkDestroyCommandPool(device, pool.vk_pool, nullptr);
+    }
+    vkDestroyCommandPool(device, _primary_pool, nullptr);
+  });
 }
 
 void CommandContext::destroy() { _deletion_queue.flush(); }
 
 void CommandContext::begin_primary_buffer(VkCommandBufferUsageFlags flags) {
+
   VkCommandBufferBeginInfo command_buffer_bi{};
   command_buffer_bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
   command_buffer_bi.pNext = nullptr;
-  command_buffer_bi.pInheritanceInfo = nullptr;
   command_buffer_bi.flags = flags;
 
   VK_CHECK(vkBeginCommandBuffer(primary_buffer, &command_buffer_bi));
