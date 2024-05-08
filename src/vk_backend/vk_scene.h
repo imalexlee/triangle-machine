@@ -7,7 +7,6 @@
 #include "vk_backend/vk_pipeline.h"
 #include <cstdint>
 #include <memory>
-#include <optional>
 #include <vector>
 #include <vk_backend/vk_types.h>
 #include <vulkan/vulkan_core.h>
@@ -25,36 +24,80 @@ struct DrawConstants {
   VkDeviceAddress vertex_buffer_address;
 };
 
-struct MaterialUniformData {
-  glm::vec4 color_factors;
+struct DrawObjUniformData {
+  glm::mat4 local_transform{1.f};
+  VkDeviceAddress vertex_buffer_address;
 };
 
-struct MetallicRoughness {
-  AllocatedImage color_texture;
-  std::optional<AllocatedImage> metallic_rough_texture;
-  std::optional<AllocatedBuffer> material_uniform_buffer;
-  uint32_t color_tex_coord;
-  uint32_t metallic_rough_tex_coord;
+struct GLTFTexture {
+  AllocatedImage tex;
+  VkSampler sampler;
+};
+
+struct PBRMetallicRoughness {
+  // GLTFTexture color_tex;
+  // GLTFTexture metal_rough_tex;
+  glm::vec4 color_factors;
+  uint32_t color_tex_coord{0};
+  uint32_t metal_rough_tex_coord{0};
   float metallic_factor;
   float roughness_factor;
-  glm::vec4 color_factors;
 };
 
-struct Material {
-  std::string name;
-  MetallicRoughness metallic_roughness;
-  VkDescriptorSet desc_set;
+struct GLTFMaterial {
+  PBRMetallicRoughness pbr;
   fastgltf::AlphaMode alpha_mode;
+};
+
+struct GLTFPrimitive {
+  uint32_t indices_count;
+  uint32_t indices_start;
+  uint32_t mat_idx;
+};
+
+struct GLTFMesh {
+  std::vector<uint32_t> indices;
+  std::vector<Vertex> vertices;
+  glm::mat4 local_transform{1.f};
+  std::vector<GLTFPrimitive> primitives;
+};
+
+struct MaterialUniformData {
+  glm::vec4 color_factors;
+  float metallic_factor;
+  float roughness_factor;
+};
+
+struct MaterialBuffers {
+  AllocatedBuffer mat_uniform_buffer;
+  AllocatedImage color_tex;
+  AllocatedImage metal_rough_tex;
+  /*
+   * this set contains bindings..
+   * 0. mat_uniform_buffer
+   * 1. color_tex
+   * 2. metal_rough_tex
+   */
+  VkDescriptorSet mat_desc_set;
+};
+
+struct DrawUniformData {
+  glm::mat4 local_transform{1.f};
+  glm::vec4 color_factors;
+  VkDeviceAddress vertex_buffer_address;
 };
 
 struct MeshBuffers {
   AllocatedBuffer indices;
   AllocatedBuffer vertices;
-  VkDeviceAddress vertex_buffer_address;
+
+  // try to get rid of this
+  //  VkDeviceAddress vertex_buffer_address;
 };
 
 struct Primitive {
   // std::shared_ptr<Material> material;
+  // contains DrawUniformData
   VkDescriptorSet desc_set;
   //   descriptor set from material ^
   // std::shared_ptr<MeshBuffers> mesh_buffers;
@@ -72,6 +115,11 @@ struct Mesh {
   std::shared_ptr<MeshBuffers> buffers;
 };
 
+// struct GLTFNode {
+//   std::vector<GLTFNode> children;
+//   glm::mat4 local_transform{1.f};
+// };
+
 struct SceneNode {
   std::vector<SceneNode> children;
   glm::mat4 local_transform{1.f};
@@ -88,7 +136,7 @@ struct DrawContext {
 class GLTFScene {
 public:
   std::vector<std::shared_ptr<MeshBuffers>> mesh_buffers;
-  std::vector<std::shared_ptr<Material>> materials;
+  std::vector<std::shared_ptr<GLTFMaterial>> materials;
   std::vector<std::shared_ptr<VkSampler>> samplers;
   DrawContext draw_ctx;
 
@@ -101,4 +149,31 @@ public:
 
 private:
   void add_nodes_to_context(SceneNode& root_node);
+};
+
+struct DrawObject {
+  VkDescriptorSet mat_desc_set;
+  VkDescriptorSet obj_desc_set;
+  VkBuffer index_buffer;
+  uint32_t indices_count;
+  uint32_t indices_start;
+};
+
+struct Scene {
+public:
+  std::vector<MeshBuffers> mesh_buffers;
+  std::vector<MaterialBuffers> material_buffers;
+  std::vector<AllocatedBuffer> draw_obj_uniform_buffers;
+  std::vector<DrawObject> draw_objects;
+  std::vector<VkSampler> samplers;
+
+  VkDescriptorSetLayout mat_desc_set_layout;
+  VkDescriptorSetLayout obj_desc_set_layout;
+  DescriptorAllocator mat_desc_allocator;
+  DescriptorAllocator obj_desc_allocator;
+
+  PipelineInfo opaque_pipeline_info;
+  PipelineInfo transparent_pipeline_info;
+
+  uint32_t trans_start;
 };

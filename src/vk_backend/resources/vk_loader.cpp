@@ -19,7 +19,6 @@
 #include <cstdint>
 #include <fastgltf/glm_element_traits.hpp>
 #include <fstream>
-#include <memory>
 #include <variant>
 #include <vulkan/vulkan_core.h>
 
@@ -94,10 +93,29 @@ glm::mat4 get_transform_matrix(const fastgltf::Node& node, glm::mat4x4& base) {
   return base;
 }
 
-std::vector<std::shared_ptr<VkSampler>> get_samplers(VkDevice device, fastgltf::Asset& asset) {
-  std::vector<std::shared_ptr<VkSampler>> samplers;
+void apply_transform_matrices(std::vector<GLTFMesh>& meshes, fastgltf::Asset& asset, uint32_t root_node_idx,
+                              glm::mat4 parent_matrix = glm::mat4{1.f}) {
+
+  auto& root_gltf_node = asset.nodes[root_node_idx];
+
+  glm::mat4 transform = get_transform_matrix(root_gltf_node, parent_matrix);
+
+  for (uint32_t child_node_idx : root_gltf_node.children) {
+    apply_transform_matrices(meshes, asset, child_node_idx, transform);
+  }
+
+  // only update meshes if they are being referenced by a node
+  if (root_gltf_node.meshIndex.has_value()) {
+    meshes[root_gltf_node.meshIndex.value()].local_transform = transform;
+  }
+}
+
+std::vector<VkSampler> get_samplers(VkDevice device, fastgltf::Asset& asset) {
+  std::vector<VkSampler> samplers;
+  samplers.reserve(asset.samplers.size());
+
   for (auto& gltf_sampler : asset.samplers) {
-    auto sampler = std::make_shared<VkSampler>();
+    VkSampler sampler;
 
     VkSamplerCreateInfo sampler_ci{};
     sampler_ci.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -142,28 +160,11 @@ std::vector<std::shared_ptr<VkSampler>> get_samplers(VkDevice device, fastgltf::
       sampler_ci.addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
     }
 
-    VK_CHECK(vkCreateSampler(device, &sampler_ci, nullptr, sampler.get()));
+    VK_CHECK(vkCreateSampler(device, &sampler_ci, nullptr, &sampler));
     samplers.push_back(sampler);
   }
 
   return samplers;
-}
-
-void apply_primitive_matrices(std::vector<Mesh>& meshes, fastgltf::Asset& asset, GLTFScene& scene,
-                              uint32_t root_node_idx, glm::mat4 parent_matrix = glm::mat4{1.f}) {
-
-  SceneNode root_node{};
-  auto& root_gltf_node = asset.nodes[root_node_idx];
-  root_node.local_transform = get_transform_matrix(root_gltf_node, parent_matrix);
-  for (uint32_t child_node_idx : root_gltf_node.children) {
-    apply_primitive_matrices(meshes, asset, scene, child_node_idx, root_node.local_transform);
-  }
-
-  if (root_gltf_node.meshIndex.has_value()) {
-    for (Primitive& primitive : meshes[root_gltf_node.meshIndex.value()].primitives) {
-      primitive.draw_constants.local_transform = root_node.local_transform;
-    }
-  }
 }
 
 // allocates and fills an AllocatedImage with the textures data
@@ -212,19 +213,16 @@ AllocatedImage generate_texture(VkBackend* backend, fastgltf::Asset& asset, fast
   return new_texture;
 };
 
-GLTFScene load_scene(VkBackend* backend, std::filesystem::path path) {
-  GLTFScene new_scene;
+Scene load_scene(VkBackend* backend, std::filesystem::path path) {
 
-  static constexpr auto supported_extensions = fastgltf::Extensions::KHR_mesh_quantization |
-                                               fastgltf::Extensions::KHR_texture_transform |
-                                               fastgltf::Extensions::KHR_materials_variants;
+  constexpr auto supported_extensions = fastgltf::Extensions::KHR_mesh_quantization |
+                                        fastgltf::Extensions::KHR_texture_transform |
+                                        fastgltf::Extensions::KHR_materials_variants;
+
   fastgltf::Parser parser(supported_extensions);
-
   fastgltf::GltfDataBuffer data;
-
   data.loadFromFile(path);
 
-  fastgltf::Asset asset;
   constexpr auto gltf_options = fastgltf::Options::DontRequireValidAssetMember | fastgltf::Options::AllowDouble |
                                 fastgltf::Options::LoadGLBBuffers | fastgltf::Options::LoadExternalBuffers |
                                 fastgltf::Options::LoadExternalImages | fastgltf::Options::GenerateMeshIndices;
@@ -235,280 +233,355 @@ GLTFScene load_scene(VkBackend* backend, std::filesystem::path path) {
     fmt::println("ERROR LOADING GLTF");
     std::exit(1);
   }
+
+  fastgltf::Asset asset;
   asset = std::move(load.get());
 
-  // SAMPLER DATA
-  new_scene.samplers = get_samplers(backend->_device_context.logical_device, asset);
+  Scene new_scene;
 
-  // MATERIAL DATA
-  // 1. create desc layout
-  // 2. create pool from layout with [material_count] sets
-  // 3. allocate and fill material desc sets for each material object
+  new_scene.samplers = get_samplers(backend->_device_context.logical_device, asset);
+  assert(new_scene.samplers.size() == asset.samplers.size() &&
+         "amount of samplers in scene does not match the amount in the GLTF file.");
+
+  // load textures
+  std::vector<GLTFTexture> textures;
+  textures.reserve(asset.textures.size());
+
+  for (auto& texture : asset.textures) {
+    GLTFTexture new_texture;
+    new_texture.tex = generate_texture(backend, asset, texture);
+
+    if (texture.samplerIndex.has_value()) {
+      new_texture.sampler = new_scene.samplers[texture.samplerIndex.value()];
+    } else {
+      new_texture.sampler = backend->_default_linear_sampler;
+    }
+    textures.push_back(new_texture);
+  }
+
+  assert(textures.size() == asset.textures.size() &&
+         "amount of textures in scene does not match the amount in the GLTF file.");
+
+  // load materials
   DescriptorLayoutBuilder layout_builder;
+  // create descriptor pool for all material data
   layout_builder.add_binding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
   layout_builder.add_binding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-  new_scene.desc_set_layout = layout_builder.build(backend->_device_context.logical_device,
-                                                   VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
+  layout_builder.add_binding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
-  std::vector<PoolSizeRatio> pool_sizes = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1},
-                                           {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1}};
+  new_scene.mat_desc_set_layout = layout_builder.build(backend->_device_context.logical_device,
+                                                       VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
 
-  new_scene.desc_allocator.create(backend->_device_context.logical_device, asset.materials.size(), pool_sizes);
+  std::vector<PoolSizeRatio> mat_pool_sizes = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1},
+                                               {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2}};
 
-  DescriptorWriter desc_writer;
+  new_scene.mat_desc_allocator.create(backend->_device_context.logical_device, asset.materials.size(), mat_pool_sizes);
 
-  fmt::println("Loading materials...");
-  for (auto& material : asset.materials) {
-    auto new_material = std::make_shared<Material>();
-    new_material->name = material.name.c_str();
-    // DEBUG_PRINT("mat name: %s", new_material->name.c_str());
-    new_material->alpha_mode = material.alphaMode;
-    new_material->metallic_roughness.metallic_factor = material.pbrData.metallicFactor;
-    new_material->metallic_roughness.roughness_factor = material.pbrData.roughnessFactor;
-    new_material->metallic_roughness.color_factors = glm::make_vec4(material.pbrData.baseColorFactor.data());
+  std::vector<GLTFMaterial> materials;
+  materials.reserve(asset.materials.size());
+  new_scene.material_buffers.reserve(asset.materials.size());
 
-    // allocate and fill a buffer to hold the base color factor
-    new_material->metallic_roughness.material_uniform_buffer =
-        create_buffer(sizeof(MaterialUniformData), backend->_allocator, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                      VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
-                      VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT);
-    auto* material_uniform_data =
-        (MaterialUniformData*)new_material->metallic_roughness.material_uniform_buffer.value().info.pMappedData;
-    material_uniform_data->color_factors = new_material->metallic_roughness.color_factors;
+  uint32_t default_mat_idx = 0;
+  for (uint32_t i = 0; i < asset.materials.size(); i++) {
+    // metadata
+    GLTFMaterial new_mat;
+    // meat and potatoes
+    MaterialBuffers new_bufs;
 
-    // write filled buffer to binding 0 of the material descriptor set
-    desc_writer.write_buffer(0, new_material->metallic_roughness.material_uniform_buffer.value().buffer,
-                             sizeof(MaterialUniformData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    const auto& material = asset.materials[i];
+
+    new_mat.alpha_mode = material.alphaMode;
+    new_mat.pbr.metallic_factor = material.pbrData.metallicFactor;
+    new_mat.pbr.roughness_factor = material.pbrData.roughnessFactor;
+    new_mat.pbr.color_factors = glm::make_vec4(material.pbrData.baseColorFactor.data());
+
+    VkSampler color_tex_sampler;
+    VkSampler metal_tex_sampler;
 
     if (material.pbrData.baseColorTexture.has_value()) {
-
-      auto& color_texture = asset.textures[material.pbrData.baseColorTexture.value().textureIndex];
-
-      new_material->metallic_roughness.color_tex_coord = material.pbrData.baseColorTexture.value().texCoordIndex;
-      new_material->metallic_roughness.color_texture = generate_texture(backend, asset, color_texture);
-      desc_writer.write_image(1, new_material->metallic_roughness.color_texture.image_view,
-                              *new_scene.samplers[color_texture.samplerIndex.value()],
-                              VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+      // new_mat.pbr.color_tex = textures[material.pbrData.baseColorTexture->textureIndex];
+      assert(material.pbrData.baseColorTexture.value().textureIndex < textures.size() &&
+             "accessing invalid color texture");
+      const GLTFTexture& color_texture = textures[material.pbrData.baseColorTexture.value().textureIndex];
+      new_mat.pbr.color_tex_coord = material.pbrData.baseColorTexture.value().texCoordIndex;
+      new_bufs.color_tex = color_texture.tex;
+      color_tex_sampler = color_texture.sampler;
     } else {
-      // use default texture
-      new_material->metallic_roughness.color_tex_coord = 0;
-      new_material->metallic_roughness.color_texture = backend->upload_texture_image(
-          (void*)white_image.data(), VK_IMAGE_USAGE_SAMPLED_BIT, CHECKER_WIDTH, CHECKER_WIDTH);
-      desc_writer.write_image(1, new_material->metallic_roughness.color_texture.image_view,
-                              backend->_default_nearest_sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                              VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+
+      default_mat_idx = i;
+      new_bufs.color_tex = backend->upload_texture_image((void*)white_image.data(), VK_IMAGE_USAGE_SAMPLED_BIT,
+                                                         CHECKER_WIDTH, CHECKER_WIDTH);
+      color_tex_sampler = backend->_default_linear_sampler;
     }
 
     if (material.pbrData.metallicRoughnessTexture.has_value()) {
-      auto& metallic_rough_texture = asset.textures[material.pbrData.metallicRoughnessTexture.value().textureIndex];
-      new_material->metallic_roughness.metallic_rough_tex_coord =
-          material.pbrData.metallicRoughnessTexture.value().texCoordIndex;
-      new_material->metallic_roughness.metallic_rough_texture =
-          generate_texture(backend, asset, metallic_rough_texture);
-      // desc_writer.write_image(1, new_material->metallic_roughness.color_texture.image_view,
-      //                         *new_scene.samplers[metallic_rough_texture.samplerIndex.value()],
-      //                         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-      //                         VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+      // new_mat.pbr.metal_rough_tex = textures[material.pbrData.metallicRoughnessTexture->textureIndex];
+      assert(material.pbrData.metallicRoughnessTexture.value().textureIndex < textures.size() &&
+             "accessing invalid metal rough texture");
+      const GLTFTexture& metal_texture = textures[material.pbrData.metallicRoughnessTexture.value().textureIndex];
+      new_mat.pbr.metal_rough_tex_coord = material.pbrData.metallicRoughnessTexture.value().texCoordIndex;
+      new_bufs.metal_rough_tex = metal_texture.tex;
+      metal_tex_sampler = metal_texture.sampler;
     } else {
-      // use default texture
-      new_material->metallic_roughness.metallic_rough_tex_coord = 0;
-      new_material->metallic_roughness.metallic_rough_texture = backend->upload_texture_image(
-          (void*)purple_checkerboard.data(), VK_IMAGE_USAGE_SAMPLED_BIT, CHECKER_WIDTH, CHECKER_WIDTH);
+
+      new_bufs.metal_rough_tex = backend->upload_texture_image((void*)white_image.data(), VK_IMAGE_USAGE_SAMPLED_BIT,
+                                                               CHECKER_WIDTH, CHECKER_WIDTH);
+      metal_tex_sampler = backend->_default_linear_sampler;
     }
-    new_material->desc_set =
-        new_scene.desc_allocator.allocate(backend->_device_context.logical_device, new_scene.desc_set_layout);
-    desc_writer.update_set(backend->_device_context.logical_device, new_material->desc_set);
 
-    new_scene.materials.push_back(new_material);
+    new_bufs.mat_desc_set =
+        new_scene.mat_desc_allocator.allocate(backend->_device_context.logical_device, new_scene.mat_desc_set_layout);
+
+    // 1. fill in the uniform material buffer
+    new_bufs.mat_uniform_buffer =
+        create_buffer(sizeof(MaterialUniformData), backend->_allocator, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                      VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+                      VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT);
+
+    auto* material_uniform_data = (MaterialUniformData*)new_bufs.mat_uniform_buffer.info.pMappedData;
+
+    material_uniform_data->color_factors = new_mat.pbr.color_factors;
+    material_uniform_data->metallic_factor = new_mat.pbr.metallic_factor;
+    material_uniform_data->roughness_factor = new_mat.pbr.roughness_factor;
+
+    DescriptorWriter desc_writer;
+
+    desc_writer.write_buffer(0, new_bufs.mat_uniform_buffer.buffer, sizeof(MaterialUniformData), 0,
+                             VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+
+    // 2. put the texture information into the descriptor set
+    desc_writer.write_image(1, new_bufs.color_tex.image_view, color_tex_sampler,
+                            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+
+    desc_writer.write_image(2, new_bufs.metal_rough_tex.image_view, metal_tex_sampler,
+                            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+
+    desc_writer.update_set(backend->_device_context.logical_device, new_bufs.mat_desc_set);
+
+    new_scene.material_buffers.push_back(new_bufs);
+    materials.push_back(new_mat);
   }
-  fmt::println("Materials loaded");
 
-  // MESH DATA
-  // temporary containers
-  std::vector<Vertex> vertices;
-  std::vector<uint32_t> indices;
-  std::vector<Primitive> new_primitives;
-  std::vector<Mesh> meshes;
+  assert(new_scene.material_buffers.size() == materials.size() && "material metadata and buffers do not match in size");
+
+  assert(new_scene.material_buffers.size() == asset.materials.size() &&
+         "allocated material buffers do not match size of materials in GLTF file");
+
+  assert(materials.size() == asset.materials.size() &&
+         "temp material metadata does not match size of materials in GLTF file");
+
+  // load meshes
+  std::vector<GLTFMesh> meshes;
+  meshes.reserve(asset.meshes.size());
+
+  uint32_t primitive_count = 0;
 
   for (auto& mesh : asset.meshes) {
-    auto new_mesh_buffers = std::make_shared<MeshBuffers>();
+    GLTFMesh new_mesh;
+    new_mesh.primitives.reserve(mesh.primitives.size());
+    primitive_count += mesh.primitives.size();
 
-    vertices.clear();
-    indices.clear();
-    new_primitives.clear();
+    // creating one index and one vertex buffer per mesh. primitives are given
+    // an offset and length into the index buffer.
+    uint32_t index_count = 0;
+    uint32_t vertex_count = 0;
 
     for (auto& primitive : mesh.primitives) {
 
-      Primitive new_primitive{};
+      uint32_t material_idx = primitive.materialIndex.value_or(default_mat_idx);
 
-      // VERTEX POSITION DATA
-      uint32_t vertex_start_pos = vertices.size();
-      {
-        // gltf primitives guarantee POSITION attribute is present. no null checking
-        auto* position_it = primitive.findAttribute("POSITION");
-        fastgltf::Accessor& position_accessor = asset.accessors[position_it->second];
+      auto& pos_accessor = asset.accessors[primitive.findAttribute("POSITION")->second];
 
-        assert(position_accessor.bufferViewIndex.has_value() && "gltf file did not have standard position data");
+      new_mesh.vertices.resize(vertex_count + pos_accessor.count);
 
-        vertices.resize(vertex_start_pos + position_accessor.count);
-        fastgltf::iterateAccessorWithIndex<glm::vec3>(asset, position_accessor, [&](glm::vec3 pos, std::size_t idx) {
-          vertices[idx + vertex_start_pos].position = pos;
-          // set default color to white
-          vertices[idx + vertex_start_pos].color = glm::vec4{1.f};
+      fastgltf::iterateAccessorWithIndex<glm::vec3>(asset, pos_accessor, [&](glm::vec3 pos, std::size_t i) {
+        new_mesh.vertices[i + vertex_count].position = pos;
+        new_mesh.vertices[i + vertex_count].color = glm::vec4{1.f};
+        // default uv coords to top left of texture image
+        new_mesh.vertices[i + vertex_count].uv_x = 0.f;
+        new_mesh.vertices[i + vertex_count].uv_y = 0.f;
+      });
+
+      auto normal_accessor = asset.accessors[primitive.findAttribute("NORMAL")->second];
+      fastgltf::iterateAccessorWithIndex<glm::vec3>(asset, normal_accessor, [&](glm::vec3 normal, std::size_t i) {
+        new_mesh.vertices[i + vertex_count].normal = normal;
+      });
+
+      // currently only loading in UV's for the color texture
+      int color_tex_coord = materials[material_idx].pbr.color_tex_coord;
+      std::string color_tex_coord_key = "TEXCOORD_";
+      // 48 is ASCII for '0'. breaks if color_text_coord > 9 for now. shiver me timbers
+      color_tex_coord_key.push_back(48 + color_tex_coord);
+
+      auto* color_tex_attribute_it = primitive.findAttribute(color_tex_coord_key);
+      if (color_tex_attribute_it != primitive.attributes.end()) {
+        // found tex coord attribute
+        auto& color_tex_accessor = asset.accessors[color_tex_attribute_it->second];
+        fastgltf::iterateAccessorWithIndex<glm::vec2>(asset, color_tex_accessor, [&](glm::vec2 uv, std::size_t i) {
+          new_mesh.vertices[i + vertex_count].uv_x = uv.x;
+          new_mesh.vertices[i + vertex_count].uv_y = uv.y;
         });
       }
 
-      // VERTEX NORMAL DATA
-      {
-        auto* normal_it = primitive.findAttribute("NORMAL");
-        fastgltf::Accessor& normal_accessor = asset.accessors[normal_it->second];
-        fastgltf::iterateAccessorWithIndex<glm::vec3>(
-            asset, normal_accessor, [&](glm::vec3 normal, std::size_t idx) { vertices[idx].normal = normal; });
-      }
+      auto& idx_accessor = asset.accessors[primitive.indicesAccessor.value()];
 
-      // VERTEX INDEX DATA
-      {
-        assert(primitive.indicesAccessor.has_value() && "gltf file does not have indices accessor");
-        auto& index_accessor = asset.accessors[primitive.indicesAccessor.value()];
-        assert(index_accessor.bufferViewIndex.has_value() && "gltf file did not have standard index data");
+      new_mesh.indices.resize(index_count + idx_accessor.count);
 
-        uint32_t index_start_pos = indices.size();
-        new_primitive.indices_start = index_start_pos;
-        new_primitive.indices_count = index_accessor.count;
-        indices.reserve(index_start_pos + index_accessor.count);
+      fastgltf::iterateAccessorWithIndex<std::uint32_t>(asset, idx_accessor, [&](std::uint32_t vert_index, size_t i) {
+        // index needs to be offset by vertex_count since we're combining all vertex data into one buffer
+        new_mesh.indices[i + index_count] = vert_index + vertex_count;
+        assert(vert_index + vertex_count < new_mesh.vertices.size() &&
+               "index is larger than the vertex buffer itself.");
+      });
 
-        // index will be offset by vertex_start_pos since all primitives are interleaved into one overall mesh
-        // buffer
-        fastgltf::iterateAccessor<uint32_t>(asset, index_accessor,
-                                            [&](uint32_t index) { indices.push_back(index + vertex_start_pos); });
-      }
-      // VERTEX UV TEXTURE DATA
-      {
-        if (primitive.materialIndex.has_value()) {
-          // new_primitive.material = new_scene.materials[primitive.materialIndex.value()];
-          auto& mat = new_scene.materials[primitive.materialIndex.value()];
-          new_primitive.desc_set = mat->desc_set;
-          // this is the N associated with TEXCOORD_N
-          uint32_t uv_color_tex_idx = mat->metallic_roughness.color_tex_coord;
-          std::string uv_attribute_key = "TEXCOORD_";
-          // 48 is ASCII for '0'
-          uv_attribute_key.push_back(48 + uv_color_tex_idx);
+      GLTFPrimitive new_primitive;
+      new_primitive.mat_idx = material_idx;
+      new_primitive.indices_count = idx_accessor.count;
+      new_primitive.indices_start = index_count;
 
-          auto* color_uv_it = primitive.findAttribute(uv_attribute_key);
-          fastgltf::Accessor& color_uv_accessor = asset.accessors[color_uv_it->second];
-          fastgltf::iterateAccessorWithIndex<glm::vec2>(asset, color_uv_accessor, [&](glm::vec2 uv, std::size_t idx) {
-            vertices[idx + vertex_start_pos].uv_x = uv.x;
-            vertices[idx + vertex_start_pos].uv_y = uv.y;
-          });
-        } else {
-          auto& mat = new_scene.materials[0];
-          new_primitive.desc_set = mat->desc_set;
-        }
-      }
-      // VERTEX COLOR DATA
-      {
-        auto colors = primitive.findAttribute("COLOR_0");
-        if (colors != primitive.attributes.end()) {
-          // DEBUG_PRINT("FOUND VERTEX COLORS");
-        }
-      }
-      new_primitives.push_back(new_primitive);
+      index_count += idx_accessor.count;
+      vertex_count += pos_accessor.count;
+
+      new_mesh.primitives.push_back(new_primitive);
     }
+    assert(new_mesh.primitives.size() == mesh.primitives.size() &&
+           "temp mesh and actual GLTF mesh do not have the same amount of primitives");
 
-    *new_mesh_buffers = backend->upload_mesh_buffers(indices, vertices);
-
-    new_scene.mesh_buffers.push_back(new_mesh_buffers);
-
-    Mesh new_mesh{};
-    new_mesh.primitives = new_primitives;
-    new_mesh.buffers = new_mesh_buffers;
     meshes.push_back(new_mesh);
   }
 
-  DEBUG_PRINT("scene count: %d", (int)asset.scenes.size());
-
-  DEBUG_PRINT("ALL node count: %d", (int)asset.nodes.size());
+  // first scene only for now
   for (auto& scene : asset.scenes) {
-    DEBUG_PRINT("scene node count: %d", (int)scene.nodeIndices.size());
-    for (uint32_t root_node_idx : scene.nodeIndices) {
-      apply_primitive_matrices(meshes, asset, new_scene, root_node_idx);
+    for (auto& root_node_idx : scene.nodeIndices) {
+      // recursively update the node tree of transform matrices for meshes
+      apply_transform_matrices(meshes, asset, root_node_idx);
     }
   }
 
-  int count = 0;
-  for (fastgltf::Mesh& mesh : asset.meshes) {
-    count += mesh.primitives.size();
-  }
-  DEBUG_PRINT("primitive count: %d", count);
+  // now go through each mesh, dump and create a desc set for each mesh.
+  // then, iterate over all primitives, creating a mesh buffer struct and filling it with allocated version
+  // of the indices and vertices in the mesh.
+  // after that,
+
+  layout_builder.clear();
+  layout_builder.add_binding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+
+  new_scene.obj_desc_set_layout = layout_builder.build(backend->_device_context.logical_device,
+                                                       VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
+
+  std::vector<PoolSizeRatio> obj_pool_sizes = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1}};
+  new_scene.obj_desc_allocator.create(backend->_device_context.logical_device, primitive_count, obj_pool_sizes);
+
+  new_scene.draw_obj_uniform_buffers.reserve(primitive_count);
+  new_scene.mesh_buffers.reserve(meshes.size());
+
+  std::vector<DrawObject> opaque_draws;
+  opaque_draws.reserve(primitive_count);
+  std::vector<DrawObject> trans_draws;
+  trans_draws.reserve(primitive_count);
 
   for (auto& mesh : meshes) {
-    for (auto& new_primitive : mesh.primitives) {
-      new_primitive.index_buffer = mesh.buffers->indices.buffer;
+    MeshBuffers new_mesh_bufs = backend->upload_mesh_buffers(mesh.indices, mesh.vertices);
+    new_scene.mesh_buffers.push_back(new_mesh_bufs);
 
-      // cache indices count
-      // new_primitive.indices_count = mesh.buffers->indices.info.size / sizeof(uint32_t);
-      new_primitive.draw_constants.vertex_buffer_address =
-          get_buffer_device_address(backend->_device_context.logical_device, mesh.buffers->vertices);
+    for (auto& primitive : mesh.primitives) {
 
-      Material* primitive_material;
+      AllocatedBuffer obj_uniform_buf;
 
-      for (const auto& material : new_scene.materials) {
-        if (material->desc_set == new_primitive.desc_set) {
-          primitive_material = material.get();
-        }
-      }
+      VkDescriptorSet draw_obj_desc_set =
+          new_scene.obj_desc_allocator.allocate(backend->_device_context.logical_device, new_scene.obj_desc_set_layout);
 
-      if (primitive_material->alpha_mode == fastgltf::AlphaMode::Blend) {
-        new_scene.draw_ctx.transparent_primitives.push_back(new_primitive);
+      obj_uniform_buf =
+          create_buffer(sizeof(DrawObjUniformData), backend->_allocator, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                        VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+                        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT);
+
+      auto* obj_uniform_data = (DrawObjUniformData*)obj_uniform_buf.info.pMappedData;
+
+      obj_uniform_data->local_transform = mesh.local_transform;
+      obj_uniform_data->vertex_buffer_address =
+          get_buffer_device_address(backend->_device_context.logical_device, new_mesh_bufs.vertices);
+
+      DescriptorWriter desc_writer;
+
+      desc_writer.write_buffer(0, obj_uniform_buf.buffer, sizeof(DrawObjUniformData), 0,
+                               VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+
+      desc_writer.update_set(backend->_device_context.logical_device, draw_obj_desc_set);
+
+      new_scene.draw_obj_uniform_buffers.push_back(obj_uniform_buf);
+
+      DrawObject new_draw_obj;
+      new_draw_obj.index_buffer = new_mesh_bufs.indices.buffer;
+      new_draw_obj.indices_count = primitive.indices_count;
+      new_draw_obj.indices_start = primitive.indices_start;
+      new_draw_obj.obj_desc_set = draw_obj_desc_set;
+      new_draw_obj.mat_desc_set = new_scene.material_buffers[primitive.mat_idx].mat_desc_set;
+
+      fastgltf::AlphaMode alpha_mode = materials[primitive.mat_idx].alpha_mode;
+
+      if (alpha_mode == fastgltf::AlphaMode::Opaque) {
+        opaque_draws.push_back(new_draw_obj);
       } else {
-        new_scene.draw_ctx.opaque_primitives.push_back(new_primitive);
+        trans_draws.push_back(new_draw_obj);
       }
     }
-
-    new_scene.draw_ctx.opaque_primitives.shrink_to_fit();
-    new_scene.draw_ctx.transparent_primitives.shrink_to_fit();
-
-    auto& primitives = new_scene.draw_ctx.opaque_primitives;
-
-    std::sort(primitives.begin(), primitives.end(), [&](const Primitive& primitive_a, const Primitive& primitive_b) {
-      if (primitive_a.desc_set == primitive_b.desc_set) {
-        return primitive_a.indices_start < primitive_b.indices_start;
-      } else {
-        return primitive_a.desc_set < primitive_b.desc_set;
-      }
-    });
   }
+
+  // sort opaque draws by material
+  std::sort(opaque_draws.begin(), opaque_draws.end(), [&](const DrawObject& obj_a, const DrawObject& obj_b) {
+    if (obj_a.mat_desc_set == obj_b.mat_desc_set) {
+      return obj_a.indices_start < obj_b.indices_start;
+    } else {
+      return obj_a.mat_desc_set < obj_b.mat_desc_set;
+    }
+  });
+
+  // sort transparent draws by material
+  std::sort(trans_draws.begin(), trans_draws.end(), [&](const DrawObject& obj_a, const DrawObject& obj_b) {
+    if (obj_a.mat_desc_set == obj_b.mat_desc_set) {
+      return obj_a.indices_start < obj_b.indices_start;
+    } else {
+      return obj_a.mat_desc_set < obj_b.mat_desc_set;
+    }
+  });
+
+  new_scene.draw_objects.resize(primitive_count);
+  new_scene.trans_start = opaque_draws.size();
+
+  // copy sorted blocks of opaque/trans draws into final buffer
+  memcpy(new_scene.draw_objects.data(), opaque_draws.data(), opaque_draws.size() * sizeof(DrawObject));
+  memcpy(new_scene.draw_objects.data() + new_scene.trans_start, trans_draws.data(),
+         trans_draws.size() * sizeof(DrawObject));
 
   return new_scene;
 }
 
-void destroy_scene(VkDevice device, VmaAllocator allocator, GLTFScene& scene) {
+void destroy_scene(VkDevice device, VmaAllocator allocator, Scene& scene) {
+
   DEBUG_PRINT("Destroying Scene");
-  scene.desc_allocator.destroy_pools(device);
+  scene.mat_desc_allocator.destroy_pools(device);
+  scene.obj_desc_allocator.destroy_pools(device);
 
   for (auto& sampler : scene.samplers) {
-    vkDestroySampler(device, *sampler, nullptr);
+    vkDestroySampler(device, sampler, nullptr);
   }
   for (auto& mesh : scene.mesh_buffers) {
-    destroy_buffer(allocator, mesh->indices);
-    destroy_buffer(allocator, mesh->vertices);
+    destroy_buffer(allocator, mesh.indices);
+    destroy_buffer(allocator, mesh.vertices);
   }
-  for (auto& material : scene.materials) {
-    destroy_image(device, allocator, material->metallic_roughness.color_texture);
-    if (material->metallic_roughness.metallic_rough_texture.has_value()) {
-      destroy_image(device, allocator, material->metallic_roughness.metallic_rough_texture.value());
-    }
-    if (material->metallic_roughness.material_uniform_buffer.has_value()) {
-
-      destroy_buffer(allocator, material->metallic_roughness.material_uniform_buffer.value());
-    }
+  for (auto& material : scene.material_buffers) {
+    destroy_image(device, allocator, material.color_tex);
+    destroy_image(device, allocator, material.metal_rough_tex);
+    destroy_buffer(allocator, material.mat_uniform_buffer);
   }
 
-  vkDestroyDescriptorSetLayout(device, scene.desc_set_layout, nullptr);
+  vkDestroyDescriptorSetLayout(device, scene.mat_desc_set_layout, nullptr);
+  vkDestroyDescriptorSetLayout(device, scene.obj_desc_set_layout, nullptr);
 
-  vkDestroyPipelineLayout(device, scene.draw_ctx.opaque_pipeline_info.pipeline_layout, nullptr);
-  vkDestroyPipelineLayout(device, scene.draw_ctx.transparent_pipeline_info.pipeline_layout, nullptr);
+  vkDestroyPipelineLayout(device, scene.opaque_pipeline_info.pipeline_layout, nullptr);
+  vkDestroyPipelineLayout(device, scene.transparent_pipeline_info.pipeline_layout, nullptr);
 
-  vkDestroyPipeline(device, scene.draw_ctx.opaque_pipeline_info.pipeline, nullptr);
-  vkDestroyPipeline(device, scene.draw_ctx.transparent_pipeline_info.pipeline, nullptr);
+  vkDestroyPipeline(device, scene.opaque_pipeline_info.pipeline, nullptr);
+  vkDestroyPipeline(device, scene.transparent_pipeline_info.pipeline, nullptr);
 }

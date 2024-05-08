@@ -5,17 +5,17 @@
 
 #include "../input_structures.glsl"
 
-struct Vertex {
-    vec3 position;
-    float uv_x;
-    vec3 normal;
-    float uv_y;
-    vec4 color;
-};
-
-layout(buffer_reference, std430) readonly buffer VertexBuffer {
-    Vertex vertices[];
-};
+//struct Vertex {
+//    vec3 position;
+//    float uv_x;
+//    vec3 normal;
+//    float uv_y;
+//    vec4 color;
+//};
+//
+//layout(buffer_reference, std430) readonly buffer VertexBuffer {
+//    Vertex vertices[];
+//};
 
 layout(push_constant) uniform PushConstants {
     // will be used to transform vertex normal
@@ -30,9 +30,9 @@ layout(location = 3) out vec3 eye_pos;
 layout(location = 4) out vec3 vert_pos;
 
 void main() {
-    Vertex v = constants.vertex_buffer.vertices[gl_VertexIndex];
-    gl_Position = scene_data.view_proj * constants.local_transform * vec4(v.position, 1.0f);
-    frag_color = (constants.local_transform * vec4(v.normal, 0)).xyz;
+    Vertex v = obj_data.vertex_buffer.vertices[gl_VertexIndex];
+    gl_Position = scene_data.view_proj * obj_data.local_transform * vec4(v.position, 1.0f);
+    frag_color = (obj_data.local_transform * vec4(v.normal, 0)).xyz;
     surface_normal = v.normal;
     eye_pos = scene_data.eye_pos;
     vert_pos = v.position;

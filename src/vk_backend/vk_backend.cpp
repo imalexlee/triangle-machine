@@ -82,7 +82,7 @@ void VkBackend::create_default_data() {
   sampler_ci.minFilter = VK_FILTER_NEAREST;
   VK_CHECK(vkCreateSampler(_device_context.logical_device, &sampler_ci, nullptr, &_default_nearest_sampler));
 
-  _scene = load_scene(this, "../../assets/3d/porsche_large.glb");
+  _scene = load_scene(this, "../../assets/3d/structure.glb");
 }
 
 auto time1 = std::chrono::high_resolution_clock::now();
@@ -185,39 +185,41 @@ void VkBackend::create_pipelines() {
   builder.set_depth_stencil_state(true, true, VK_COMPARE_OP_GREATER_OR_EQUAL);
   builder.set_render_info(_swapchain_context.format, _depth_image.image_format);
 
-  VkPushConstantRange push_constant_range{};
-  push_constant_range.size = sizeof(DrawConstants);
-  push_constant_range.offset = 0;
-  push_constant_range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-  std::array<VkPushConstantRange, 1> push_constant_ranges{push_constant_range};
+  // VkPushConstantRange push_constant_range{};
+  // push_constant_range.size = sizeof(DrawConstants);
+  // push_constant_range.offset = 0;
+  // push_constant_range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+  // std::array<VkPushConstantRange, 1> push_constant_ranges{push_constant_range};
   // all frames have the same layout so you can use the first one's layout
-  std::array<VkDescriptorSetLayout, 2> set_layoutrs{_frames[0].desc_set_layout, _scene.desc_set_layout};
+  std::array<VkDescriptorSetLayout, 3> set_layouts{_frames[0].desc_set_layout, _scene.mat_desc_set_layout,
+                                                   _scene.obj_desc_set_layout};
 
-  builder.set_layout(set_layoutrs, push_constant_ranges, 0);
+  builder.set_layout(set_layouts, {}, 0);
 
   PipelineInfo opaque_pipeline_info = builder.build_pipeline(_device_context.logical_device);
-  _scene.draw_ctx.opaque_pipeline_info = opaque_pipeline_info;
+  _scene.opaque_pipeline_info = opaque_pipeline_info;
 
-  for (auto& primitive : _scene.draw_ctx.opaque_primitives) {
-    primitive.pipeline_info = _scene.draw_ctx.opaque_pipeline_info;
-  }
+  // for (auto& primitive : _scene.draw_ctx.opaque_primitives) {
+  //   primitive.pipeline_info = _scene.draw_ctx.opaque_pipeline_info;
+  // }
 
   builder.enable_blending_alphablend();
   builder.set_depth_stencil_state(true, false, VK_COMPARE_OP_GREATER_OR_EQUAL);
 
   PipelineInfo transparent_pipeline_info = builder.build_pipeline(_device_context.logical_device);
-  _scene.draw_ctx.transparent_pipeline_info = transparent_pipeline_info;
+  _scene.transparent_pipeline_info = transparent_pipeline_info;
 
-  for (auto& primitive : _scene.draw_ctx.transparent_primitives) {
-    primitive.pipeline_info = _scene.draw_ctx.transparent_pipeline_info;
-  }
+  // for (auto& draw_obj : _scene.draw_objects) {
+  //   draw_obj.pipeline_info = _scene.opaque_pipeline_info;
+  // }
 
-  for (auto& new_primitive : _scene.draw_ctx.opaque_primitives) {
-    _scene.draw_ctx.all_primitives.push_back(new_primitive);
-  }
-  for (auto& new_primitive : _scene.draw_ctx.transparent_primitives) {
-    _scene.draw_ctx.all_primitives.push_back(new_primitive);
-  }
+  // for (auto& new_primitive : _scene.draw_ctx.opaque_primitives) {
+  //   _scene.draw_ctx.all_primitives.push_back(new_primitive);
+  // }
+  //
+  // for (auto& new_primitive : _scene.draw_ctx.transparent_primitives) {
+  //   _scene.draw_ctx.all_primitives.push_back(new_primitive);
+  // }
 
   _deletion_queue.push_persistant([=, this]() {
     vkDestroyShaderModule(_device_context.logical_device, vert_shader, nullptr);
@@ -238,10 +240,9 @@ std::vector<const char*> VkBackend::get_instance_extensions() {
   return extensions;
 }
 
-auto t1 = std::chrono::high_resolution_clock::now();
-auto t2 = std::chrono::high_resolution_clock::now();
 uintmax_t counter = 0;
-float average_time = 0.f;
+uintmax_t iters = 0;
+volatile float average_time = 0.f;
 
 void VkBackend::draw() {
   update_scene();
@@ -363,31 +364,17 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
   writer.clear();
 
   // both opaque and transparent have the same layout for now
-  VkPipelineLayout current_pipeline_layout = _scene.draw_ctx.opaque_pipeline_info.pipeline_layout;
+  VkPipelineLayout current_pipeline_layout = _scene.opaque_pipeline_info.pipeline_layout;
 
-  // vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, _scene.draw_ctx.opaque_pipeline_info.pipeline);
+  // vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, _scene.opaque_pipeline_info.pipeline);
 
-  // VkViewport viewport{};
-  // viewport.x = 0.0f;
-  // viewport.y = 0.0f;
-  // viewport.width = _swapchain_context.extent.width;
-  // viewport.height = _swapchain_context.extent.height;
-  // viewport.minDepth = 0.0f;
-  // viewport.maxDepth = 1.0f;
+  //  if (counter > 150) {
+  //    t1 = std::chrono::high_resolution_clock::now();
+  //  }
 
-  // VkRect2D scissor{};
-  // scissor.extent = _swapchain_context.extent;
-  // scissor.offset = {0, 0};
+  auto t1 = std::chrono::high_resolution_clock::now();
 
-  // vkCmdSetViewport(cmd_buf, 0, 1, &viewport);
-
-  // vkCmdSetScissor(cmd_buf, 0, 1, &scissor);
-
-  if (counter > 150) {
-    t1 = std::chrono::high_resolution_clock::now();
-  }
-
-  auto draw = [=, this](const std::span<Primitive> primitives, uint32_t primitve_start_idx, uint32_t stride,
+  auto draw = [&, this](const std::vector<DrawObject>& draw_objects, const uint32_t start_idx, const uint32_t stride,
                         uint32_t thread_id) {
     //    VkCommandBufferInheritanceViewportScissorInfoNV inheritance_view_scissor_info;
     //    inheritance_view_scissor_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_VIEWPORT_SCISSOR_INFO_NV;
@@ -423,6 +410,12 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
 
     vkBeginCommandBuffer(secondary_buf, &command_buffer_bi);
 
+    if (start_idx < _scene.trans_start) {
+      vkCmdBindPipeline(secondary_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, _scene.opaque_pipeline_info.pipeline);
+    } else {
+      vkCmdBindPipeline(secondary_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, _scene.transparent_pipeline_info.pipeline);
+    }
+
     VkViewport viewport{};
     viewport.x = 0.0f;
     viewport.y = 0.0f;
@@ -442,31 +435,30 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
     vkCmdBindDescriptorSets(secondary_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline_layout, 0, 1,
                             &scene_desc_set, 0, nullptr);
 
-    VkPipeline current_pipeline = nullptr;
     VkDescriptorSet material_desc_set = nullptr;
-    uint32_t end_pos = std::min(primitve_start_idx + stride, (uint32_t)primitives.size());
+    uint32_t end_pos = std::min(start_idx + stride, (uint32_t)draw_objects.size());
 
-    for (; primitve_start_idx < end_pos; primitve_start_idx++) {
+    for (uint32_t i = start_idx; i < end_pos; i++) {
 
-      const auto& primitive = primitives[primitve_start_idx];
+      const auto& draw_obj = draw_objects[i];
 
-      if (current_pipeline != primitive.pipeline_info.pipeline) {
-        current_pipeline = primitive.pipeline_info.pipeline;
-        vkCmdBindPipeline(secondary_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, primitive.pipeline_info.pipeline);
+      if (i == _scene.trans_start) {
+        vkCmdBindPipeline(secondary_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, _scene.transparent_pipeline_info.pipeline);
       }
 
-      if (material_desc_set != primitive.desc_set) {
-        material_desc_set = primitive.desc_set;
+      if (material_desc_set != draw_obj.mat_desc_set) {
+        material_desc_set = draw_obj.mat_desc_set;
 
-        vkCmdBindDescriptorSets(secondary_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, primitive.pipeline_info.pipeline_layout,
-                                1, 1, &primitive.desc_set, 0, nullptr);
+        vkCmdBindDescriptorSets(secondary_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline_layout, 1, 1,
+                                &draw_obj.mat_desc_set, 0, nullptr);
       }
 
-      vkCmdPushConstants(secondary_buf, current_pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(DrawConstants),
-                         &primitive.draw_constants);
+      vkCmdBindDescriptorSets(secondary_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline_layout, 2, 1,
+                              &draw_obj.obj_desc_set, 0, nullptr);
 
-      vkCmdBindIndexBuffer(secondary_buf, primitive.index_buffer, 0, VK_INDEX_TYPE_UINT32);
-      vkCmdDrawIndexed(secondary_buf, primitive.indices_count, 1, primitive.indices_start, 0, 0);
+      vkCmdBindIndexBuffer(secondary_buf, draw_obj.index_buffer, 0, VK_INDEX_TYPE_UINT32);
+
+      vkCmdDrawIndexed(secondary_buf, draw_obj.indices_count, 1, draw_obj.indices_start, 0, 0);
     }
 
     vkEndCommandBuffer(secondary_buf);
@@ -475,8 +467,9 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
   };
 
   std::vector<std::future<VkCommandBuffer>> futures;
+
   uint32_t thread_count = std::thread::hardware_concurrency();
-  uint32_t primitive_len = _scene.draw_ctx.all_primitives.size();
+  uint32_t primitive_len = _scene.draw_objects.size();
   uint32_t stride = primitive_len / thread_count;
   // if we have leftover primitives, distribute the remainder over many cores instead of
   // overload the last thread with N MORE primitives where 0 < N < thread_count
@@ -484,57 +477,44 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
     stride++;
   }
 
-  //  fmt::println("{}", primitive_len);
-  stride = 5000;
+  stride = 500;
   for (uint32_t i = 0; i < primitive_len; i += stride) {
-    //   fmt::println("sending {} to {}", i, i + stride);
-    auto future = _thread_pool.push(
-        [=, this](size_t thread_id) { return draw(_scene.draw_ctx.all_primitives, i, stride, thread_id); });
+    auto future =
+        _thread_pool.push([=, this](size_t thread_id) { return draw(_scene.draw_objects, i, stride, thread_id); });
 
     futures.push_back(std::move(future));
   }
-
-  // std::vector<VkCommandBuffer> recorded_secondary_buffers;
-  // for (auto& fut : futures) {
-  //   recorded_secondary_buffers.push_back(fut.get());
-  // }
 
   for (auto& future : futures) {
     VkCommandBuffer buf = future.get();
     vkCmdExecuteCommands(cmd_buf, 1, &buf);
   }
 
-  // vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, _scene.draw_ctx.transparent_pipeline_info.pipeline);
-
-  // secondary_buf = get_current_frame().command_context.secondary_buffers[1];
-  // for (const Primitive& primitive : _scene.draw_ctx.transparent_primitives) {
-  // draw(primitive, cmd_buf);
-  // auto future = _thread_pool.push_job(draw, primitive, secondary_buf);
-
-  // futures.push_back(std::move(future));
-  //}
-
-  //  vkCmdExecuteCommands(cmd_buf, 1, &secondary_buf);
-
   vkCmdEndRendering(cmd_buf);
+
   if (counter > 150) {
-    t2 = std::chrono::high_resolution_clock::now();
+    auto t2 = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration<float>(t2 - t1);
     auto elapsed_time = std::chrono::duration_cast<std::chrono::microseconds>(duration);
     average_time += elapsed_time.count();
-    average_time /= 2;
+    iters++;
+    //    fmt::println("average time: {}", average_time);
 
-    if (counter % 75 == 0) {
-      fmt::println("draw time: {}", elapsed_time.count());
-    }
   } else {
 
-    t2 = std::chrono::high_resolution_clock::now();
+    auto t2 = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration<float>(t2 - t1);
     auto elapsed_time = std::chrono::duration_cast<std::chrono::microseconds>(duration);
     average_time = elapsed_time.count();
+    //   fmt::println("elapsed: {}", elapsed_time.count());
   }
   counter++;
+  // if (counter % 75 == 0) {
+  //  t2 = std::chrono::high_resolution_clock::now();
+  //  auto duration = std::chrono::duration<float>(t2 - t1);
+  //  auto elapsed_time = std::chrono::duration_cast<std::chrono::microseconds>(duration);
+  //  fmt::println("elapsed: {}", elapsed_time.count());
+  // }
 }
 
 MeshBuffers VkBackend::upload_mesh_buffers(std::span<uint32_t> indices, std::span<Vertex> vertices) {
@@ -626,7 +606,7 @@ void VkBackend::destroy() {
 
   vkDeviceWaitIdle(_device_context.logical_device);
   DEBUG_PRINT("destroying Vulkan Backend");
-  fmt::println("average draw time: {}", average_time);
+  fmt::println("average draw time: {}", average_time / (float)iters);
 
   _deletion_queue.flush();
 
