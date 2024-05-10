@@ -45,7 +45,7 @@ target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_23)
 target_compile_options(
   ${PROJECT_NAME}
   PUBLIC
-    "$<$<CONFIG:RELEASE>:-Ofast;-flto;-Wall;-Wextra>;-Wno-missing-field-initializers>"
+    "$<$<CONFIG:RELEASE>:-Ofast;-fno-signed-zeros;-flto;-Wall;-Wextra>;-Wno-missing-field-initializers>"
 )
 
 if(APPLE)

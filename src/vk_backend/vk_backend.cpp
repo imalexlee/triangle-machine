@@ -82,7 +82,7 @@ void VkBackend::create_default_data() {
   sampler_ci.minFilter = VK_FILTER_NEAREST;
   VK_CHECK(vkCreateSampler(_device_context.logical_device, &sampler_ci, nullptr, &_default_nearest_sampler));
 
-  _scene = load_scene(this, "../../assets/3d/structure.glb");
+  _scene = load_scene(this, "../../assets/3d/structure_mat.glb");
 }
 
 auto time1 = std::chrono::high_resolution_clock::now();
@@ -92,10 +92,9 @@ void VkBackend::update_scene() {
   glm::mat4 upside_down = glm::mat4{1.f};
   upside_down[1][1] *= -1;
 
-  // glm::vec3 cam_pos = {0, 90, -200}; // matilda
-  // glm::vec3 cam_pos = {0, 3, -50}; // house
-  glm::vec3 cam_pos = {0, 1, -8}; // porsche, monkey
-  // glm::vec3 cam_pos = {1, -16, -20}; // porsche, monkey
+  glm::vec3 cam_pos = {0, 90, -200}; // matilda
+  //  glm::vec3 cam_pos = {0, 3, -50}; // house
+  // glm::vec3 cam_pos = {0, 1, -8}; // porsche, monkey
 
   glm::mat4 model = upside_down * glm::rotate(glm::mat4{1.f}, glm::radians(time_span.count() * 30), glm::vec3{0, 1, 0});
   glm::mat4 view = glm::translate(glm::mat4(1.f), cam_pos);
@@ -179,7 +178,7 @@ void VkBackend::create_pipelines() {
   builder.set_shader_stages(vert_shader, frag_shader);
   builder.disable_blending();
   builder.set_input_assembly(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-  builder.set_raster_culling(VK_CULL_MODE_FRONT_BIT, VK_FRONT_FACE_CLOCKWISE);
+  builder.set_raster_culling(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
   builder.set_raster_poly_mode(VK_POLYGON_MODE_FILL);
   builder.set_multisample_state(VK_SAMPLE_COUNT_1_BIT);
   builder.set_depth_stencil_state(true, true, VK_COMPARE_OP_GREATER_OR_EQUAL);
@@ -366,25 +365,35 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
   // both opaque and transparent have the same layout for now
   VkPipelineLayout current_pipeline_layout = _scene.opaque_pipeline_info.pipeline_layout;
 
-  // vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, _scene.opaque_pipeline_info.pipeline);
-
-  //  if (counter > 150) {
-  //    t1 = std::chrono::high_resolution_clock::now();
-  //  }
-
   auto t1 = std::chrono::high_resolution_clock::now();
+  auto t4 = std::chrono::high_resolution_clock::now();
 
+  //  VkViewport viewport{};
+  //  viewport.x = 0.0f;
+  //  viewport.y = 0.0f;
+  //  viewport.width = _swapchain_context.extent.width;
+  //  viewport.height = _swapchain_context.extent.height;
+  //  viewport.minDepth = 0.0f;
+  //  viewport.maxDepth = 1.0f;
+  //
+  //  VkRect2D scissor{};
+  //  scissor.extent = _swapchain_context.extent;
+  //  scissor.offset = {0, 0};
+  //
+  //  vkCmdSetViewport(cmd_buf, 0, 1, &viewport);
+  //
+  //  vkCmdSetScissor(cmd_buf, 0, 1, &scissor);
+
+  int draw_call_count = 0;
   auto draw = [&, this](const std::vector<DrawObject>& draw_objects, const uint32_t start_idx, const uint32_t stride,
                         uint32_t thread_id) {
-    //    VkCommandBufferInheritanceViewportScissorInfoNV inheritance_view_scissor_info;
-    //    inheritance_view_scissor_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_VIEWPORT_SCISSOR_INFO_NV;
-    //    inheritance_view_scissor_info.pViewportDepths = &viewport;
-    //    inheritance_view_scissor_info.viewportDepthCount = 1;
-    //    inheritance_view_scissor_info.viewportScissor2D = VK_TRUE;
+    //    auto t5 = std::chrono::high_resolution_clock::now();
+    //    auto duration = std::chrono::duration<float>(t5 - t4);
+    //    auto elapsed_time = std::chrono::duration_cast<std::chrono::microseconds>(duration);
+    //    fmt::println("elapsed time: {}", elapsed_time.count());
 
     VkCommandBufferInheritanceRenderingInfo inheritance_rendering_info;
     inheritance_rendering_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_RENDERING_INFO;
-    //    inheritance_rendering_info.pNext = &inheritance_view_scissor_info;
     inheritance_rendering_info.pNext = nullptr;
     inheritance_rendering_info.flags = VK_RENDERING_CONTENTS_SECONDARY_COMMAND_BUFFERS_BIT;
     inheritance_rendering_info.colorAttachmentCount = 1;
@@ -397,7 +406,6 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
     VkCommandBufferInheritanceInfo inheritance_info{};
     inheritance_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
     inheritance_info.pNext = &inheritance_rendering_info;
-    // inheritance_info.renderPass = VK_NULL_HANDLE;
 
     VkCommandBufferBeginInfo command_buffer_bi{};
     command_buffer_bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -415,7 +423,6 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
     } else {
       vkCmdBindPipeline(secondary_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, _scene.transparent_pipeline_info.pipeline);
     }
-
     VkViewport viewport{};
     viewport.x = 0.0f;
     viewport.y = 0.0f;
@@ -459,6 +466,7 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
       vkCmdBindIndexBuffer(secondary_buf, draw_obj.index_buffer, 0, VK_INDEX_TYPE_UINT32);
 
       vkCmdDrawIndexed(secondary_buf, draw_obj.indices_count, 1, draw_obj.indices_start, 0, 0);
+      draw_call_count++;
     }
 
     vkEndCommandBuffer(secondary_buf);
@@ -468,8 +476,9 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
 
   std::vector<std::future<VkCommandBuffer>> futures;
 
-  uint32_t thread_count = std::thread::hardware_concurrency();
+  uint32_t thread_count = std::thread::hardware_concurrency() - 1;
   uint32_t primitive_len = _scene.draw_objects.size();
+  // fmt::println("primitive_len: {}", primitive_len);
   uint32_t stride = primitive_len / thread_count;
   // if we have leftover primitives, distribute the remainder over many cores instead of
   // overload the last thread with N MORE primitives where 0 < N < thread_count
@@ -478,13 +487,15 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
   }
 
   stride = 500;
+  uint32_t secondary_buf_idx = 0;
   for (uint32_t i = 0; i < primitive_len; i += stride) {
-    auto future =
-        _thread_pool.push([=, this](size_t thread_id) { return draw(_scene.draw_objects, i, stride, thread_id); });
+
+    // t4 = std::chrono::high_resolution_clock::now();
+    auto future = std::async(std::launch::deferred, draw, _scene.draw_objects, i, stride, secondary_buf_idx);
 
     futures.push_back(std::move(future));
+    secondary_buf_idx++;
   }
-
   for (auto& future : futures) {
     VkCommandBuffer buf = future.get();
     vkCmdExecuteCommands(cmd_buf, 1, &buf);
@@ -498,7 +509,7 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
     auto elapsed_time = std::chrono::duration_cast<std::chrono::microseconds>(duration);
     average_time += elapsed_time.count();
     iters++;
-    //    fmt::println("average time: {}", average_time);
+    //    fmt::println("elapsed time: {}", elapsed_time.count());
 
   } else {
 
@@ -506,15 +517,8 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
     auto duration = std::chrono::duration<float>(t2 - t1);
     auto elapsed_time = std::chrono::duration_cast<std::chrono::microseconds>(duration);
     average_time = elapsed_time.count();
-    //   fmt::println("elapsed: {}", elapsed_time.count());
   }
   counter++;
-  // if (counter % 75 == 0) {
-  //  t2 = std::chrono::high_resolution_clock::now();
-  //  auto duration = std::chrono::duration<float>(t2 - t1);
-  //  auto elapsed_time = std::chrono::duration_cast<std::chrono::microseconds>(duration);
-  //  fmt::println("elapsed: {}", elapsed_time.count());
-  // }
 }
 
 MeshBuffers VkBackend::upload_mesh_buffers(std::span<uint32_t> indices, std::span<Vertex> vertices) {

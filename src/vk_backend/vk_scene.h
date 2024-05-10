@@ -50,9 +50,14 @@ struct GLTFMaterial {
 };
 
 struct GLTFPrimitive {
+  VkDescriptorSet obj_desc_set;
+  VkDescriptorSet mat_desc_set;
+  VkBuffer index_buffer;
+
   uint32_t indices_count;
   uint32_t indices_start;
   uint32_t mat_idx;
+  fastgltf::AlphaMode alpha_mode;
 };
 
 struct GLTFMesh {
@@ -60,6 +65,11 @@ struct GLTFMesh {
   std::vector<Vertex> vertices;
   glm::mat4 local_transform{1.f};
   std::vector<GLTFPrimitive> primitives;
+};
+
+struct GLTFNode {
+  glm::mat4 transform;
+  uint32_t mesh_idx;
 };
 
 struct MaterialUniformData {
@@ -163,6 +173,8 @@ struct Scene {
 public:
   std::vector<MeshBuffers> mesh_buffers;
   std::vector<MaterialBuffers> material_buffers;
+  // GPU allocated buffers for per-draw_object data.
+  // this uniform buffer is referenced by obj_desc_set in DrawObject
   std::vector<AllocatedBuffer> draw_obj_uniform_buffers;
   std::vector<DrawObject> draw_objects;
   std::vector<VkSampler> samplers;

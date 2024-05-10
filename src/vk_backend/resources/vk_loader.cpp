@@ -6,6 +6,8 @@
 #include <cstdio>
 #include <cstring>
 #include <fmt/base.h>
+#include <iostream>
+#include <numeric>
 #include <string>
 #define STB_IMAGE_IMPLEMENTATION
 #include "fastgltf/core.hpp"
@@ -21,6 +23,8 @@
 #include <fstream>
 #include <variant>
 #include <vulkan/vulkan_core.h>
+
+// #define STRUCTURE_MAT
 
 constexpr uint32_t CHECKER_WIDTH = 32;
 
@@ -77,28 +81,34 @@ VkShaderModule load_shader_module(VkDevice device, const char* file_path) {
   return shader_module;
 }
 
-glm::mat4 get_transform_matrix(const fastgltf::Node& node, glm::mat4x4& base) {
-  /** Both a matrix and TRS values are not allowed
-   * to exist at the same time according to the spec */
-  if (const auto* pMatrix = std::get_if<fastgltf::Node::TransformMatrix>(&node.transform)) {
-    return base * glm::mat4x4(glm::make_mat4x4(pMatrix->data()));
-  }
+glm::mat4 get_transform_matrix(const fastgltf::Node& node) {
 
-  if (const auto* pTransform = std::get_if<fastgltf::TRS>(&node.transform)) {
-    return base * glm::translate(glm::mat4(1.0f), glm::make_vec3(pTransform->translation.data())) *
-           glm::toMat4(glm::make_quat(pTransform->rotation.data())) *
-           glm::scale(glm::mat4(1.0f), glm::make_vec3(pTransform->scale.data()));
-  }
+  glm::mat4 node_transform;
+  std::visit(fastgltf::visitor{
+                 [&](fastgltf::Node::TransformMatrix matrix) { node_transform = glm::make_mat4x4(matrix.data()); },
+                 [&](fastgltf::TRS transform) {
+                   glm::vec3 tl = glm::make_vec3(transform.translation.data());
+                   glm::quat rot(transform.rotation[3], transform.rotation[0], transform.rotation[1],
+                                 transform.rotation[2]);
+                   glm::vec3 sc = glm::make_vec3(transform.scale.data());
 
-  return base;
+                   glm::mat4 tm = glm::translate(glm::mat4(1.f), tl);
+                   glm::mat4 rm = glm::toMat4(rot);
+                   glm::mat4 sm = glm::scale(glm::mat4(1.f), sc);
+
+                   node_transform = tm * rm * sm;
+                 }},
+             node.transform);
+  return node_transform;
 }
 
+// int trans_idx = 0;
 void apply_transform_matrices(std::vector<GLTFMesh>& meshes, fastgltf::Asset& asset, uint32_t root_node_idx,
                               glm::mat4 parent_matrix = glm::mat4{1.f}) {
 
   auto& root_gltf_node = asset.nodes[root_node_idx];
 
-  glm::mat4 transform = get_transform_matrix(root_gltf_node, parent_matrix);
+  glm::mat4 transform = get_transform_matrix(root_gltf_node);
 
   for (uint32_t child_node_idx : root_gltf_node.children) {
     apply_transform_matrices(meshes, asset, child_node_idx, transform);
@@ -106,7 +116,32 @@ void apply_transform_matrices(std::vector<GLTFMesh>& meshes, fastgltf::Asset& as
 
   // only update meshes if they are being referenced by a node
   if (root_gltf_node.meshIndex.has_value()) {
-    meshes[root_gltf_node.meshIndex.value()].local_transform = transform;
+    meshes[root_gltf_node.meshIndex.value()].local_transform = parent_matrix * transform;
+    // fmt::println("trans idx: {}", trans_idx);
+    // trans_idx++;
+    // for (int i = 0; i < 4; i++) {
+    //   fmt::println("{:.2f} {:.2f} {:.2f} {:.2f}", transform[i][0], transform[i][1], transform[i][2],
+    //   transform[i][3]);
+    // }
+  }
+}
+
+// recursively fills a vector of nodes based on GLTF node tree
+void generate_nodes(std::vector<GLTFNode>& out_node_buf, fastgltf::Asset& asset, uint32_t root_node_idx,
+                    glm::mat4 parent_matrix = glm::mat4{1.f}) {
+
+  auto& root_gltf_node = asset.nodes[root_node_idx];
+
+  glm::mat4 transform = get_transform_matrix(root_gltf_node);
+  for (uint32_t child_node_idx : root_gltf_node.children) {
+    generate_nodes(out_node_buf, asset, child_node_idx, transform);
+  }
+
+  if (root_gltf_node.meshIndex.has_value()) {
+    GLTFNode new_node;
+    new_node.transform = parent_matrix * transform;
+    new_node.mesh_idx = root_gltf_node.meshIndex.value();
+    out_node_buf.push_back(new_node);
   }
 }
 
@@ -215,9 +250,10 @@ AllocatedImage generate_texture(VkBackend* backend, fastgltf::Asset& asset, fast
 
 Scene load_scene(VkBackend* backend, std::filesystem::path path) {
 
-  constexpr auto supported_extensions = fastgltf::Extensions::KHR_mesh_quantization |
-                                        fastgltf::Extensions::KHR_texture_transform |
-                                        fastgltf::Extensions::KHR_materials_variants;
+  constexpr auto supported_extensions =
+      fastgltf::Extensions::KHR_mesh_quantization | fastgltf::Extensions::KHR_texture_transform |
+      fastgltf::Extensions::KHR_materials_clearcoat | fastgltf::Extensions::KHR_materials_specular |
+      fastgltf::Extensions::KHR_materials_transmission | fastgltf::Extensions::KHR_materials_variants;
 
   fastgltf::Parser parser(supported_extensions);
   fastgltf::GltfDataBuffer data;
@@ -258,9 +294,6 @@ Scene load_scene(VkBackend* backend, std::filesystem::path path) {
     }
     textures.push_back(new_texture);
   }
-
-  assert(textures.size() == asset.textures.size() &&
-         "amount of textures in scene does not match the amount in the GLTF file.");
 
   // load materials
   DescriptorLayoutBuilder layout_builder;
@@ -386,7 +419,7 @@ Scene load_scene(VkBackend* backend, std::filesystem::path path) {
     uint32_t index_count = 0;
     uint32_t vertex_count = 0;
 
-    for (auto& primitive : mesh.primitives) {
+    for (auto&& primitive : mesh.primitives) {
 
       uint32_t material_idx = primitive.materialIndex.value_or(default_mat_idx);
 
@@ -427,7 +460,7 @@ Scene load_scene(VkBackend* backend, std::filesystem::path path) {
 
       new_mesh.indices.resize(index_count + idx_accessor.count);
 
-      fastgltf::iterateAccessorWithIndex<std::uint32_t>(asset, idx_accessor, [&](std::uint32_t vert_index, size_t i) {
+      fastgltf::iterateAccessorWithIndex<std::uint16_t>(asset, idx_accessor, [&](std::uint16_t vert_index, size_t i) {
         // index needs to be offset by vertex_count since we're combining all vertex data into one buffer
         new_mesh.indices[i + index_count] = vert_index + vertex_count;
         assert(vert_index + vertex_count < new_mesh.vertices.size() &&
@@ -450,18 +483,16 @@ Scene load_scene(VkBackend* backend, std::filesystem::path path) {
     meshes.push_back(new_mesh);
   }
 
-  // first scene only for now
-  for (auto& scene : asset.scenes) {
-    for (auto& root_node_idx : scene.nodeIndices) {
-      // recursively update the node tree of transform matrices for meshes
-      apply_transform_matrices(meshes, asset, root_node_idx);
+  for (auto& mesh : meshes) {
+    MeshBuffers new_mesh_bufs = backend->upload_mesh_buffers(mesh.indices, mesh.vertices);
+    new_scene.mesh_buffers.push_back(new_mesh_bufs);
+
+    for (auto& primitive : mesh.primitives) {
+
+      primitive.mat_desc_set = new_scene.material_buffers[primitive.mat_idx].mat_desc_set;
+      primitive.index_buffer = new_mesh_bufs.indices.buffer;
     }
   }
-
-  // now go through each mesh, dump and create a desc set for each mesh.
-  // then, iterate over all primitives, creating a mesh buffer struct and filling it with allocated version
-  // of the indices and vertices in the mesh.
-  // after that,
 
   layout_builder.clear();
   layout_builder.add_binding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
@@ -479,11 +510,17 @@ Scene load_scene(VkBackend* backend, std::filesystem::path path) {
   opaque_draws.reserve(primitive_count);
   std::vector<DrawObject> trans_draws;
   trans_draws.reserve(primitive_count);
+  std::vector<GLTFNode> nodes;
 
-  for (auto& mesh : meshes) {
-    MeshBuffers new_mesh_bufs = backend->upload_mesh_buffers(mesh.indices, mesh.vertices);
-    new_scene.mesh_buffers.push_back(new_mesh_bufs);
+  for (auto& scene : asset.scenes) {
+    for (auto& root_node_idx : scene.nodeIndices) {
+      generate_nodes(nodes, asset, root_node_idx);
+    }
+  }
 
+  for (auto& node : nodes) {
+    auto& mesh = meshes[node.mesh_idx];
+    auto& mesh_buffers = new_scene.mesh_buffers[node.mesh_idx];
     for (auto& primitive : mesh.primitives) {
 
       AllocatedBuffer obj_uniform_buf;
@@ -498,9 +535,9 @@ Scene load_scene(VkBackend* backend, std::filesystem::path path) {
 
       auto* obj_uniform_data = (DrawObjUniformData*)obj_uniform_buf.info.pMappedData;
 
-      obj_uniform_data->local_transform = mesh.local_transform;
+      obj_uniform_data->local_transform = node.transform;
       obj_uniform_data->vertex_buffer_address =
-          get_buffer_device_address(backend->_device_context.logical_device, new_mesh_bufs.vertices);
+          get_buffer_device_address(backend->_device_context.logical_device, mesh_buffers.vertices);
 
       DescriptorWriter desc_writer;
 
@@ -511,12 +548,14 @@ Scene load_scene(VkBackend* backend, std::filesystem::path path) {
 
       new_scene.draw_obj_uniform_buffers.push_back(obj_uniform_buf);
 
+      primitive.obj_desc_set = draw_obj_desc_set;
+
       DrawObject new_draw_obj;
-      new_draw_obj.index_buffer = new_mesh_bufs.indices.buffer;
+      new_draw_obj.index_buffer = mesh_buffers.indices.buffer;
       new_draw_obj.indices_count = primitive.indices_count;
       new_draw_obj.indices_start = primitive.indices_start;
+      new_draw_obj.mat_desc_set = primitive.mat_desc_set;
       new_draw_obj.obj_desc_set = draw_obj_desc_set;
-      new_draw_obj.mat_desc_set = new_scene.material_buffers[primitive.mat_idx].mat_desc_set;
 
       fastgltf::AlphaMode alpha_mode = materials[primitive.mat_idx].alpha_mode;
 
@@ -546,7 +585,7 @@ Scene load_scene(VkBackend* backend, std::filesystem::path path) {
     }
   });
 
-  new_scene.draw_objects.resize(primitive_count);
+  new_scene.draw_objects.resize(opaque_draws.size() + trans_draws.size());
   new_scene.trans_start = opaque_draws.size();
 
   // copy sorted blocks of opaque/trans draws into final buffer
@@ -574,6 +613,10 @@ void destroy_scene(VkDevice device, VmaAllocator allocator, Scene& scene) {
     destroy_image(device, allocator, material.color_tex);
     destroy_image(device, allocator, material.metal_rough_tex);
     destroy_buffer(allocator, material.mat_uniform_buffer);
+  }
+
+  for (auto& draw_obj_uniform : scene.draw_obj_uniform_buffers) {
+    destroy_buffer(allocator, draw_obj_uniform);
   }
 
   vkDestroyDescriptorSetLayout(device, scene.mat_desc_set_layout, nullptr);
