@@ -1,5 +1,6 @@
 #include "vk_backend/vk_pipeline.h"
 #include <chrono>
+#include <core/camera.h>
 #include <cstdint>
 #include <cstring>
 #include <fastgltf/types.hpp>
@@ -29,12 +30,12 @@ constexpr bool use_validation_layers = true;
 
 constexpr uint64_t TIMEOUT_DURATION = 1'000'000'000;
 
-void VkBackend::create(Window& window) {
+void VkBackend::create(Window& window, Camera& camera) {
   create_instance();
   VkSurfaceKHR surface = window.get_vulkan_surface(_instance);
 
   _device_context.create(_instance, surface);
-  _swapchain_context.create(_instance, _device_context, surface, VK_PRESENT_MODE_FIFO_KHR);
+  _swapchain_context.create(_instance, _device_context, surface, VK_PRESENT_MODE_MAILBOX_KHR);
   create_allocator();
 
   for (Frame& frame : _frames) {
@@ -62,6 +63,8 @@ void VkBackend::create(Window& window) {
   uint32_t thread_count = std::thread::hardware_concurrency();
   _thread_pool.resize(thread_count);
 
+  _camera = &camera;
+
   create_default_data();
   create_pipelines();
 
@@ -82,7 +85,10 @@ void VkBackend::create_default_data() {
   sampler_ci.minFilter = VK_FILTER_NEAREST;
   VK_CHECK(vkCreateSampler(_device_context.logical_device, &sampler_ci, nullptr, &_default_nearest_sampler));
 
-  _scene = load_scene(this, "../../assets/3d/structure_mat.glb");
+  _default_texture =
+      upload_texture_image((void*)white_image.data(), VK_IMAGE_USAGE_SAMPLED_BIT, CHECKER_WIDTH, CHECKER_WIDTH);
+
+  _scene = load_scene(this, "../../assets/3d/porsche_large.glb");
 }
 
 auto time1 = std::chrono::high_resolution_clock::now();
@@ -92,18 +98,18 @@ void VkBackend::update_scene() {
   glm::mat4 upside_down = glm::mat4{1.f};
   upside_down[1][1] *= -1;
 
-  glm::vec3 cam_pos = {0, 90, -200}; // matilda
-  //  glm::vec3 cam_pos = {0, 3, -50}; // house
+  // glm::vec3 cam_pos = {0, 90, -200}; // matilda
+  //   glm::vec3 cam_pos = {0, 3, -50}; // house
   // glm::vec3 cam_pos = {0, 1, -8}; // porsche, monkey
 
   glm::mat4 model = upside_down * glm::rotate(glm::mat4{1.f}, glm::radians(time_span.count() * 30), glm::vec3{0, 1, 0});
-  glm::mat4 view = glm::translate(glm::mat4(1.f), cam_pos);
+  // glm::mat4 view = glm::translate(glm::mat4(1.f), cam_pos);
   glm::mat4 projection = glm::perspective(
       glm::radians(60.f), (float)_swapchain_context.extent.width / (float)_swapchain_context.extent.height, 10000.0f,
       0.1f);
 
-  _scene_data.view_proj = projection * view * model;
-  _scene_data.eye_pos = cam_pos;
+  _scene_data.view_proj = projection * _camera->look_at * model;
+  _scene_data.eye_pos = _camera->position;
 }
 
 void VkBackend::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function) {
@@ -178,7 +184,7 @@ void VkBackend::create_pipelines() {
   builder.set_shader_stages(vert_shader, frag_shader);
   builder.disable_blending();
   builder.set_input_assembly(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-  builder.set_raster_culling(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
+  builder.set_raster_culling(VK_CULL_MODE_FRONT_BIT, VK_FRONT_FACE_CLOCKWISE);
   builder.set_raster_poly_mode(VK_POLYGON_MODE_FILL);
   builder.set_multisample_state(VK_SAMPLE_COUNT_1_BIT);
   builder.set_depth_stencil_state(true, true, VK_COMPARE_OP_GREATER_OR_EQUAL);
@@ -601,15 +607,17 @@ void VkBackend::destroy() {
     destroy_buffer(_allocator, frame.scene_data_buffer);
   }
 
-  destroy_scene(_device_context.logical_device, _allocator, _scene);
+  destroy_scene(this, _scene);
+
   destroy_image(_device_context.logical_device, _allocator, _draw_image);
   destroy_image(_device_context.logical_device, _allocator, _depth_image);
-
-  vmaDestroyAllocator(_allocator);
+  destroy_image(_device_context.logical_device, _allocator, _default_texture);
 
   vkDestroySampler(_device_context.logical_device, _default_nearest_sampler, nullptr);
   vkDestroySampler(_device_context.logical_device, _default_linear_sampler, nullptr);
   vkDestroyFence(_device_context.logical_device, _imm_fence, nullptr);
+
+  vmaDestroyAllocator(_allocator);
 
   _imm_cmd_context.destroy();
   _swapchain_context.destroy();

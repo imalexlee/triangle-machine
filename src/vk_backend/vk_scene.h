@@ -68,7 +68,7 @@ struct GLTFMesh {
 };
 
 struct GLTFNode {
-  glm::mat4 transform;
+  glm::mat4 transform{1.f};
   uint32_t mesh_idx;
 };
 

@@ -6,8 +6,8 @@
 #include <cstdio>
 #include <cstring>
 #include <fmt/base.h>
+#include <fmt/format.h>
 #include <iostream>
-#include <numeric>
 #include <string>
 #define STB_IMAGE_IMPLEMENTATION
 #include "fastgltf/core.hpp"
@@ -23,42 +23,6 @@
 #include <fstream>
 #include <variant>
 #include <vulkan/vulkan_core.h>
-
-// #define STRUCTURE_MAT
-
-constexpr uint32_t CHECKER_WIDTH = 32;
-
-[[maybe_unused]] static constexpr std::array<uint32_t, CHECKER_WIDTH * CHECKER_WIDTH> purple_checkerboard = []() {
-  std::array<uint32_t, CHECKER_WIDTH * CHECKER_WIDTH> result{};
-  // fix endianness
-  uint32_t black = __builtin_bswap32(0x000000FF);
-  uint32_t magenta = __builtin_bswap32(0xFF00FFFF);
-
-  for (uint32_t x = 0; x < CHECKER_WIDTH; x++) {
-    for (uint32_t y = 0; y < CHECKER_WIDTH; y++) {
-      result[y * CHECKER_WIDTH + x] = ((x % 2) ^ (y % 2)) ? magenta : black;
-    }
-  }
-  return result;
-}();
-
-[[maybe_unused]] static constexpr std::array<uint32_t, CHECKER_WIDTH * CHECKER_WIDTH> black_image = []() {
-  std::array<uint32_t, CHECKER_WIDTH * CHECKER_WIDTH> result{};
-  uint32_t black = __builtin_bswap32(0x000000FF);
-  for (uint32_t& el : result) {
-    el = black;
-  }
-  return result;
-}();
-
-[[maybe_unused]] static constexpr std::array<uint32_t, CHECKER_WIDTH * CHECKER_WIDTH> white_image = []() {
-  std::array<uint32_t, CHECKER_WIDTH * CHECKER_WIDTH> result{};
-  uint32_t black = __builtin_bswap32(0xFFFFFFFF);
-  for (uint32_t& el : result) {
-    el = black;
-  }
-  return result;
-}();
 
 VkShaderModule load_shader_module(VkDevice device, const char* file_path) {
 
@@ -81,49 +45,20 @@ VkShaderModule load_shader_module(VkDevice device, const char* file_path) {
   return shader_module;
 }
 
-glm::mat4 get_transform_matrix(const fastgltf::Node& node) {
-
-  glm::mat4 node_transform;
-  std::visit(fastgltf::visitor{
-                 [&](fastgltf::Node::TransformMatrix matrix) { node_transform = glm::make_mat4x4(matrix.data()); },
-                 [&](fastgltf::TRS transform) {
-                   glm::vec3 tl = glm::make_vec3(transform.translation.data());
-                   glm::quat rot(transform.rotation[3], transform.rotation[0], transform.rotation[1],
-                                 transform.rotation[2]);
-                   glm::vec3 sc = glm::make_vec3(transform.scale.data());
-
-                   glm::mat4 tm = glm::translate(glm::mat4(1.f), tl);
-                   glm::mat4 rm = glm::toMat4(rot);
-                   glm::mat4 sm = glm::scale(glm::mat4(1.f), sc);
-
-                   node_transform = tm * rm * sm;
-                 }},
-             node.transform);
-  return node_transform;
-}
-
-// int trans_idx = 0;
-void apply_transform_matrices(std::vector<GLTFMesh>& meshes, fastgltf::Asset& asset, uint32_t root_node_idx,
-                              glm::mat4 parent_matrix = glm::mat4{1.f}) {
-
-  auto& root_gltf_node = asset.nodes[root_node_idx];
-
-  glm::mat4 transform = get_transform_matrix(root_gltf_node);
-
-  for (uint32_t child_node_idx : root_gltf_node.children) {
-    apply_transform_matrices(meshes, asset, child_node_idx, transform);
+glm::mat4 get_transform_matrix(const fastgltf::Node& node, glm::mat4x4& base) {
+  /** Both a matrix and TRS values are not allowed
+   * to exist at the same time according to the spec */
+  if (const auto* pMatrix = std::get_if<fastgltf::Node::TransformMatrix>(&node.transform)) {
+    return base * glm::mat4x4(glm::make_mat4x4(pMatrix->data()));
   }
 
-  // only update meshes if they are being referenced by a node
-  if (root_gltf_node.meshIndex.has_value()) {
-    meshes[root_gltf_node.meshIndex.value()].local_transform = parent_matrix * transform;
-    // fmt::println("trans idx: {}", trans_idx);
-    // trans_idx++;
-    // for (int i = 0; i < 4; i++) {
-    //   fmt::println("{:.2f} {:.2f} {:.2f} {:.2f}", transform[i][0], transform[i][1], transform[i][2],
-    //   transform[i][3]);
-    // }
+  if (const auto* pTransform = std::get_if<fastgltf::TRS>(&node.transform)) {
+    return base * glm::translate(glm::mat4(1.0f), glm::make_vec3(pTransform->translation.data())) *
+           glm::toMat4(glm::make_quat(pTransform->rotation.data())) *
+           glm::scale(glm::mat4(1.0f), glm::make_vec3(pTransform->scale.data()));
   }
+
+  return base;
 }
 
 // recursively fills a vector of nodes based on GLTF node tree
@@ -132,14 +67,14 @@ void generate_nodes(std::vector<GLTFNode>& out_node_buf, fastgltf::Asset& asset,
 
   auto& root_gltf_node = asset.nodes[root_node_idx];
 
-  glm::mat4 transform = get_transform_matrix(root_gltf_node);
+  glm::mat4 transform = get_transform_matrix(root_gltf_node, parent_matrix);
   for (uint32_t child_node_idx : root_gltf_node.children) {
     generate_nodes(out_node_buf, asset, child_node_idx, transform);
   }
 
   if (root_gltf_node.meshIndex.has_value()) {
     GLTFNode new_node;
-    new_node.transform = parent_matrix * transform;
+    new_node.transform = transform;
     new_node.mesh_idx = root_gltf_node.meshIndex.value();
     out_node_buf.push_back(new_node);
   }
@@ -315,6 +250,16 @@ Scene load_scene(VkBackend* backend, std::filesystem::path path) {
   new_scene.material_buffers.reserve(asset.materials.size());
 
   uint32_t default_mat_idx = 0;
+
+  std::vector<bool> texture_used;
+
+  /*
+   * textures arent garunteed to be used in GLTF
+   * save used texture indices to clean up unused images
+   * at the end of scope
+   */
+  texture_used.resize(textures.size(), false);
+
   for (uint32_t i = 0; i < asset.materials.size(); i++) {
     // metadata
     GLTFMaterial new_mat;
@@ -335,15 +280,21 @@ Scene load_scene(VkBackend* backend, std::filesystem::path path) {
       // new_mat.pbr.color_tex = textures[material.pbrData.baseColorTexture->textureIndex];
       assert(material.pbrData.baseColorTexture.value().textureIndex < textures.size() &&
              "accessing invalid color texture");
-      const GLTFTexture& color_texture = textures[material.pbrData.baseColorTexture.value().textureIndex];
+      uint32_t tex_index = material.pbrData.baseColorTexture.value().textureIndex;
+      const GLTFTexture& color_texture = textures[tex_index];
+
+      texture_used[tex_index] = true;
+      // fmt::println("accessing texture {}", material.pbrData.baseColorTexture.value().textureIndex);
+
       new_mat.pbr.color_tex_coord = material.pbrData.baseColorTexture.value().texCoordIndex;
       new_bufs.color_tex = color_texture.tex;
+      // fmt::println("attaching color tex {}", fmt::ptr(color_texture.tex.image));
       color_tex_sampler = color_texture.sampler;
+
     } else {
 
       default_mat_idx = i;
-      new_bufs.color_tex = backend->upload_texture_image((void*)white_image.data(), VK_IMAGE_USAGE_SAMPLED_BIT,
-                                                         CHECKER_WIDTH, CHECKER_WIDTH);
+      new_bufs.color_tex = backend->_default_texture;
       color_tex_sampler = backend->_default_linear_sampler;
     }
 
@@ -351,14 +302,20 @@ Scene load_scene(VkBackend* backend, std::filesystem::path path) {
       // new_mat.pbr.metal_rough_tex = textures[material.pbrData.metallicRoughnessTexture->textureIndex];
       assert(material.pbrData.metallicRoughnessTexture.value().textureIndex < textures.size() &&
              "accessing invalid metal rough texture");
-      const GLTFTexture& metal_texture = textures[material.pbrData.metallicRoughnessTexture.value().textureIndex];
+
+      uint32_t tex_index = material.pbrData.metallicRoughnessTexture.value().textureIndex;
+      const GLTFTexture& metal_texture = textures[tex_index];
+
+      texture_used[tex_index] = true;
+
       new_mat.pbr.metal_rough_tex_coord = material.pbrData.metallicRoughnessTexture.value().texCoordIndex;
       new_bufs.metal_rough_tex = metal_texture.tex;
+      // fmt::println("attaching metal tex {}", fmt::ptr(metal_texture.tex.image));
       metal_tex_sampler = metal_texture.sampler;
+      // fmt::println("accessing texture {}", material.pbrData.metallicRoughnessTexture.value().textureIndex);
     } else {
 
-      new_bufs.metal_rough_tex = backend->upload_texture_image((void*)white_image.data(), VK_IMAGE_USAGE_SAMPLED_BIT,
-                                                               CHECKER_WIDTH, CHECKER_WIDTH);
+      new_bufs.metal_rough_tex = backend->_default_texture;
       metal_tex_sampler = backend->_default_linear_sampler;
     }
 
@@ -393,6 +350,13 @@ Scene load_scene(VkBackend* backend, std::filesystem::path path) {
 
     new_scene.material_buffers.push_back(new_bufs);
     materials.push_back(new_mat);
+  }
+
+  // free unused textures from vram
+  for (uint32_t i = 0; i < texture_used.size(); i++) {
+    if (!texture_used[i]) {
+      destroy_image(backend->_device_context.logical_device, backend->_allocator, textures[i].tex);
+    }
   }
 
   assert(new_scene.material_buffers.size() == materials.size() && "material metadata and buffers do not match in size");
@@ -559,10 +523,10 @@ Scene load_scene(VkBackend* backend, std::filesystem::path path) {
 
       fastgltf::AlphaMode alpha_mode = materials[primitive.mat_idx].alpha_mode;
 
-      if (alpha_mode == fastgltf::AlphaMode::Opaque) {
-        opaque_draws.push_back(new_draw_obj);
-      } else {
+      if (alpha_mode == fastgltf::AlphaMode::Blend) {
         trans_draws.push_back(new_draw_obj);
+      } else {
+        opaque_draws.push_back(new_draw_obj);
       }
     }
   }
@@ -596,9 +560,13 @@ Scene load_scene(VkBackend* backend, std::filesystem::path path) {
   return new_scene;
 }
 
-void destroy_scene(VkDevice device, VmaAllocator allocator, Scene& scene) {
+void destroy_scene(VkBackend* backend, Scene& scene) {
 
   DEBUG_PRINT("Destroying Scene");
+
+  VkDevice device = backend->_device_context.logical_device;
+  VmaAllocator allocator = backend->_allocator;
+
   scene.mat_desc_allocator.destroy_pools(device);
   scene.obj_desc_allocator.destroy_pools(device);
 
@@ -610,8 +578,13 @@ void destroy_scene(VkDevice device, VmaAllocator allocator, Scene& scene) {
     destroy_buffer(allocator, mesh.vertices);
   }
   for (auto& material : scene.material_buffers) {
-    destroy_image(device, allocator, material.color_tex);
-    destroy_image(device, allocator, material.metal_rough_tex);
+
+    if (material.color_tex.image != backend->_default_texture.image) {
+      destroy_image(device, allocator, material.color_tex);
+    }
+    if (material.metal_rough_tex.image != backend->_default_texture.image) {
+      destroy_image(device, allocator, material.metal_rough_tex);
+    }
     destroy_buffer(allocator, material.mat_uniform_buffer);
   }
 

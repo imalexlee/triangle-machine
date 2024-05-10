@@ -7,6 +7,7 @@
 #include "vk_backend/vk_device.h"
 #include "vk_backend/vk_frame.h"
 #include "vk_backend/vk_utils.h"
+#include <core/camera.h>
 #include <core/ctpl_stl.h>
 #include <core/thread_pool.h>
 #include <cstdint>
@@ -19,12 +20,22 @@
 
 constexpr uint64_t FRAME_NUM = 3;
 
+constexpr uint32_t CHECKER_WIDTH = 32;
+[[maybe_unused]] static constexpr std::array<uint32_t, CHECKER_WIDTH * CHECKER_WIDTH> white_image = []() {
+  std::array<uint32_t, CHECKER_WIDTH * CHECKER_WIDTH> result{};
+  uint32_t black = __builtin_bswap32(0xFFFFFFFF);
+  for (uint32_t& el : result) {
+    el = black;
+  }
+  return result;
+}();
+
 class VkBackend {
 public:
   VkBackend(){};
   ~VkBackend() { destroy(); };
 
-  void create(Window& window);
+  void create(Window& window, Camera& camera);
   void draw();
   void resize();
 
@@ -37,6 +48,7 @@ private:
   VmaAllocator _allocator;
 
   Scene _scene;
+  Camera* _camera;
 
   CommandContext _imm_cmd_context;
   VkFence _imm_fence;
@@ -51,6 +63,7 @@ private:
   // defaults
   VkSampler _default_linear_sampler;
   VkSampler _default_nearest_sampler;
+  AllocatedImage _default_texture;
 
   // ThreadPool _thread_pool;
 
@@ -78,5 +91,6 @@ private:
   AllocatedImage upload_texture_image(void* data, VkImageUsageFlags usage, uint32_t height, uint32_t width);
 
   friend Scene load_scene(VkBackend* backend, std::filesystem::path path);
+  friend void destroy_scene(VkBackend* backend, Scene& scene);
   friend AllocatedImage generate_texture(VkBackend* backend, fastgltf::Asset& asset, fastgltf::Texture& gltf_texture);
 };

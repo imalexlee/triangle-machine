@@ -16,4 +16,5 @@ private:
   void destroy();
   VkBackend _vk_backend;
   Window _window;
+  Camera _camera;
 };
