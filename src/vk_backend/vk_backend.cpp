@@ -366,32 +366,10 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
   VkPipelineLayout current_pipeline_layout = _scene.opaque_pipeline_info.pipeline_layout;
 
   auto t1 = std::chrono::high_resolution_clock::now();
-  auto t4 = std::chrono::high_resolution_clock::now();
-
-  //  VkViewport viewport{};
-  //  viewport.x = 0.0f;
-  //  viewport.y = 0.0f;
-  //  viewport.width = _swapchain_context.extent.width;
-  //  viewport.height = _swapchain_context.extent.height;
-  //  viewport.minDepth = 0.0f;
-  //  viewport.maxDepth = 1.0f;
-  //
-  //  VkRect2D scissor{};
-  //  scissor.extent = _swapchain_context.extent;
-  //  scissor.offset = {0, 0};
-  //
-  //  vkCmdSetViewport(cmd_buf, 0, 1, &viewport);
-  //
-  //  vkCmdSetScissor(cmd_buf, 0, 1, &scissor);
 
   int draw_call_count = 0;
   auto draw = [&, this](const std::vector<DrawObject>& draw_objects, const uint32_t start_idx, const uint32_t stride,
                         uint32_t thread_id) {
-    //    auto t5 = std::chrono::high_resolution_clock::now();
-    //    auto duration = std::chrono::duration<float>(t5 - t4);
-    //    auto elapsed_time = std::chrono::duration_cast<std::chrono::microseconds>(duration);
-    //    fmt::println("elapsed time: {}", elapsed_time.count());
-
     VkCommandBufferInheritanceRenderingInfo inheritance_rendering_info;
     inheritance_rendering_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_RENDERING_INFO;
     inheritance_rendering_info.pNext = nullptr;
