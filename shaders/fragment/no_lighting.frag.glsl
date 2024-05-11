@@ -10,5 +10,5 @@ layout(location = 2) in vec3 surface_normal;
 layout(location = 0) out vec4 out_color;
 
 void main() {
-    out_color = texture(color_tex, uv);
+    out_color = material_data.color_factors * texture(color_tex, uv);
 }

@@ -7,6 +7,7 @@
 #include <fmt/base.h>
 #include <fmt/format.h>
 #include <future>
+#include <glm/ext/matrix_float4x4.hpp>
 #include <span>
 #include <unistd.h>
 #include <vulkan/vulkan_core.h>
@@ -30,7 +31,7 @@ constexpr bool use_validation_layers = true;
 
 constexpr uint64_t TIMEOUT_DURATION = 1'000'000'000;
 
-void VkBackend::create(Window& window, Camera& camera) {
+void VkBackend::create(Window &window, Camera &camera) {
   create_instance();
   VkSurfaceKHR surface = window.get_vulkan_surface(_instance);
 
@@ -38,7 +39,7 @@ void VkBackend::create(Window& window, Camera& camera) {
   _swapchain_context.create(_instance, _device_context, surface, VK_PRESENT_MODE_MAILBOX_KHR);
   create_allocator();
 
-  for (Frame& frame : _frames) {
+  for (Frame &frame : _frames) {
     fmt::println("creating frame");
     frame.create(_device_context.logical_device, _allocator, _device_context.queues.graphics_family_index);
   }
@@ -86,33 +87,31 @@ void VkBackend::create_default_data() {
   VK_CHECK(vkCreateSampler(_device_context.logical_device, &sampler_ci, nullptr, &_default_nearest_sampler));
 
   _default_texture =
-      upload_texture_image((void*)white_image.data(), VK_IMAGE_USAGE_SAMPLED_BIT, CHECKER_WIDTH, CHECKER_WIDTH);
+      upload_texture_image((void *)white_image.data(), VK_IMAGE_USAGE_SAMPLED_BIT, CHECKER_WIDTH, CHECKER_WIDTH);
 
-  _scene = load_scene(this, "../../assets/3d/porsche_large.glb");
+  _scene = load_scene(this, "../../assets/3d/structure.glb");
 }
 
 auto time1 = std::chrono::high_resolution_clock::now();
 void VkBackend::update_scene() {
-  auto time_span = duration_cast<std::chrono::duration<float>>(std::chrono::high_resolution_clock::now() - time1);
 
   glm::mat4 upside_down = glm::mat4{1.f};
-  upside_down[1][1] *= -1;
+  // upside_down[1][1] *= -1;
 
-  // glm::vec3 cam_pos = {0, 90, -200}; // matilda
-  //   glm::vec3 cam_pos = {0, 3, -50}; // house
-  // glm::vec3 cam_pos = {0, 1, -8}; // porsche, monkey
+  _camera->update();
 
-  glm::mat4 model = upside_down * glm::rotate(glm::mat4{1.f}, glm::radians(time_span.count() * 30), glm::vec3{0, 1, 0});
-  // glm::mat4 view = glm::translate(glm::mat4(1.f), cam_pos);
+  glm::mat4 model = upside_down;
+
   glm::mat4 projection = glm::perspective(
       glm::radians(60.f), (float)_swapchain_context.extent.width / (float)_swapchain_context.extent.height, 10000.0f,
       0.1f);
+  projection[1][1] *= -1;
 
-  _scene_data.view_proj = projection * _camera->look_at * model;
+  _scene_data.view_proj = projection * _camera->view * model;
   _scene_data.eye_pos = _camera->position;
 }
 
-void VkBackend::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function) {
+void VkBackend::immediate_submit(std::function<void(VkCommandBuffer cmd)> &&function) {
 
   VK_CHECK(vkResetFences(_device_context.logical_device, 1, &_imm_fence));
 
@@ -146,7 +145,7 @@ void VkBackend::create_instance() {
   app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
   app_info.apiVersion = VK_API_VERSION_1_3;
 
-  std::vector<const char*> instance_extensions = get_instance_extensions();
+  std::vector<const char *> instance_extensions = get_instance_extensions();
 
   VkInstanceCreateInfo instance_ci{};
   instance_ci.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -157,7 +156,7 @@ void VkBackend::create_instance() {
 
   VkDebugUtilsMessengerCreateInfoEXT debug_ci;
   VkValidationFeaturesEXT validation_features;
-  std::array<const char*, 1> validation_layers;
+  std::array<const char *, 1> validation_layers;
 
   if constexpr (use_validation_layers) {
     debug_ci = _debugger.create_messenger_info();
@@ -184,7 +183,7 @@ void VkBackend::create_pipelines() {
   builder.set_shader_stages(vert_shader, frag_shader);
   builder.disable_blending();
   builder.set_input_assembly(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-  builder.set_raster_culling(VK_CULL_MODE_FRONT_BIT, VK_FRONT_FACE_CLOCKWISE);
+  builder.set_raster_culling(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
   builder.set_raster_poly_mode(VK_POLYGON_MODE_FILL);
   builder.set_multisample_state(VK_SAMPLE_COUNT_1_BIT);
   builder.set_depth_stencil_state(true, true, VK_COMPARE_OP_GREATER_OR_EQUAL);
@@ -232,10 +231,10 @@ void VkBackend::create_pipelines() {
   });
 }
 
-std::vector<const char*> VkBackend::get_instance_extensions() {
+std::vector<const char *> VkBackend::get_instance_extensions() {
   uint32_t count{0};
-  const char** glfw_extensions = glfwGetRequiredInstanceExtensions(&count);
-  std::vector<const char*> extensions;
+  const char **glfw_extensions = glfwGetRequiredInstanceExtensions(&count);
+  std::vector<const char *> extensions;
   for (size_t i = 0; i < count; i++) {
     extensions.emplace_back(glfw_extensions[i]);
   }
@@ -252,7 +251,7 @@ volatile float average_time = 0.f;
 void VkBackend::draw() {
   update_scene();
 
-  Frame& current_frame = get_current_frame();
+  Frame &current_frame = get_current_frame();
   VkCommandBuffer cmd_buffer = current_frame.command_context.primary_buffer;
 
   // wait for previous command buffer to finish executing
@@ -326,7 +325,7 @@ void VkBackend::resize() {
   _depth_image = create_image(_device_context.logical_device, _allocator, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
                               _swapchain_context.extent, VK_FORMAT_D32_SFLOAT);
 
-  for (Frame& frame : _frames) {
+  for (Frame &frame : _frames) {
     frame.reset_sync_structures(_device_context.logical_device);
   }
 }
@@ -358,7 +357,7 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
   VkDescriptorSet scene_desc_set = get_current_frame().create_scene_desc_set(_device_context.logical_device);
 
   // fill in the buffer with the updated scene data
-  SceneData* scene_data = (SceneData*)get_current_frame().scene_data_buffer.allocation->GetMappedData();
+  SceneData *scene_data = (SceneData *)get_current_frame().scene_data_buffer.allocation->GetMappedData();
   *scene_data = _scene_data;
 
   // connect buffer that was just filled to a binding then hook it up to the allocated desc set
@@ -374,7 +373,7 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
   auto t1 = std::chrono::high_resolution_clock::now();
 
   int draw_call_count = 0;
-  auto draw = [&, this](const std::vector<DrawObject>& draw_objects, const uint32_t start_idx, const uint32_t stride,
+  auto draw = [&, this](const std::vector<DrawObject> &draw_objects, const uint32_t start_idx, const uint32_t stride,
                         uint32_t thread_id) {
     VkCommandBufferInheritanceRenderingInfo inheritance_rendering_info;
     inheritance_rendering_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_RENDERING_INFO;
@@ -431,7 +430,7 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
 
     for (uint32_t i = start_idx; i < end_pos; i++) {
 
-      const auto& draw_obj = draw_objects[i];
+      const auto &draw_obj = draw_objects[i];
 
       if (i == _scene.trans_start) {
         vkCmdBindPipeline(secondary_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, _scene.transparent_pipeline_info.pipeline);
@@ -480,7 +479,7 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
     futures.push_back(std::move(future));
     secondary_buf_idx++;
   }
-  for (auto& future : futures) {
+  for (auto &future : futures) {
     VkCommandBuffer buf = future.get();
     vkCmdExecuteCommands(cmd_buf, 1, &buf);
   }
@@ -513,11 +512,11 @@ MeshBuffers VkBackend::upload_mesh_buffers(std::span<uint32_t> indices, std::spa
       create_buffer(vertex_buffer_bytes + index_buffer_bytes, _allocator, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                     VMA_MEMORY_USAGE_CPU_ONLY, VMA_ALLOCATION_CREATE_MAPPED_BIT);
 
-  void* staging_data = staging_buf.allocation->GetMappedData();
+  void *staging_data = staging_buf.allocation->GetMappedData();
 
   // share staging buffer for vertices and indices
   memcpy(staging_data, vertices.data(), vertex_buffer_bytes);
-  memcpy((char*)staging_data + vertex_buffer_bytes, indices.data(), index_buffer_bytes);
+  memcpy((char *)staging_data + vertex_buffer_bytes, indices.data(), index_buffer_bytes);
 
   MeshBuffers new_mesh_buffer;
   new_mesh_buffer.vertices = create_buffer(vertex_buffer_bytes, _allocator,
@@ -548,7 +547,7 @@ MeshBuffers VkBackend::upload_mesh_buffers(std::span<uint32_t> indices, std::spa
   return new_mesh_buffer;
 }
 
-AllocatedImage VkBackend::upload_texture_image(void* data, VkImageUsageFlags usage, uint32_t height, uint32_t width) {
+AllocatedImage VkBackend::upload_texture_image(void *data, VkImageUsageFlags usage, uint32_t height, uint32_t width) {
   VkExtent2D extent{.width = width, .height = height};
 
   uint32_t data_size = width * height * sizeof(uint32_t);
@@ -602,7 +601,7 @@ void VkBackend::destroy() {
     _debugger.destroy();
   }
 
-  for (Frame& frame : _frames) {
+  for (Frame &frame : _frames) {
     frame.destroy();
     destroy_buffer(_allocator, frame.scene_data_buffer);
   }

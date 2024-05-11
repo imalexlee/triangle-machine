@@ -14,5 +14,12 @@ void main() {
     vec3 light_dir = normalize(vec3(0, 1, 0.4));
     float light_value = max(dot(surface_normal, light_dir), 0.2f);
 
-    out_color = c_surface * 3.5 * light_value;
+    out_color = c_surface * 2.5 * light_value;
+
+    //  float lightValue = max(dot(inNormal, sceneData.sunlight_direction.xyz), 0.1f);
+
+    //  vec3 color = inColor * texture(colorTex, inUV).xyz;
+    //  vec3 ambient = color * sceneData.ambient_color.xyz;
+
+    //  outFragcolor = vec4(color * lightValue * sceneData.sunlight_color.w + ambient, 1.0f);
 }
