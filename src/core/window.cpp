@@ -6,7 +6,7 @@
 #include <fmt/base.h>
 #include <vk_backend/vk_debug.h>
 
-Window::~Window() {
+void Window::destroy() {
   DEBUG_PRINT("destroying GLFW window");
   glfwDestroyWindow(glfw_window);
   glfwTerminate();

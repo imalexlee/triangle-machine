@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.22)
 
 project(triangle-machine)
-find_package(glfw3)
+
+find_package(glfw3 REQUIRED)
 find_package(Vulkan REQUIRED)
 
 if(NOT CMAKE_BUILD_TYPE)
@@ -64,6 +65,7 @@ target_include_directories(
   PRIVATE thirdparty/fmt/include
   PRIVATE thirdparty/stb_image
   PRIVATE thirdparty/fastgltf/include
+  PRIVATE thirdparty/fastgltf/include
   PRIVATE thirdparty/VulkanMemoryAllocator/include)
 
 target_link_directories(
@@ -80,10 +82,9 @@ target_link_libraries(
   PRIVATE glfw
   PRIVATE fastgltf
   PRIVATE fmt
+  PRIVATE imgui
   PRIVATE VulkanMemoryAllocator
-  PRIVATE Vulkan::Vulkan
-  # PRIVATE engine PRIVATE imgui
-)
+  PRIVATE Vulkan::Vulkan)
 
 find_program(
   GLSL_VALIDATOR glslangValidator

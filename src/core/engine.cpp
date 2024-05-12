@@ -30,11 +30,13 @@ void Engine::run() {
     if (_window.resized) {
       _vk_backend.resize();
       _window.resized = false;
-      // continue;
     }
 
     _vk_backend.draw();
   };
 }
 
-void Engine::destroy(){};
+void Engine::destroy() {
+  _vk_backend.destroy();
+  _window.destroy();
+};

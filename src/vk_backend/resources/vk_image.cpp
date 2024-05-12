@@ -65,7 +65,7 @@ VkImageView create_image_view(VkDevice device, VkImage image, VkFormat format, V
   return image_view;
 }
 
-void destroy_image(VkDevice device, VmaAllocator allocator, AllocatedImage& allocated_image) {
+void destroy_image(VkDevice device, VmaAllocator allocator, AllocatedImage &allocated_image) {
   vmaDestroyImage(allocator, allocated_image.image, allocated_image.allocation);
   vkDestroyImageView(device, allocated_image.image_view, nullptr);
 }
@@ -81,13 +81,14 @@ VkImageSubresourceRange create_image_subresource_range(VkImageAspectFlags aspect
   return subresource_range;
 }
 
-VkRenderingAttachmentInfo create_color_attachment_info(VkImageView view, VkClearValue* clear) {
+VkRenderingAttachmentInfo create_color_attachment_info(VkImageView view, VkClearValue *clear,
+                                                       VkAttachmentLoadOp load_op) {
   VkRenderingAttachmentInfo colorAttachment{};
   colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
   colorAttachment.pNext = nullptr;
   colorAttachment.imageView = view;
   colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-  colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+  colorAttachment.loadOp = load_op;
   colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
   if (clear) {
     colorAttachment.clearValue = *clear;

@@ -10,7 +10,7 @@ public:
   void create();
   void run();
 
-  static Engine& get();
+  static Engine &get();
 
 private:
   void destroy();

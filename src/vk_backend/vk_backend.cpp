@@ -1,4 +1,5 @@
 #include "vk_backend/vk_pipeline.h"
+#include <array>
 #include <chrono>
 #include <core/camera.h>
 #include <cstdint>
@@ -10,6 +11,7 @@
 #include <glm/ext/matrix_float4x4.hpp>
 #include <span>
 #include <unistd.h>
+#include <vk_backend/vk_utils.h>
 #include <vulkan/vulkan_core.h>
 #define VMA_IMPLEMENTATION
 #include "global_utils.h"
@@ -30,6 +32,7 @@ constexpr bool use_validation_layers = true;
 #endif // NDEBUG
 
 constexpr uint64_t TIMEOUT_DURATION = 1'000'000'000;
+using namespace std::chrono;
 
 void VkBackend::create(Window &window, Camera &camera) {
   create_instance();
@@ -68,6 +71,7 @@ void VkBackend::create(Window &window, Camera &camera) {
 
   create_default_data();
   create_pipelines();
+  create_gui(window);
 
   if (use_validation_layers) {
     _debugger.create(_instance);
@@ -92,23 +96,96 @@ void VkBackend::create_default_data() {
   _scene = load_scene(this, "../../assets/3d/structure.glb");
 }
 
-auto time1 = std::chrono::high_resolution_clock::now();
-void VkBackend::update_scene() {
+void VkBackend::create_gui(Window &window) {
 
-  glm::mat4 upside_down = glm::mat4{1.f};
-  // upside_down[1][1] *= -1;
+  ImGui::CreateContext();
+
+  ImGuiIO &io = ImGui::GetIO();
+  io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
+  io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;  // Enable Gamepad Controls
+
+  ImGui_ImplGlfw_InitForVulkan(window.glfw_window, true);
+
+  ImGui::StyleColorsDark();
+
+  std::array<VkDescriptorPoolSize, 1> pool_sizes = {
+      {{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1}},
+  };
+
+  VkDescriptorPoolCreateInfo pool_ci{};
+  pool_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+  pool_ci.maxSets = 1;
+  pool_ci.pPoolSizes = pool_sizes.data();
+  pool_ci.poolSizeCount = pool_sizes.size();
+  pool_ci.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+
+  VK_CHECK(vkCreateDescriptorPool(_device_context.logical_device, &pool_ci, nullptr, &_imm_descriptor_pool));
+
+  VkPipelineRenderingCreateInfoKHR pipeline_info{};
+  pipeline_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
+  pipeline_info.pColorAttachmentFormats = &_swapchain_context.format;
+  pipeline_info.colorAttachmentCount = 1;
+  // pipeline_info.depthAttachmentFormat = _depth_image.image_format;
+
+  ImGui_ImplVulkan_InitInfo init_info = {};
+  init_info.Instance = _instance;
+  init_info.PhysicalDevice = _device_context.physical_device;
+  init_info.Device = _device_context.logical_device;
+  init_info.Queue = _device_context.queues.graphics;
+  init_info.DescriptorPool = _imm_descriptor_pool;
+  init_info.MinImageCount = 3;
+  init_info.ImageCount = 3;
+  init_info.UseDynamicRendering = true;
+  init_info.PipelineRenderingCreateInfo = pipeline_info;
+  init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+
+  ImGui_ImplVulkan_Init(&init_info);
+}
+
+void VkBackend::update_scene() {
+  auto start_time = system_clock::now();
 
   _camera->update();
 
-  glm::mat4 model = upside_down;
+  glm::mat4 model = glm::mat4{1.f};
 
   glm::mat4 projection = glm::perspective(
       glm::radians(60.f), (float)_swapchain_context.extent.width / (float)_swapchain_context.extent.height, 10000.0f,
       0.1f);
+
   projection[1][1] *= -1;
 
   _scene_data.view_proj = projection * _camera->view * model;
   _scene_data.eye_pos = _camera->position;
+
+  auto end_time = system_clock::now();
+  auto dur = duration<float>(end_time - start_time);
+  _stats.scene_update_time = duration_cast<nanoseconds>(dur).count() / 1000.f;
+}
+
+bool show_demo_window = true;
+bool show_another_window = false;
+void VkBackend::update_ui() {
+  ImGui_ImplVulkan_NewFrame();
+  ImGui_ImplGlfw_NewFrame();
+
+  ImGui::NewFrame();
+
+  static bool show_window = true;
+
+  ImGuiWindowFlags window_flags = 0;
+  window_flags |= ImGuiWindowFlags_NoBackground;
+  window_flags |= ImGuiWindowFlags_NoTitleBar;
+
+  ImGui::Begin("Stats", &show_window, window_flags);
+
+  ImGui::Text("Host buffer recording: %.3f ms", _stats.draw_time);
+  ImGui::Text("Frame time: %.3f ms (%.1f FPS)", _stats.frame_time, 1000.f / _stats.frame_time);
+  ImGui::Text("Scene update time: %.3f us", _stats.scene_update_time);
+
+  ImGui::End();
+
+  ImGui::Render();
 }
 
 void VkBackend::immediate_submit(std::function<void(VkCommandBuffer cmd)> &&function) {
@@ -244,12 +321,11 @@ std::vector<const char *> VkBackend::get_instance_extensions() {
   return extensions;
 }
 
-uintmax_t counter = 0;
-uintmax_t iters = 0;
-volatile float average_time = 0.f;
-
 void VkBackend::draw() {
+  auto start_frame_time = system_clock::now();
+
   update_scene();
+  update_ui();
 
   Frame &current_frame = get_current_frame();
   VkCommandBuffer cmd_buffer = current_frame.command_context.primary_buffer;
@@ -261,6 +337,8 @@ void VkBackend::draw() {
   VkResult result =
       vkAcquireNextImageKHR(_device_context.logical_device, _swapchain_context.swapchain, TIMEOUT_DURATION,
                             current_frame.present_semaphore, nullptr, &swapchain_image_index);
+
+  auto buffer_recording_start = system_clock::now();
 
   if (result == VK_ERROR_OUT_OF_DATE_KHR) {
     return;
@@ -276,19 +354,27 @@ void VkBackend::draw() {
 
   VK_CHECK(vkBeginCommandBuffer(current_frame.command_context.primary_buffer, &command_buffer_bi));
 
-  insert_image_memory_barrier(cmd_buffer, _swapchain_context.images[swapchain_image_index], VK_IMAGE_LAYOUT_UNDEFINED,
+  VkImage swapchain_image = _swapchain_context.images[swapchain_image_index];
+  VkImageView swapchain_image_view = _swapchain_context.image_views[swapchain_image_index];
+
+  insert_image_memory_barrier(cmd_buffer, swapchain_image, VK_IMAGE_LAYOUT_UNDEFINED,
                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-  insert_image_memory_barrier(cmd_buffer, _swapchain_context.images[swapchain_image_index],
-                              VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+  insert_image_memory_barrier(cmd_buffer, swapchain_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                              VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
   insert_image_memory_barrier(cmd_buffer, _depth_image.image, VK_IMAGE_LAYOUT_UNDEFINED,
                               VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
-  draw_geometry(cmd_buffer, _swapchain_context.extent, swapchain_image_index);
+  render_geometry(cmd_buffer, _swapchain_context.extent, swapchain_image_view);
 
-  insert_image_memory_barrier(cmd_buffer, _swapchain_context.images[swapchain_image_index],
-                              VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+  insert_image_memory_barrier(cmd_buffer, swapchain_image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                              VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+  render_ui(cmd_buffer, _swapchain_context.extent, swapchain_image_view);
+
+  insert_image_memory_barrier(cmd_buffer, swapchain_image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                              VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
   // tweak stage masks to make it more optimal
   VkSemaphoreSubmitInfo wait_semaphore_si =
@@ -315,6 +401,14 @@ void VkBackend::draw() {
   }
 
   _frame_num++;
+
+  auto end_time = system_clock::now();
+  auto dur = duration<float>(end_time - buffer_recording_start);
+  _stats.draw_time = duration_cast<microseconds>(dur).count() / 1000.f;
+
+  dur = duration<float>(end_time - start_frame_time);
+  end_time = system_clock::now();
+  _stats.frame_time = duration_cast<microseconds>(dur).count() / 1000.f;
 }
 
 void VkBackend::resize() {
@@ -330,10 +424,10 @@ void VkBackend::resize() {
   }
 }
 
-void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32_t swapchain_img_idx) {
+void VkBackend::render_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, VkImageView image_view) {
   // make this use _draw_image.image after blit image is done
   VkRenderingAttachmentInfo color_attachment =
-      create_color_attachment_info(_swapchain_context.image_views[swapchain_img_idx], nullptr);
+      create_color_attachment_info(image_view, nullptr, VK_ATTACHMENT_LOAD_OP_CLEAR);
 
   VkRenderingAttachmentInfo depth_attachment = create_depth_attachment_info(_depth_image.image_view);
 
@@ -370,9 +464,6 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
   // both opaque and transparent have the same layout for now
   VkPipelineLayout current_pipeline_layout = _scene.opaque_pipeline_info.pipeline_layout;
 
-  auto t1 = std::chrono::high_resolution_clock::now();
-
-  int draw_call_count = 0;
   auto draw = [&, this](const std::vector<DrawObject> &draw_objects, const uint32_t start_idx, const uint32_t stride,
                         uint32_t thread_id) {
     VkCommandBufferInheritanceRenderingInfo inheritance_rendering_info;
@@ -409,13 +500,13 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
     VkViewport viewport{};
     viewport.x = 0.0f;
     viewport.y = 0.0f;
-    viewport.width = _swapchain_context.extent.width;
-    viewport.height = _swapchain_context.extent.height;
+    viewport.width = extent.width;
+    viewport.height = extent.height;
     viewport.minDepth = 0.0f;
     viewport.maxDepth = 1.0f;
 
     VkRect2D scissor{};
-    scissor.extent = _swapchain_context.extent;
+    scissor.extent = extent;
     scissor.offset = {0, 0};
 
     vkCmdSetViewport(secondary_buf, 0, 1, &viewport);
@@ -426,6 +517,7 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
                             &scene_desc_set, 0, nullptr);
 
     VkDescriptorSet material_desc_set = nullptr;
+
     uint32_t end_pos = std::min(start_idx + stride, (uint32_t)draw_objects.size());
 
     for (uint32_t i = start_idx; i < end_pos; i++) {
@@ -449,7 +541,6 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
       vkCmdBindIndexBuffer(secondary_buf, draw_obj.index_buffer, 0, VK_INDEX_TYPE_UINT32);
 
       vkCmdDrawIndexed(secondary_buf, draw_obj.indices_count, 1, draw_obj.indices_start, 0, 0);
-      draw_call_count++;
     }
 
     vkEndCommandBuffer(secondary_buf);
@@ -461,10 +552,8 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
 
   uint32_t thread_count = std::thread::hardware_concurrency() - 1;
   uint32_t primitive_len = _scene.draw_objects.size();
-  // fmt::println("primitive_len: {}", primitive_len);
   uint32_t stride = primitive_len / thread_count;
-  // if we have leftover primitives, distribute the remainder over many cores instead of
-  // overload the last thread with N MORE primitives where 0 < N < thread_count
+
   if (stride * thread_count < primitive_len) {
     stride++;
   }
@@ -473,7 +562,6 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
   uint32_t secondary_buf_idx = 0;
   for (uint32_t i = 0; i < primitive_len; i += stride) {
 
-    // t4 = std::chrono::high_resolution_clock::now();
     auto future = std::async(std::launch::deferred, draw, _scene.draw_objects, i, stride, secondary_buf_idx);
 
     futures.push_back(std::move(future));
@@ -485,23 +573,31 @@ void VkBackend::draw_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, uint32
   }
 
   vkCmdEndRendering(cmd_buf);
+}
 
-  if (counter > 150) {
-    auto t2 = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration<float>(t2 - t1);
-    auto elapsed_time = std::chrono::duration_cast<std::chrono::microseconds>(duration);
-    average_time += elapsed_time.count();
-    iters++;
-    //    fmt::println("elapsed time: {}", elapsed_time.count());
+void VkBackend::render_ui(VkCommandBuffer cmd_buf, VkExtent2D extent, VkImageView image_view) {
 
-  } else {
+  // load last render(s). aka, don't delete the scene when rendering ui.
+  VkRenderingAttachmentInfo color_attachment =
+      create_color_attachment_info(image_view, nullptr, VK_ATTACHMENT_LOAD_OP_LOAD);
 
-    auto t2 = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration<float>(t2 - t1);
-    auto elapsed_time = std::chrono::duration_cast<std::chrono::microseconds>(duration);
-    average_time = elapsed_time.count();
-  }
-  counter++;
+  VkRenderingInfo rendering_info{};
+  rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+  rendering_info.renderArea = VkRect2D{
+      .offset = VkOffset2D{0, 0},
+      .extent = extent,
+  };
+  rendering_info.pColorAttachments = &color_attachment;
+  rendering_info.colorAttachmentCount = 1;
+  rendering_info.layerCount = 1;
+  rendering_info.pStencilAttachment = nullptr;
+  // rendering_info.pDepthAttachment = &depth_attachment;
+
+  vkCmdBeginRendering(cmd_buf, &rendering_info);
+
+  ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd_buf);
+
+  vkCmdEndRendering(cmd_buf);
 }
 
 MeshBuffers VkBackend::upload_mesh_buffers(std::span<uint32_t> indices, std::span<Vertex> vertices) {
@@ -593,7 +689,6 @@ void VkBackend::destroy() {
 
   vkDeviceWaitIdle(_device_context.logical_device);
   DEBUG_PRINT("destroying Vulkan Backend");
-  fmt::println("average draw time: {}", average_time / (float)iters);
 
   _deletion_queue.flush();
 
@@ -607,6 +702,13 @@ void VkBackend::destroy() {
   }
 
   destroy_scene(this, _scene);
+
+  ImGui_ImplGlfw_Shutdown();
+  ImGui_ImplVulkan_Shutdown();
+
+  ImGui::DestroyContext();
+
+  vkDestroyDescriptorPool(_device_context.logical_device, _imm_descriptor_pool, nullptr);
 
   destroy_image(_device_context.logical_device, _allocator, _draw_image);
   destroy_image(_device_context.logical_device, _allocator, _depth_image);
