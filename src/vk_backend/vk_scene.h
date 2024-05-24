@@ -162,6 +162,7 @@ private:
 };
 
 struct DrawObject {
+  PipelineInfo pipeline_info;
   VkDescriptorSet mat_desc_set;
   VkDescriptorSet obj_desc_set;
   VkBuffer index_buffer;
@@ -170,13 +171,13 @@ struct DrawObject {
 };
 
 struct Scene {
-public:
   std::vector<MeshBuffers> mesh_buffers;
   std::vector<MaterialBuffers> material_buffers;
   // GPU allocated buffers for per-draw_object data.
   // this uniform buffer is referenced by obj_desc_set in DrawObject
   std::vector<AllocatedBuffer> draw_obj_uniform_buffers;
-  std::vector<DrawObject> draw_objects;
+  std::vector<DrawObject> transparent_objs;
+  std::vector<DrawObject> opaque_objs;
   std::vector<VkSampler> samplers;
 
   VkDescriptorSetLayout mat_desc_set_layout;
@@ -186,6 +187,4 @@ public:
 
   PipelineInfo opaque_pipeline_info;
   PipelineInfo transparent_pipeline_info;
-
-  uint32_t trans_start;
 };

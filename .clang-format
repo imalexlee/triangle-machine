@@ -4,3 +4,4 @@ TabWidth: 2
 ColumnLimit: 120
 NamespaceIndentation: All
 BreakBeforeBraces: Attach
+PointerAlignment: Left
