@@ -38,6 +38,7 @@ struct Stats {
   float frame_time;
   float scene_update_time;
   float draw_time;
+  uint32_t total_draw_time;
 };
 
 class VkBackend {

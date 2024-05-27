@@ -8,10 +8,10 @@
 #include <fastgltf/types.hpp>
 #include <fmt/base.h>
 #include <fmt/format.h>
-#include <future>
-#include <glm/ext/matrix_float4x4.hpp>
+#include <glm/ext/quaternion_transform.hpp>
 #include <span>
 #include <unistd.h>
+#include <vk_backend/vk_types.h>
 #include <vk_backend/vk_utils.h>
 #include <vulkan/vulkan_core.h>
 #define VMA_IMPLEMENTATION
@@ -143,12 +143,14 @@ void VkBackend::create_gui(Window& window) {
   ImGui_ImplVulkan_Init(&init_info);
 }
 
+auto time1 = std::chrono::high_resolution_clock::now();
 void VkBackend::update_scene() {
   auto start_time = system_clock::now();
-
+  auto time_span = duration_cast<std::chrono::duration<float>>(std::chrono::high_resolution_clock::now() - time1);
   _camera->update();
 
-  glm::mat4 model = glm::mat4{1.f};
+  glm::mat4 model =
+      glm::mat4{1.f} * glm::rotate(glm::mat4{1.f}, glm::radians(time_span.count() * 30), glm::vec3{0, 1, 0});
 
   glm::mat4 projection = glm::perspective(
       glm::radians(60.f), (float)_swapchain_context.extent.width / (float)_swapchain_context.extent.height, 10000.0f,
@@ -164,6 +166,23 @@ void VkBackend::update_scene() {
   if (_frame_num % 1000 == 0) {
     _stats.scene_update_time = duration_cast<nanoseconds>(dur).count() / 1000.f;
   }
+}
+
+void VkBackend::update_global_descriptors() {
+  get_current_frame().clear_scene_desc_set(_device_context.logical_device);
+  // allocate an empty set with the layout to hold our global scene data
+  global_desc_set = get_current_frame().create_scene_desc_set(_device_context.logical_device);
+
+  // fill in the buffer with the updated scene data
+  SceneData* scene_data = (SceneData*)get_current_frame().scene_data_buffer.allocation->GetMappedData();
+  *scene_data = _scene_data;
+
+  // connect buffer that was just filled to a binding then hook it up to the allocated desc set
+  DescriptorWriter writer;
+  writer.write_buffer(0, get_current_frame().scene_data_buffer.buffer, sizeof(SceneData), 0,
+                      VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+
+  writer.update_set(_device_context.logical_device, global_desc_set);
 }
 
 bool show_demo_window = true;
@@ -290,11 +309,11 @@ void VkBackend::create_pipelines() {
   _scene.transparent_pipeline_info = transparent_pipeline_info;
 
   for (auto& obj : _scene.opaque_objs) {
-    obj.pipeline_info = opaque_pipeline_info;
+    obj.pipeline_info = &_scene.opaque_pipeline_info;
   }
 
   for (auto& obj : _scene.transparent_objs) {
-    obj.pipeline_info = transparent_pipeline_info;
+    obj.pipeline_info = &_scene.transparent_pipeline_info;
   }
 
   _deletion_queue.push_persistant([=, this]() {
@@ -332,8 +351,6 @@ void VkBackend::draw() {
   VkResult result =
       vkAcquireNextImageKHR(_device_context.logical_device, _swapchain_context.swapchain, TIMEOUT_DURATION,
                             current_frame.present_semaphore, nullptr, &swapchain_image_index);
-
-  auto buffer_recording_start = system_clock::now();
 
   if (result == VK_ERROR_OUT_OF_DATE_KHR) {
     return;
@@ -399,11 +416,7 @@ void VkBackend::draw() {
 
   if (_frame_num % 1000 == 0) {
     auto end_time = system_clock::now();
-    auto dur = duration<float>(end_time - buffer_recording_start);
-    _stats.draw_time = duration_cast<microseconds>(dur).count();
-
-    dur = duration<float>(end_time - start_frame_time);
-    end_time = system_clock::now();
+    auto dur = duration<float>(end_time - start_frame_time);
     _stats.frame_time = duration_cast<microseconds>(dur).count() / 1000.f;
   }
 }
@@ -430,6 +443,7 @@ VkRenderingInfo create_rendering_info(VkRenderingAttachmentInfo& color_attachmen
       .offset = VkOffset2D{0, 0},
       .extent = extent,
   };
+
   rendering_info.flags = VK_RENDERING_CONTENTS_SECONDARY_COMMAND_BUFFERS_BIT;
   rendering_info.pColorAttachments = &color_attachment;
   rendering_info.colorAttachmentCount = 1;
@@ -440,24 +454,8 @@ VkRenderingInfo create_rendering_info(VkRenderingAttachmentInfo& color_attachmen
   return rendering_info;
 }
 
-void VkBackend::update_global_descriptors() {
-  get_current_frame().clear_scene_desc_set(_device_context.logical_device);
-  // allocate an empty set with the layout to hold our global scene data
-  global_desc_set = get_current_frame().create_scene_desc_set(_device_context.logical_device);
-
-  // fill in the buffer with the updated scene data
-  SceneData* scene_data = (SceneData*)get_current_frame().scene_data_buffer.allocation->GetMappedData();
-  *scene_data = _scene_data;
-
-  // connect buffer that was just filled to a binding then hook it up to the allocated desc set
-  DescriptorWriter writer;
-  writer.write_buffer(0, get_current_frame().scene_data_buffer.buffer, sizeof(SceneData), 0,
-                      VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-
-  writer.update_set(_device_context.logical_device, global_desc_set);
-}
-
 void VkBackend::render_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, VkImageView color_img_view) {
+  auto buffer_recording_start = system_clock::now();
 
   VkRenderingAttachmentInfo color_attachment =
       create_color_attachment_info(color_img_view, nullptr, VK_ATTACHMENT_LOAD_OP_CLEAR);
@@ -470,33 +468,29 @@ void VkBackend::render_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, VkIm
 
   vkCmdBeginRendering(cmd_buf, &rendering_info);
 
+  VkViewport viewport{};
+  viewport.x = 0.0f;
+  viewport.y = 0.0f;
+  viewport.width = _swapchain_context.extent.width;
+  viewport.height = _swapchain_context.extent.height;
+  viewport.minDepth = 0.0f;
+  viewport.maxDepth = 1.0f;
+
+  VkRect2D scissor{};
+  scissor.extent = _swapchain_context.extent;
+  scissor.offset = {0, 0};
+
+  PipelineInfo* current_pipeline_info = nullptr;
+  VkDescriptorSet current_mat_desc = VK_NULL_HANDLE;
+
   auto record_obj = [&](const DrawObject& obj) {
-    VkViewport viewport{};
-    viewport.x = 0.0f;
-    viewport.y = 0.0f;
-    viewport.width = _swapchain_context.extent.width;
-    viewport.height = _swapchain_context.extent.height;
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
+    if (obj.mat_desc_set != current_mat_desc) {
+      current_mat_desc = obj.mat_desc_set;
+      vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline_info->pipeline_layout, 1, 1,
+                              &obj.mat_desc_set, 0, nullptr);
+    }
 
-    VkRect2D scissor{};
-    scissor.extent = _swapchain_context.extent;
-    scissor.offset = {0, 0};
-
-    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, obj.pipeline_info.pipeline);
-
-    // set for all draws
-    vkCmdSetViewport(cmd_buf, 0, 1, &viewport);
-
-    vkCmdSetScissor(cmd_buf, 0, 1, &scissor);
-
-    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, obj.pipeline_info.pipeline_layout, 0, 1,
-                            &global_desc_set, 0, nullptr);
-
-    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, obj.pipeline_info.pipeline_layout, 1, 1,
-                            &obj.mat_desc_set, 0, nullptr);
-
-    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, obj.pipeline_info.pipeline_layout, 2, 1,
+    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline_info->pipeline_layout, 2, 1,
                             &obj.obj_desc_set, 0, nullptr);
 
     vkCmdBindIndexBuffer(cmd_buf, obj.index_buffer, 0, VK_INDEX_TYPE_UINT32);
@@ -504,15 +498,37 @@ void VkBackend::render_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, VkIm
     vkCmdDrawIndexed(cmd_buf, obj.indices_count, 1, obj.indices_start, 0, 0);
   };
 
+  current_pipeline_info = &_scene.opaque_pipeline_info;
+
+  vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline_info->pipeline);
+
+  vkCmdSetViewport(cmd_buf, 0, 1, &viewport);
+
+  vkCmdSetScissor(cmd_buf, 0, 1, &scissor);
+
+  vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline_info->pipeline_layout, 0, 1,
+                          &global_desc_set, 0, nullptr);
+
   for (DrawObject& obj : _scene.opaque_objs) {
     record_obj(obj);
   }
+
+  current_pipeline_info = &_scene.transparent_pipeline_info;
+
+  vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline_info->pipeline);
 
   for (DrawObject& obj : _scene.transparent_objs) {
     record_obj(obj);
   }
 
   vkCmdEndRendering(cmd_buf);
+
+  auto end_time = system_clock::now();
+  auto dur = duration<float>(end_time - buffer_recording_start);
+  _stats.total_draw_time += (uint32_t)duration_cast<microseconds>(dur).count();
+  if (_frame_num % 1000 == 0) {
+    _stats.draw_time = duration_cast<microseconds>(dur).count();
+  }
 }
 
 void VkBackend::render_ui(VkCommandBuffer cmd_buf, VkExtent2D extent, VkImageView image_view) {
@@ -629,6 +645,8 @@ void VkBackend::destroy() {
 
   vkDeviceWaitIdle(_device_context.logical_device);
   DEBUG_PRINT("destroying Vulkan Backend");
+
+  fmt::println("average draw time: {}", _stats.total_draw_time / _frame_num);
 
   _deletion_queue.flush();
 

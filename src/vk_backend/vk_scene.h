@@ -162,7 +162,7 @@ private:
 };
 
 struct DrawObject {
-  PipelineInfo pipeline_info;
+  PipelineInfo* pipeline_info;
   VkDescriptorSet mat_desc_set;
   VkDescriptorSet obj_desc_set;
   VkBuffer index_buffer;

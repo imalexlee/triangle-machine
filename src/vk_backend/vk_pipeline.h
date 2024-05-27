@@ -30,7 +30,6 @@ public:
   void clear();
 
 private:
-  // try std::array
   std::vector<VkPipelineShaderStageCreateInfo> _shader_stages;
   VkPipelineInputAssemblyStateCreateInfo _input_assembly_state;
   VkPipelineRasterizationStateCreateInfo _rasterization_state;
