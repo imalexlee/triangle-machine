@@ -4,7 +4,7 @@
 
 // creates a 2D image along with its image_view
 AllocatedImage create_image(VkDevice device, VmaAllocator allocator, VkImageUsageFlags usage, VkExtent2D extent,
-                            VkFormat format) {
+                            VkFormat format, uint32_t samples) {
 
   VkExtent3D extent_3D{
       .width = extent.width,
@@ -21,7 +21,7 @@ AllocatedImage create_image(VkDevice device, VmaAllocator allocator, VkImageUsag
   image_ci.extent = extent_3D;
   image_ci.format = format;
   image_ci.usage = usage;
-  image_ci.samples = VK_SAMPLE_COUNT_1_BIT;
+  image_ci.samples = (VkSampleCountFlagBits)samples;
   image_ci.mipLevels = 1;
   image_ci.imageType = VK_IMAGE_TYPE_2D;
   image_ci.arrayLayers = 1;
@@ -65,6 +65,39 @@ VkImageView create_image_view(VkDevice device, VkImage image, VkFormat format, V
   return image_view;
 }
 
+void blit_image(VkCommandBuffer cmd, VkImage src, VkImage dest, VkExtent2D src_extent, VkExtent2D dst_extent) {
+  VkImageBlit2 blit_region{.sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2, .pNext = nullptr};
+  blit_region.srcOffsets[1].x = src_extent.width;
+  blit_region.srcOffsets[1].y = src_extent.height;
+  blit_region.srcOffsets[1].z = 1;
+
+  blit_region.dstOffsets[1].x = dst_extent.width;
+  blit_region.dstOffsets[1].y = dst_extent.height;
+  blit_region.dstOffsets[1].z = 1;
+
+  blit_region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  blit_region.srcSubresource.baseArrayLayer = 0;
+  blit_region.srcSubresource.layerCount = 1;
+  blit_region.srcSubresource.mipLevel = 0;
+
+  blit_region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  blit_region.dstSubresource.baseArrayLayer = 0;
+  blit_region.dstSubresource.layerCount = 1;
+  blit_region.dstSubresource.mipLevel = 0;
+
+  VkBlitImageInfo2 blit_info{.sType = VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2, .pNext = nullptr};
+
+  blit_info.dstImage = dest;
+  blit_info.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+  blit_info.srcImage = src;
+  blit_info.srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+  blit_info.filter = VK_FILTER_LINEAR;
+  blit_info.regionCount = 1;
+  blit_info.pRegions = &blit_region;
+
+  vkCmdBlitImage2(cmd, &blit_info);
+}
+
 void destroy_image(VkDevice device, VmaAllocator allocator, AllocatedImage& allocated_image) {
   vmaDestroyImage(allocator, allocated_image.image, allocated_image.allocation);
   vkDestroyImageView(device, allocated_image.image_view, nullptr);
@@ -82,29 +115,32 @@ VkImageSubresourceRange create_image_subresource_range(VkImageAspectFlags aspect
 }
 
 VkRenderingAttachmentInfo create_color_attachment_info(VkImageView view, VkClearValue* clear,
-                                                       VkAttachmentLoadOp load_op) {
-  VkRenderingAttachmentInfo colorAttachment{};
-  colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-  colorAttachment.pNext = nullptr;
-  colorAttachment.imageView = view;
-  colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-  colorAttachment.loadOp = load_op;
-  colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+                                                       VkAttachmentLoadOp load_op, VkAttachmentStoreOp store_op) {
+  VkRenderingAttachmentInfo color_attachment{};
+  color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+  color_attachment.pNext = nullptr;
+  color_attachment.imageView = view;
+  color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+  color_attachment.loadOp = load_op;
+  color_attachment.storeOp = store_op;
   if (clear) {
-    colorAttachment.clearValue = *clear;
+    color_attachment.clearValue = *clear;
   }
 
-  return colorAttachment;
+  return color_attachment;
 }
 
-VkRenderingAttachmentInfo create_depth_attachment_info(VkImageView view) {
+VkRenderingAttachmentInfo create_depth_attachment_info(VkImageView view, VkAttachmentLoadOp load_op,
+                                                       VkAttachmentStoreOp store_op) {
   VkRenderingAttachmentInfo depthAttachment{};
   depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
   depthAttachment.pNext = nullptr;
   depthAttachment.imageView = view;
   depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-  depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-  depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+  // depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+  // depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+  depthAttachment.loadOp = load_op;
+  depthAttachment.storeOp = store_op;
   depthAttachment.clearValue.depthStencil.depth = 0.f;
 
   return depthAttachment;

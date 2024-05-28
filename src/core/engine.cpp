@@ -5,13 +5,15 @@
 
 constexpr int WIDTH = 800;
 constexpr int HEIGHT = 600;
-Engine *active_engine = nullptr;
+Engine* active_engine = nullptr;
 
 void Engine::create() {
   assert(active_engine == nullptr);
   active_engine = this;
 
-  glm::vec3 init_cam_pos = {0, -1, -8};
+  // glm::vec3 init_cam_pos = {0, -1, -8};
+  glm::vec3 init_cam_pos = {-86.7, 3.3, -30.8};
+  //-86.78253 3.3122897 -30.813347
 
   _window.create(WIDTH, HEIGHT, "Triangle Machine");
 

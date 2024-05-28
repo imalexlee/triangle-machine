@@ -66,6 +66,7 @@ private:
   VkFence _imm_fence;
 
   AllocatedImage _draw_image;
+  VkExtent2D _draw_extent;
   AllocatedImage _depth_image;
 
   uint64_t _frame_num{1};
@@ -95,8 +96,8 @@ private:
   void update_ui();
 
   // rendering
-  void render_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, VkImageView image_view);
-  void render_ui(VkCommandBuffer cmd_buf, VkExtent2D extent, VkImageView image_view);
+  void render_geometry(VkCommandBuffer cmd_buf);
+  void render_ui(VkCommandBuffer cmd_buf);
 
   // utils
   inline Frame& get_current_frame() { return _frames[_frame_num % FRAME_NUM]; }

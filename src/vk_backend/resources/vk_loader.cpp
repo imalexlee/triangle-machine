@@ -144,7 +144,9 @@ AllocatedImage generate_texture(VkBackend* backend, fastgltf::Asset& asset, fast
   AllocatedImage new_texture;
 
   std::visit(fastgltf::visitor{
-                 []([[maybe_unused]] auto& arg) {},
+                 []([[maybe_unused]] auto& arg) {
+
+                 },
                  [&](fastgltf::sources::URI& file_path) {
                    assert(file_path.fileByteOffset == 0);
                    assert(file_path.uri.isLocalPath());
