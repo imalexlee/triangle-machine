@@ -53,13 +53,15 @@ void VkBackend::create(Window& window, Camera& camera) {
       .height = window.height,
   };
 
+  _draw_extent = image_extent;
+
   _draw_image =
       create_image(_device_context.logical_device, _allocator,
                    VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                   image_extent, VK_FORMAT_R16G16B16A16_SFLOAT);
+                   image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
 
   _depth_image = create_image(_device_context.logical_device, _allocator, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                              _swapchain_context.extent, VK_FORMAT_D32_SFLOAT);
+                              _swapchain_context.extent, VK_FORMAT_D32_SFLOAT, 1);
 
   _imm_fence = create_fence(_device_context.logical_device, VK_FENCE_CREATE_SIGNALED_BIT);
   _imm_cmd_context.create(_device_context.logical_device, _device_context.queues.graphics_family_index,
@@ -94,7 +96,7 @@ void VkBackend::create_default_data() {
   _default_texture =
       upload_texture_image((void*)white_image.data(), VK_IMAGE_USAGE_SAMPLED_BIT, CHECKER_WIDTH, CHECKER_WIDTH);
 
-  _scene = load_scene(this, "../../assets/3d/porsche_large.glb");
+  _scene = load_scene(this, "../../assets/glb/structure.glb");
 }
 
 void VkBackend::create_gui(Window& window) {
@@ -124,7 +126,7 @@ void VkBackend::create_gui(Window& window) {
 
   VkPipelineRenderingCreateInfoKHR pipeline_info{};
   pipeline_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
-  pipeline_info.pColorAttachmentFormats = &_swapchain_context.format;
+  pipeline_info.pColorAttachmentFormats = &_draw_image.image_format;
   pipeline_info.colorAttachmentCount = 1;
   // pipeline_info.depthAttachmentFormat = _depth_image.image_format;
 
@@ -146,11 +148,11 @@ void VkBackend::create_gui(Window& window) {
 auto time1 = std::chrono::high_resolution_clock::now();
 void VkBackend::update_scene() {
   auto start_time = system_clock::now();
-  auto time_span = duration_cast<std::chrono::duration<float>>(std::chrono::high_resolution_clock::now() - time1);
+  // auto time_span = duration_cast<std::chrono::duration<float>>(std::chrono::high_resolution_clock::now() - time1);
   _camera->update();
 
-  glm::mat4 model =
-      glm::mat4{1.f} * glm::rotate(glm::mat4{1.f}, glm::radians(time_span.count() * 30), glm::vec3{0, 1, 0});
+  glm::mat4 model = glm::mat4{1.f};
+  //* glm::rotate(glm::mat4{1.f}, glm::radians(time_span.count() * 30), glm::vec3{0, 1, 0});
 
   glm::mat4 projection = glm::perspective(
       glm::radians(60.f), (float)_swapchain_context.extent.width / (float)_swapchain_context.extent.height, 10000.0f,
@@ -163,7 +165,7 @@ void VkBackend::update_scene() {
 
   auto end_time = system_clock::now();
   auto dur = duration<float>(end_time - start_time);
-  if (_frame_num % 1000 == 0) {
+  if (_frame_num % 60 == 0) {
     _stats.scene_update_time = duration_cast<nanoseconds>(dur).count() / 1000.f;
   }
 }
@@ -284,15 +286,12 @@ void VkBackend::create_pipelines() {
   builder.set_input_assembly(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
   builder.set_raster_culling(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
   builder.set_raster_poly_mode(VK_POLYGON_MODE_FILL);
+  //  builder.set_multisample_state((VkSampleCountFlagBits)_device_context.msaa_sample_count);
   builder.set_multisample_state(VK_SAMPLE_COUNT_1_BIT);
-  builder.set_depth_stencil_state(true, true, VK_COMPARE_OP_GREATER_OR_EQUAL);
-  builder.set_render_info(_swapchain_context.format, _depth_image.image_format);
 
-  // VkPushConstantRange push_constant_range{};
-  // push_constant_range.size = sizeof(DrawConstants);
-  // push_constant_range.offset = 0;
-  // push_constant_range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-  // std::array<VkPushConstantRange, 1> push_constant_ranges{push_constant_range};
+  builder.set_depth_stencil_state(true, true, VK_COMPARE_OP_GREATER_OR_EQUAL);
+  builder.set_render_info(_draw_image.image_format, _depth_image.image_format);
+
   // all frames have the same layout so you can use the first one's layout
   std::array<VkDescriptorSetLayout, 3> set_layouts{_frames[0].desc_set_layout, _scene.mat_desc_set_layout,
                                                    _scene.obj_desc_set_layout};
@@ -307,14 +306,6 @@ void VkBackend::create_pipelines() {
 
   PipelineInfo transparent_pipeline_info = builder.build_pipeline(_device_context.logical_device);
   _scene.transparent_pipeline_info = transparent_pipeline_info;
-
-  for (auto& obj : _scene.opaque_objs) {
-    obj.pipeline_info = &_scene.opaque_pipeline_info;
-  }
-
-  for (auto& obj : _scene.transparent_objs) {
-    obj.pipeline_info = &_scene.transparent_pipeline_info;
-  }
 
   _deletion_queue.push_persistant([=, this]() {
     vkDestroyShaderModule(_device_context.logical_device, vert_shader, nullptr);
@@ -364,28 +355,33 @@ void VkBackend::draw() {
   command_buffer_bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
   // command_buffer_bi.pInheritanceInfo = &inheritance_info;
 
+  VkImage swapchain_image = _swapchain_context.images[swapchain_image_index];
+
   VK_CHECK(vkBeginCommandBuffer(current_frame.command_context.primary_buffer, &command_buffer_bi));
 
-  VkImage swapchain_image = _swapchain_context.images[swapchain_image_index];
-  VkImageView swapchain_image_view = _swapchain_context.image_views[swapchain_image_index];
-
-  insert_image_memory_barrier(cmd_buffer, swapchain_image, VK_IMAGE_LAYOUT_UNDEFINED,
-                              VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-
-  insert_image_memory_barrier(cmd_buffer, swapchain_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+  insert_image_memory_barrier(cmd_buffer, _draw_image.image, VK_IMAGE_LAYOUT_UNDEFINED,
                               VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
   insert_image_memory_barrier(cmd_buffer, _depth_image.image, VK_IMAGE_LAYOUT_UNDEFINED,
                               VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
-  render_geometry(cmd_buffer, _swapchain_context.extent, swapchain_image_view);
+  render_geometry(cmd_buffer);
 
-  insert_image_memory_barrier(cmd_buffer, swapchain_image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+  insert_image_memory_barrier(cmd_buffer, _draw_image.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                               VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-  render_ui(cmd_buffer, _swapchain_context.extent, swapchain_image_view);
+  render_ui(cmd_buffer);
 
-  insert_image_memory_barrier(cmd_buffer, swapchain_image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+  insert_image_memory_barrier(cmd_buffer, _draw_image.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                              VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+
+  insert_image_memory_barrier(cmd_buffer, swapchain_image, VK_IMAGE_LAYOUT_UNDEFINED,
+                              VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+  // copy rendered image onto swapchain image
+  blit_image(cmd_buffer, _draw_image.image, swapchain_image, _swapchain_context.extent, _draw_extent);
+
+  insert_image_memory_barrier(cmd_buffer, swapchain_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                               VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
   // tweak stage masks to make it more optimal
@@ -414,7 +410,7 @@ void VkBackend::draw() {
 
   _frame_num++;
 
-  if (_frame_num % 1000 == 0) {
+  if (_frame_num % 60 == 0) {
     auto end_time = system_clock::now();
     auto dur = duration<float>(end_time - start_frame_time);
     _stats.frame_time = duration_cast<microseconds>(dur).count() / 1000.f;
@@ -426,8 +422,22 @@ void VkBackend::resize() {
   _swapchain_context.reset_swapchain(_device_context);
 
   destroy_image(_device_context.logical_device, _allocator, _depth_image);
+  destroy_image(_device_context.logical_device, _allocator, _draw_image);
+
+  VkExtent2D image_extent{
+      .width = _swapchain_context.extent.width,
+      .height = _swapchain_context.extent.height,
+  };
+
+  _draw_extent = image_extent;
+
+  _draw_image =
+      create_image(_device_context.logical_device, _allocator,
+                   VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                   image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
+
   _depth_image = create_image(_device_context.logical_device, _allocator, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                              _swapchain_context.extent, VK_FORMAT_D32_SFLOAT);
+                              _swapchain_context.extent, VK_FORMAT_D32_SFLOAT, 1);
 
   for (Frame& frame : _frames) {
     frame.reset_sync_structures(_device_context.logical_device);
@@ -454,15 +464,16 @@ VkRenderingInfo create_rendering_info(VkRenderingAttachmentInfo& color_attachmen
   return rendering_info;
 }
 
-void VkBackend::render_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, VkImageView color_img_view) {
+void VkBackend::render_geometry(VkCommandBuffer cmd_buf) {
   auto buffer_recording_start = system_clock::now();
 
-  VkRenderingAttachmentInfo color_attachment =
-      create_color_attachment_info(color_img_view, nullptr, VK_ATTACHMENT_LOAD_OP_CLEAR);
+  VkRenderingAttachmentInfo color_attachment = create_color_attachment_info(
+      _draw_image.image_view, nullptr, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE);
 
-  VkRenderingAttachmentInfo depth_attachment = create_depth_attachment_info(_depth_image.image_view);
+  VkRenderingAttachmentInfo depth_attachment =
+      create_depth_attachment_info(_depth_image.image_view, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE);
 
-  VkRenderingInfo rendering_info = create_rendering_info(color_attachment, depth_attachment, extent);
+  VkRenderingInfo rendering_info = create_rendering_info(color_attachment, depth_attachment, _swapchain_context.extent);
 
   update_global_descriptors();
 
@@ -480,17 +491,17 @@ void VkBackend::render_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, VkIm
   scissor.extent = _swapchain_context.extent;
   scissor.offset = {0, 0};
 
-  PipelineInfo* current_pipeline_info = nullptr;
+  PipelineInfo current_pipeline_info;
   VkDescriptorSet current_mat_desc = VK_NULL_HANDLE;
 
-  auto record_obj = [&](const DrawObject& obj) {
+  const auto record_obj = [&](const DrawObject& obj) {
     if (obj.mat_desc_set != current_mat_desc) {
       current_mat_desc = obj.mat_desc_set;
-      vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline_info->pipeline_layout, 1, 1,
+      vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline_info.pipeline_layout, 1, 1,
                               &obj.mat_desc_set, 0, nullptr);
     }
 
-    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline_info->pipeline_layout, 2, 1,
+    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline_info.pipeline_layout, 2, 1,
                             &obj.obj_desc_set, 0, nullptr);
 
     vkCmdBindIndexBuffer(cmd_buf, obj.index_buffer, 0, VK_INDEX_TYPE_UINT32);
@@ -498,26 +509,26 @@ void VkBackend::render_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, VkIm
     vkCmdDrawIndexed(cmd_buf, obj.indices_count, 1, obj.indices_start, 0, 0);
   };
 
-  current_pipeline_info = &_scene.opaque_pipeline_info;
+  current_pipeline_info = _scene.opaque_pipeline_info;
 
-  vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline_info->pipeline);
+  vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline_info.pipeline);
 
   vkCmdSetViewport(cmd_buf, 0, 1, &viewport);
 
   vkCmdSetScissor(cmd_buf, 0, 1, &scissor);
 
-  vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline_info->pipeline_layout, 0, 1,
+  vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline_info.pipeline_layout, 0, 1,
                           &global_desc_set, 0, nullptr);
 
-  for (DrawObject& obj : _scene.opaque_objs) {
+  for (const DrawObject& obj : _scene.opaque_objs) {
     record_obj(obj);
   }
 
-  current_pipeline_info = &_scene.transparent_pipeline_info;
+  current_pipeline_info = _scene.transparent_pipeline_info;
 
-  vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline_info->pipeline);
+  vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline_info.pipeline);
 
-  for (DrawObject& obj : _scene.transparent_objs) {
+  for (const DrawObject& obj : _scene.transparent_objs) {
     record_obj(obj);
   }
 
@@ -526,22 +537,22 @@ void VkBackend::render_geometry(VkCommandBuffer cmd_buf, VkExtent2D extent, VkIm
   auto end_time = system_clock::now();
   auto dur = duration<float>(end_time - buffer_recording_start);
   _stats.total_draw_time += (uint32_t)duration_cast<microseconds>(dur).count();
-  if (_frame_num % 1000 == 0) {
+  if (_frame_num % 60 == 0) {
     _stats.draw_time = duration_cast<microseconds>(dur).count();
   }
 }
 
-void VkBackend::render_ui(VkCommandBuffer cmd_buf, VkExtent2D extent, VkImageView image_view) {
+void VkBackend::render_ui(VkCommandBuffer cmd_buf) {
 
   // load last render(s). aka, don't delete the scene when rendering ui.
-  VkRenderingAttachmentInfo color_attachment =
-      create_color_attachment_info(image_view, nullptr, VK_ATTACHMENT_LOAD_OP_LOAD);
+  VkRenderingAttachmentInfo color_attachment = create_color_attachment_info(
+      _draw_image.image_view, nullptr, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_STORE_OP_STORE);
 
   VkRenderingInfo rendering_info{};
   rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
   rendering_info.renderArea = VkRect2D{
       .offset = VkOffset2D{0, 0},
-      .extent = extent,
+      .extent = _swapchain_context.extent,
   };
   rendering_info.pColorAttachments = &color_attachment;
   rendering_info.colorAttachmentCount = 1;

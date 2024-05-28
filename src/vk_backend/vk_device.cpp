@@ -1,4 +1,5 @@
 #include "vk_device.h"
+#include <algorithm>
 #include <array>
 #include <iostream>
 #include <optional>
@@ -25,10 +26,13 @@ void DeviceContext::create_physical_device(VkInstance instance) {
     VkPhysicalDeviceProperties properties{};
     vkGetPhysicalDeviceProperties(device, &properties);
 
-    // needs to be at least Vulkan 1.3 for synch 2 and dynamic rendering features
+    // needs to be at least Vulkan 1.3 for sync 2 and dynamic rendering features
     if (properties.apiVersion < VK_API_VERSION_1_3) {
       continue;
     }
+
+    // use up to 2x2 msaa sampling
+    msaa_sample_count = std::clamp(properties.limits.framebufferColorSampleCounts, 1u, 4u);
 
     // prefer dedicated GPU if we find one
     if (properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
