@@ -1,6 +1,7 @@
 #include "vk_pipeline.h"
 #include "global_utils.h"
 #include "vk_backend/vk_utils.h"
+#include <fmt/base.h>
 #include <vulkan/vulkan_core.h>
 
 PipelineInfo PipelineBuilder::build_pipeline(VkDevice device) {

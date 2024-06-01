@@ -17,7 +17,7 @@ public:
   VkDevice logical_device;
   VkPhysicalDevice physical_device;
   DeviceQueues queues;
-  uint32_t msaa_sample_count;
+  uint32_t raster_samples;
 
   void create(VkInstance instance, VkSurfaceKHR surface);
   void destroy();

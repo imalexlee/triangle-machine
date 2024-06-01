@@ -12,7 +12,7 @@ void Window::destroy() {
   glfwTerminate();
 };
 
-void Window::create(uint32_t width, uint32_t height, const char *title) {
+void Window::create(uint32_t width, uint32_t height, const char* title) {
 
   if (!glfwInit()) {
     exit(EXIT_FAILURE);
@@ -34,11 +34,11 @@ void Window::create(uint32_t width, uint32_t height, const char *title) {
   }
 
   // infinite cursor movement. no visible cursor
-  glfwSetInputMode(glfw_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+  // glfwSetInputMode(glfw_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
   // try to enable unscaled and unaccelerated cursor capture
   if (glfwRawMouseMotionSupported()) {
-    glfwSetInputMode(glfw_window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
+    //    glfwSetInputMode(glfw_window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
   }
 
   glfwSetErrorCallback(error_callback);
@@ -59,29 +59,29 @@ void Window::register_cursor_callback(std::function<void(double, double)> fn_ptr
   _cursor_callbacks.push_back(fn_ptr);
 }
 
-void Window::key_callback(GLFWwindow *window, int key, [[maybe_unused]] int scancode, int action,
+void Window::key_callback(GLFWwindow* window, int key, [[maybe_unused]] int scancode, int action,
                           [[maybe_unused]] int mods) {
 
   if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
     glfwSetWindowShouldClose(window, GLFW_TRUE);
   }
 
-  for (auto &callback : _key_callbacks) {
+  for (auto& callback : _key_callbacks) {
     callback(key, scancode, action, mods);
   }
 }
 
-void Window::cursor_callback([[maybe_unused]] GLFWwindow *window, double x_pos, double y_pos) {
-  for (auto &callback : _cursor_callbacks) {
+void Window::cursor_callback([[maybe_unused]] GLFWwindow* window, double x_pos, double y_pos) {
+  for (auto& callback : _cursor_callbacks) {
     callback(x_pos, y_pos);
   }
 };
 
-void Window::error_callback([[maybe_unused]] int error, const char *description) {
+void Window::error_callback([[maybe_unused]] int error, const char* description) {
   fmt::println("GLFW errow: {}", description);
 }
 
-void Window::resize_callback([[maybe_unused]] GLFWwindow *window, int new_width, int new_height) {
+void Window::resize_callback([[maybe_unused]] GLFWwindow* window, int new_width, int new_height) {
   width = new_width;
   height = new_height;
   resized = true;

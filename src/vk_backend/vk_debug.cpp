@@ -3,6 +3,10 @@
 #include <iostream>
 #include <vulkan/vulkan_core.h>
 
+#ifdef NDEBUG
+
+#endif
+
 static constexpr std::array<VkValidationFeatureEnableEXT, 3> enabled_validation_features{
     VkValidationFeatureEnableEXT::VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
     VkValidationFeatureEnableEXT::VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
@@ -12,30 +16,35 @@ static constexpr std::array<const char*, 1> validation_layers{"VK_LAYER_KHRONOS_
 
 VkBool32 Debugger::debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
                                   [[maybe_unused]] VkDebugUtilsMessageTypeFlagsEXT messageTypes,
-                                  const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+                                  [[maybe_unused]] const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
                                   [[maybe_unused]] void* pUserData) {
 
   // only print info, warnings, and errors
   if (messageSeverity > VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) {
-    std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
+    std::cerr << "\n";
   }
   return VK_FALSE;
 };
 
-VkResult Debugger::create(VkInstance& instance) {
+VkResult Debugger::create(VkInstance instance, VkDevice device) {
 
-  auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+  logical_device = device;
+
+  auto msg_fn = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
   VkDebugUtilsMessengerCreateInfoEXT messenger_ci = create_messenger_info();
 
-  if (func != nullptr) {
-    VkResult result = func(instance, &messenger_ci, nullptr, &messenger);
+  if (msg_fn != nullptr) {
+
+    obj_name_fn = (PFN_vkSetDebugUtilsObjectNameEXT)(vkGetInstanceProcAddr(instance, "vkSetDebugUtilsObjectNameEXT"));
+
+    VkResult result = msg_fn(instance, &messenger_ci, nullptr, &messenger);
     if (result == VK_SUCCESS) {
-      _deletion_queue.push_persistant([&]() {
+      _deletion_queue.push_persistant([=, this]() {
         DEBUG_PRINT("destroying debugger");
-        auto func =
+        auto destroy_messenger_fn =
             (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
-        if (func != nullptr) {
-          func(instance, messenger, nullptr);
+        if (destroy_messenger_fn != nullptr) {
+          destroy_messenger_fn(instance, messenger, nullptr);
         }
       });
     }

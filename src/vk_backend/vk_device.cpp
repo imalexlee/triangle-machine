@@ -1,4 +1,5 @@
 #include "vk_device.h"
+#include "vk_options.h"
 #include <algorithm>
 #include <array>
 #include <iostream>
@@ -32,7 +33,11 @@ void DeviceContext::create_physical_device(VkInstance instance) {
     }
 
     // use up to 2x2 msaa sampling
-    msaa_sample_count = std::clamp(properties.limits.framebufferColorSampleCounts, 1u, 4u);
+    if constexpr (vk_opts::msaa_enabled) {
+      raster_samples = std::clamp(properties.limits.framebufferColorSampleCounts, 1u, 4u);
+    } else {
+      raster_samples = 1;
+    }
 
     // prefer dedicated GPU if we find one
     if (properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {

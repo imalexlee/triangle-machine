@@ -23,7 +23,8 @@ VkImageView create_image_view(VkDevice device, VkImage image, VkFormat format, V
 VkImageSubresourceRange create_image_subresource_range(VkImageAspectFlags aspect_flags, uint32_t mip_levels = 1);
 
 VkRenderingAttachmentInfo create_color_attachment_info(VkImageView view, VkClearValue* clear,
-                                                       VkAttachmentLoadOp load_op, VkAttachmentStoreOp store_op);
+                                                       VkAttachmentLoadOp load_op, VkAttachmentStoreOp store_op,
+                                                       VkImageView resolve_img_view);
 
 VkRenderingAttachmentInfo create_depth_attachment_info(VkImageView view, VkAttachmentLoadOp load_op,
                                                        VkAttachmentStoreOp store_op);

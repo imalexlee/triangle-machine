@@ -1,5 +1,6 @@
 #include "imgui.h"
 #include "vk_backend/vk_pipeline.h"
+#include "vk_options.h"
 #include <array>
 #include <chrono>
 #include <core/camera.h>
@@ -10,7 +11,9 @@
 #include <fmt/format.h>
 #include <glm/ext/quaternion_transform.hpp>
 #include <span>
+#include <string>
 #include <unistd.h>
+#include <vk_backend/vk_device.h>
 #include <vk_backend/vk_types.h>
 #include <vk_backend/vk_utils.h>
 #include <vulkan/vulkan_core.h>
@@ -26,12 +29,6 @@
 #include "vk_backend/vk_backend.h"
 #include "vk_backend/vk_sync.h"
 
-#ifdef NDEBUG
-constexpr bool use_validation_layers = false;
-#else
-constexpr bool use_validation_layers = true;
-#endif // NDEBUG
-
 constexpr uint64_t TIMEOUT_DURATION = 1'000'000'000;
 using namespace std::chrono;
 
@@ -40,11 +37,11 @@ void VkBackend::create(Window& window, Camera& camera) {
   VkSurfaceKHR surface = window.get_vulkan_surface(_instance);
 
   _device_context.create(_instance, surface);
-  _swapchain_context.create(_instance, _device_context, surface, VK_PRESENT_MODE_MAILBOX_KHR);
+  _swapchain_context.create(_instance, _device_context, surface, VK_PRESENT_MODE_FIFO_KHR);
+
   create_allocator();
 
   for (Frame& frame : _frames) {
-    fmt::println("creating frame");
     frame.create(_device_context.logical_device, _allocator, _device_context.queues.graphics_family_index);
   }
 
@@ -53,15 +50,22 @@ void VkBackend::create(Window& window, Camera& camera) {
       .height = window.height,
   };
 
-  _draw_extent = image_extent;
+  _image_extent = image_extent;
 
-  _draw_image =
-      create_image(_device_context.logical_device, _allocator,
-                   VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                   image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
+  _color_image = create_image(_device_context.logical_device, _allocator,
+                              VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT |
+                                  VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                              image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, _device_context.raster_samples);
+
+  if constexpr (vk_opts::msaa_enabled) {
+    _color_resolve_image =
+        create_image(_device_context.logical_device, _allocator,
+                     VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                     image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
+  }
 
   _depth_image = create_image(_device_context.logical_device, _allocator, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                              _swapchain_context.extent, VK_FORMAT_D32_SFLOAT, 1);
+                              image_extent, VK_FORMAT_D32_SFLOAT, _device_context.raster_samples);
 
   _imm_fence = create_fence(_device_context.logical_device, VK_FENCE_CREATE_SIGNALED_BIT);
   _imm_cmd_context.create(_device_context.logical_device, _device_context.queues.graphics_family_index,
@@ -76,8 +80,15 @@ void VkBackend::create(Window& window, Camera& camera) {
   create_pipelines();
   create_gui(window);
 
-  if (use_validation_layers) {
-    _debugger.create(_instance);
+  if constexpr (vk_opts::validation_enabled) {
+    _debugger.create(_instance, _device_context.logical_device);
+    _debugger.set_handle_name(_color_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW, "color image view");
+    _debugger.set_handle_name(_depth_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW, "depth image view");
+    for (size_t i = 0; i < _frames.size(); i++) {
+      Frame& frame = _frames[i];
+      _debugger.set_handle_name(frame.command_context.primary_buffer, VK_OBJECT_TYPE_COMMAND_BUFFER,
+                                "frame " + std::to_string(i) + " cmd buf");
+    }
   }
 }
 
@@ -96,7 +107,7 @@ void VkBackend::create_default_data() {
   _default_texture =
       upload_texture_image((void*)white_image.data(), VK_IMAGE_USAGE_SAMPLED_BIT, CHECKER_WIDTH, CHECKER_WIDTH);
 
-  _scene = load_scene(this, "../../assets/glb/structure.glb");
+  _scene = load_scene(this, "../../assets/glb/crypt_location.glb");
 }
 
 void VkBackend::create_gui(Window& window) {
@@ -126,9 +137,9 @@ void VkBackend::create_gui(Window& window) {
 
   VkPipelineRenderingCreateInfoKHR pipeline_info{};
   pipeline_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
-  pipeline_info.pColorAttachmentFormats = &_draw_image.image_format;
+  pipeline_info.pColorAttachmentFormats = &_color_image.image_format;
   pipeline_info.colorAttachmentCount = 1;
-  // pipeline_info.depthAttachmentFormat = _depth_image.image_format;
+  pipeline_info.depthAttachmentFormat = _depth_image.image_format;
 
   ImGui_ImplVulkan_InitInfo init_info = {};
   init_info.Instance = _instance;
@@ -140,7 +151,7 @@ void VkBackend::create_gui(Window& window) {
   init_info.ImageCount = 3;
   init_info.UseDynamicRendering = true;
   init_info.PipelineRenderingCreateInfo = pipeline_info;
-  init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+  init_info.MSAASamples = (VkSampleCountFlagBits)_device_context.raster_samples;
 
   ImGui_ImplVulkan_Init(&init_info);
 }
@@ -259,7 +270,7 @@ void VkBackend::create_instance() {
   VkValidationFeaturesEXT validation_features;
   std::array<const char*, 1> validation_layers;
 
-  if constexpr (use_validation_layers) {
+  if constexpr (vk_opts::validation_enabled) {
     debug_ci = _debugger.create_messenger_info();
     validation_features = _debugger.create_validation_features();
     validation_layers = _debugger.create_validation_layers();
@@ -286,11 +297,11 @@ void VkBackend::create_pipelines() {
   builder.set_input_assembly(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
   builder.set_raster_culling(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
   builder.set_raster_poly_mode(VK_POLYGON_MODE_FILL);
-  //  builder.set_multisample_state((VkSampleCountFlagBits)_device_context.msaa_sample_count);
-  builder.set_multisample_state(VK_SAMPLE_COUNT_1_BIT);
+  builder.set_multisample_state((VkSampleCountFlagBits)_device_context.raster_samples);
+  // builder.set_multisample_state(VK_SAMPLE_COUNT_1_BIT);
 
   builder.set_depth_stencil_state(true, true, VK_COMPARE_OP_GREATER_OR_EQUAL);
-  builder.set_render_info(_draw_image.image_format, _depth_image.image_format);
+  builder.set_render_info(_color_image.image_format, _depth_image.image_format);
 
   // all frames have the same layout so you can use the first one's layout
   std::array<VkDescriptorSetLayout, 3> set_layouts{_frames[0].desc_set_layout, _scene.mat_desc_set_layout,
@@ -320,7 +331,7 @@ std::vector<const char*> VkBackend::get_instance_extensions() {
   for (size_t i = 0; i < count; i++) {
     extensions.emplace_back(glfw_extensions[i]);
   }
-  if constexpr (use_validation_layers) {
+  if constexpr (vk_opts::validation_enabled) {
     extensions.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
   }
   return extensions;
@@ -359,27 +370,33 @@ void VkBackend::draw() {
 
   VK_CHECK(vkBeginCommandBuffer(current_frame.command_context.primary_buffer, &command_buffer_bi));
 
-  insert_image_memory_barrier(cmd_buffer, _draw_image.image, VK_IMAGE_LAYOUT_UNDEFINED,
+  insert_image_memory_barrier(cmd_buffer, _color_image.image, VK_IMAGE_LAYOUT_UNDEFINED,
                               VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+  VkImage copy_img;
+  if constexpr (vk_opts::msaa_enabled) {
+    copy_img = _color_resolve_image.image;
+    insert_image_memory_barrier(cmd_buffer, _color_resolve_image.image, VK_IMAGE_LAYOUT_UNDEFINED,
+                                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+  } else {
+    copy_img = _color_image.image;
+  }
 
   insert_image_memory_barrier(cmd_buffer, _depth_image.image, VK_IMAGE_LAYOUT_UNDEFINED,
                               VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
   render_geometry(cmd_buffer);
 
-  insert_image_memory_barrier(cmd_buffer, _draw_image.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                              VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-
   render_ui(cmd_buffer);
 
-  insert_image_memory_barrier(cmd_buffer, _draw_image.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+  insert_image_memory_barrier(cmd_buffer, copy_img, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                               VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
-  insert_image_memory_barrier(cmd_buffer, swapchain_image, VK_IMAGE_LAYOUT_UNDEFINED,
+  insert_image_memory_barrier(cmd_buffer, swapchain_image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
   // copy rendered image onto swapchain image
-  blit_image(cmd_buffer, _draw_image.image, swapchain_image, _swapchain_context.extent, _draw_extent);
+  blit_image(cmd_buffer, copy_img, swapchain_image, _swapchain_context.extent, _image_extent);
 
   insert_image_memory_barrier(cmd_buffer, swapchain_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                               VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
@@ -422,22 +439,29 @@ void VkBackend::resize() {
   _swapchain_context.reset_swapchain(_device_context);
 
   destroy_image(_device_context.logical_device, _allocator, _depth_image);
-  destroy_image(_device_context.logical_device, _allocator, _draw_image);
+  destroy_image(_device_context.logical_device, _allocator, _color_image);
 
   VkExtent2D image_extent{
       .width = _swapchain_context.extent.width,
       .height = _swapchain_context.extent.height,
   };
 
-  _draw_extent = image_extent;
+  _image_extent = image_extent;
 
-  _draw_image =
-      create_image(_device_context.logical_device, _allocator,
-                   VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                   image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
+  _color_image = create_image(_device_context.logical_device, _allocator,
+                              VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
+                              image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, _device_context.raster_samples);
 
-  _depth_image = create_image(_device_context.logical_device, _allocator, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                              _swapchain_context.extent, VK_FORMAT_D32_SFLOAT, 1);
+  if constexpr (vk_opts::msaa_enabled) {
+    _color_resolve_image =
+        create_image(_device_context.logical_device, _allocator,
+                     VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                     image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
+  }
+
+  _depth_image = create_image(_device_context.logical_device, _allocator,
+                              VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
+                              image_extent, VK_FORMAT_D32_SFLOAT, _device_context.raster_samples);
 
   for (Frame& frame : _frames) {
     frame.reset_sync_structures(_device_context.logical_device);
@@ -467,13 +491,20 @@ VkRenderingInfo create_rendering_info(VkRenderingAttachmentInfo& color_attachmen
 void VkBackend::render_geometry(VkCommandBuffer cmd_buf) {
   auto buffer_recording_start = system_clock::now();
 
+  VkClearValue clear = {.color = {{1.f, 1.f, 1.f, 1.f}}};
+
+  VkImageView resolve_img_view = nullptr;
+  if constexpr (vk_opts::msaa_enabled) {
+    resolve_img_view = _color_resolve_image.image_view;
+  }
+
   VkRenderingAttachmentInfo color_attachment = create_color_attachment_info(
-      _draw_image.image_view, nullptr, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE);
+      _color_image.image_view, &clear, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, resolve_img_view);
 
   VkRenderingAttachmentInfo depth_attachment =
       create_depth_attachment_info(_depth_image.image_view, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE);
 
-  VkRenderingInfo rendering_info = create_rendering_info(color_attachment, depth_attachment, _swapchain_context.extent);
+  VkRenderingInfo rendering_info = create_rendering_info(color_attachment, depth_attachment, _image_extent);
 
   update_global_descriptors();
 
@@ -482,13 +513,13 @@ void VkBackend::render_geometry(VkCommandBuffer cmd_buf) {
   VkViewport viewport{};
   viewport.x = 0.0f;
   viewport.y = 0.0f;
-  viewport.width = _swapchain_context.extent.width;
-  viewport.height = _swapchain_context.extent.height;
+  viewport.width = _image_extent.width;
+  viewport.height = _image_extent.height;
   viewport.minDepth = 0.0f;
   viewport.maxDepth = 1.0f;
 
   VkRect2D scissor{};
-  scissor.extent = _swapchain_context.extent;
+  scissor.extent = _image_extent;
   scissor.offset = {0, 0};
 
   PipelineInfo current_pipeline_info;
@@ -544,9 +575,22 @@ void VkBackend::render_geometry(VkCommandBuffer cmd_buf) {
 
 void VkBackend::render_ui(VkCommandBuffer cmd_buf) {
 
+  VkImageView resolve_img_view = nullptr;
+  VkAttachmentStoreOp color_store_ap = VK_ATTACHMENT_STORE_OP_STORE;
+
+  if constexpr (vk_opts::msaa_enabled) {
+    resolve_img_view = _color_resolve_image.image_view;
+
+    // dont care about the multisampled buffer if it'll resolve into another img anyways
+    color_store_ap = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+  }
+
   // load last render(s). aka, don't delete the scene when rendering ui.
   VkRenderingAttachmentInfo color_attachment = create_color_attachment_info(
-      _draw_image.image_view, nullptr, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_STORE_OP_STORE);
+      _color_image.image_view, nullptr, VK_ATTACHMENT_LOAD_OP_LOAD, color_store_ap, resolve_img_view);
+
+  VkRenderingAttachmentInfo depth_attachment = create_depth_attachment_info(
+      _depth_image.image_view, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_STORE_OP_DONT_CARE);
 
   VkRenderingInfo rendering_info{};
   rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -558,7 +602,7 @@ void VkBackend::render_ui(VkCommandBuffer cmd_buf) {
   rendering_info.colorAttachmentCount = 1;
   rendering_info.layerCount = 1;
   rendering_info.pStencilAttachment = nullptr;
-  // rendering_info.pDepthAttachment = &depth_attachment;
+  rendering_info.pDepthAttachment = &depth_attachment;
 
   vkCmdBeginRendering(cmd_buf, &rendering_info);
 
@@ -661,7 +705,7 @@ void VkBackend::destroy() {
 
   _deletion_queue.flush();
 
-  if constexpr (use_validation_layers) {
+  if constexpr (vk_opts::validation_enabled) {
     _debugger.destroy();
   }
 
@@ -679,9 +723,12 @@ void VkBackend::destroy() {
 
   vkDestroyDescriptorPool(_device_context.logical_device, _imm_descriptor_pool, nullptr);
 
-  destroy_image(_device_context.logical_device, _allocator, _draw_image);
+  destroy_image(_device_context.logical_device, _allocator, _color_image);
   destroy_image(_device_context.logical_device, _allocator, _depth_image);
   destroy_image(_device_context.logical_device, _allocator, _default_texture);
+  if constexpr (vk_opts::msaa_enabled) {
+    destroy_image(_device_context.logical_device, _allocator, _color_resolve_image);
+  }
 
   vkDestroySampler(_device_context.logical_device, _default_nearest_sampler, nullptr);
   vkDestroySampler(_device_context.logical_device, _default_linear_sampler, nullptr);

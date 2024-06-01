@@ -1,4 +1,5 @@
 #include "vk_image.h"
+#include "vk_backend/vk_options.h"
 #include <vulkan/vk_enum_string_helper.h>
 #include <vulkan/vulkan_core.h>
 
@@ -26,8 +27,6 @@ AllocatedImage create_image(VkDevice device, VmaAllocator allocator, VkImageUsag
   image_ci.imageType = VK_IMAGE_TYPE_2D;
   image_ci.arrayLayers = 1;
   image_ci.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-  //  image_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
   VmaAllocationCreateInfo allocation_ci{};
   allocation_ci.usage = VMA_MEMORY_USAGE_GPU_ONLY;
   allocation_ci.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
@@ -110,12 +109,12 @@ VkImageSubresourceRange create_image_subresource_range(VkImageAspectFlags aspect
   subresource_range.levelCount = mip_levels;
   subresource_range.baseArrayLayer = 0;
   subresource_range.layerCount = 1;
-
   return subresource_range;
 }
 
 VkRenderingAttachmentInfo create_color_attachment_info(VkImageView view, VkClearValue* clear,
-                                                       VkAttachmentLoadOp load_op, VkAttachmentStoreOp store_op) {
+                                                       VkAttachmentLoadOp load_op, VkAttachmentStoreOp store_op,
+                                                       VkImageView resolve_img_view) {
   VkRenderingAttachmentInfo color_attachment{};
   color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
   color_attachment.pNext = nullptr;
@@ -123,6 +122,12 @@ VkRenderingAttachmentInfo create_color_attachment_info(VkImageView view, VkClear
   color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
   color_attachment.loadOp = load_op;
   color_attachment.storeOp = store_op;
+  if constexpr (vk_opts::msaa_enabled) {
+    color_attachment.resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;
+    color_attachment.resolveImageView = resolve_img_view;
+    color_attachment.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+  }
+
   if (clear) {
     color_attachment.clearValue = *clear;
   }
@@ -132,16 +137,14 @@ VkRenderingAttachmentInfo create_color_attachment_info(VkImageView view, VkClear
 
 VkRenderingAttachmentInfo create_depth_attachment_info(VkImageView view, VkAttachmentLoadOp load_op,
                                                        VkAttachmentStoreOp store_op) {
-  VkRenderingAttachmentInfo depthAttachment{};
-  depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-  depthAttachment.pNext = nullptr;
-  depthAttachment.imageView = view;
-  depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-  // depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-  // depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-  depthAttachment.loadOp = load_op;
-  depthAttachment.storeOp = store_op;
-  depthAttachment.clearValue.depthStencil.depth = 0.f;
+  VkRenderingAttachmentInfo depth_attachment{};
+  depth_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+  depth_attachment.pNext = nullptr;
+  depth_attachment.imageView = view;
+  depth_attachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+  depth_attachment.loadOp = load_op;
+  depth_attachment.storeOp = store_op;
+  depth_attachment.clearValue.depthStencil.depth = 0.f;
 
-  return depthAttachment;
+  return depth_attachment;
 }

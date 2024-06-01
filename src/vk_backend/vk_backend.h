@@ -65,8 +65,10 @@ private:
   VkDescriptorPool _imm_descriptor_pool;
   VkFence _imm_fence;
 
-  AllocatedImage _draw_image;
-  VkExtent2D _draw_extent;
+  AllocatedImage _color_image;
+  AllocatedImage _color_resolve_image;
+  VkExtent2D _image_extent;
+
   AllocatedImage _depth_image;
 
   uint64_t _frame_num{1};
