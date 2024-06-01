@@ -25,14 +25,15 @@ constexpr uint64_t FRAME_NUM = 3;
 
 constexpr uint32_t CHECKER_WIDTH = 1;
 
-[[maybe_unused]] static constexpr std::array<uint32_t, CHECKER_WIDTH * CHECKER_WIDTH> white_image = []() {
-  std::array<uint32_t, CHECKER_WIDTH * CHECKER_WIDTH> result{};
-  uint32_t black = __builtin_bswap32(0xFFFFFFFF);
-  for (uint32_t& el : result) {
-    el = black;
-  }
-  return result;
-}();
+[[maybe_unused]] static constexpr std::array<uint32_t, CHECKER_WIDTH * CHECKER_WIDTH> white_image =
+    []() {
+      std::array<uint32_t, CHECKER_WIDTH * CHECKER_WIDTH> result{};
+      uint32_t black = __builtin_bswap32(0xFFFFFFFF);
+      for (uint32_t& el : result) {
+        el = black;
+      }
+      return result;
+    }();
 
 struct Stats {
   float frame_time;
@@ -46,7 +47,7 @@ public:
   void create(Window& window, Camera& camera);
   void destroy();
   void draw();
-  void resize();
+  static void resize_callback(int new_width, int new_height);
 
 private:
   VkInstance _instance;
@@ -55,6 +56,9 @@ private:
   Debugger _debugger;
   SwapchainContext _swapchain_context;
   VmaAllocator _allocator;
+
+  PipelineInfo _opaque_pipeline_info;
+  PipelineInfo _transparent_pipeline_info;
 
   VkDescriptorSet global_desc_set;
   Scene _scene;
@@ -69,6 +73,12 @@ private:
   AllocatedImage _color_resolve_image;
   VkExtent2D _image_extent;
 
+  // for geometry and ui
+  VkClearValue _scene_clear_value;
+  VkRenderingAttachmentInfo _scene_color_attachment;
+  VkRenderingAttachmentInfo _scene_depth_attachment;
+  VkRenderingInfo _scene_rendering_info;
+
   AllocatedImage _depth_image;
 
   uint64_t _frame_num{1};
@@ -80,9 +90,6 @@ private:
   VkSampler _default_nearest_sampler;
   AllocatedImage _default_texture;
 
-  // ThreadPool _thread_pool;
-
-  ctpl::thread_pool _thread_pool;
   DeletionQueue _deletion_queue;
 
   // initialization
@@ -91,11 +98,15 @@ private:
   void create_pipelines();
   void create_default_data();
   void create_gui(Window& window);
+  void configure_debugger();
+  void configure_scene_resources();
+  void load_scenes();
 
   // state update
   void update_scene();
   void update_global_descriptors();
   void update_ui();
+  void resize();
 
   // rendering
   void render_geometry(VkCommandBuffer cmd_buf);
@@ -106,9 +117,11 @@ private:
   std::vector<const char*> get_instance_extensions();
   void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
   MeshBuffers upload_mesh_buffers(std::span<uint32_t> indices, std::span<Vertex> vertices);
-  AllocatedImage upload_texture_image(void* data, VkImageUsageFlags usage, uint32_t height, uint32_t width);
+  AllocatedImage upload_texture_image(void* data, VkImageUsageFlags usage, uint32_t height,
+                                      uint32_t width);
 
   friend Scene load_scene(VkBackend* backend, std::filesystem::path path);
   friend void destroy_scene(VkBackend* backend, Scene& scene);
-  friend AllocatedImage generate_texture(VkBackend* backend, fastgltf::Asset& asset, fastgltf::Texture& gltf_texture);
+  friend AllocatedImage generate_texture(VkBackend* backend, fastgltf::Asset& asset,
+                                         fastgltf::Texture& gltf_texture);
 };

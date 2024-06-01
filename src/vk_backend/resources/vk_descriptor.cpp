@@ -13,7 +13,8 @@ void DescriptorLayoutBuilder::add_binding(uint32_t binding, VkDescriptorType typ
 
 void DescriptorLayoutBuilder::clear() { _bindings.clear(); }
 
-VkDescriptorSetLayout DescriptorLayoutBuilder::build(VkDevice device, VkShaderStageFlags shader_stages) {
+VkDescriptorSetLayout DescriptorLayoutBuilder::build(VkDevice device,
+                                                     VkShaderStageFlags shader_stages) {
 
   for (auto& binding : _bindings) {
     binding.stageFlags |= shader_stages;
@@ -33,9 +34,10 @@ VkDescriptorSetLayout DescriptorLayoutBuilder::build(VkDevice device, VkShaderSt
   return set;
 }
 
-void DescriptorWriter::write_buffer(int binding, VkBuffer buffer, size_t size, size_t offset, VkDescriptorType type) {
-  VkDescriptorBufferInfo& info =
-      _buffer_infos.emplace_back(VkDescriptorBufferInfo{.buffer = buffer, .offset = offset, .range = size});
+void DescriptorWriter::write_buffer(int binding, VkBuffer buffer, size_t size, size_t offset,
+                                    VkDescriptorType type) {
+  VkDescriptorBufferInfo& info = _buffer_infos.emplace_back(
+      VkDescriptorBufferInfo{.buffer = buffer, .offset = offset, .range = size});
 
   VkWriteDescriptorSet write = {.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
 
@@ -48,10 +50,10 @@ void DescriptorWriter::write_buffer(int binding, VkBuffer buffer, size_t size, s
   _writes.push_back(write);
 }
 
-void DescriptorWriter::write_image(int binding, VkImageView image, VkSampler sampler, VkImageLayout layout,
-                                   VkDescriptorType type) {
-  VkDescriptorImageInfo& info =
-      _image_infos.emplace_back(VkDescriptorImageInfo{.sampler = sampler, .imageView = image, .imageLayout = layout});
+void DescriptorWriter::write_image(int binding, VkImageView image, VkSampler sampler,
+                                   VkImageLayout layout, VkDescriptorType type) {
+  VkDescriptorImageInfo& info = _image_infos.emplace_back(
+      VkDescriptorImageInfo{.sampler = sampler, .imageView = image, .imageLayout = layout});
 
   VkWriteDescriptorSet write = {.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
 
@@ -78,7 +80,8 @@ void DescriptorWriter::update_set(VkDevice device, VkDescriptorSet set) {
   vkUpdateDescriptorSets(device, _writes.size(), _writes.data(), 0, nullptr);
 }
 
-void DescriptorAllocator::create(VkDevice device, uint32_t max_sets, std::span<PoolSizeRatio> pool_size_ratios) {
+void DescriptorAllocator::create(VkDevice device, uint32_t max_sets,
+                                 std::span<PoolSizeRatio> pool_size_ratios) {
   _ratios.clear();
 
   std::vector<VkDescriptorPoolSize> sizes;

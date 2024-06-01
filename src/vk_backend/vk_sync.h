@@ -11,11 +11,6 @@ VkSemaphore create_semaphore(VkDevice device, VkSemaphoreType = VK_SEMAPHORE_TYP
 
 VkFence create_fence(VkDevice device, VkFenceCreateFlags flags);
 
-// VkImageMemoryBarrier2
-// create_image_memory_barrier(VkImage image, VkImageLayout current_layout, VkImageLayout new_layout,
-//                             VkPipelineStageFlags2 src_stages = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-//                             VkPipelineStageFlags2 dst_stages = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
-
 void insert_image_memory_barrier(VkCommandBuffer cmd_buf, VkImage image, VkImageLayout current_layout,
                                  VkImageLayout new_layout,
                                  VkPipelineStageFlags2 src_stages = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,

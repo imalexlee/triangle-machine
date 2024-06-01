@@ -62,8 +62,8 @@ glm::mat4 get_transform_matrix(const fastgltf::Node& node, glm::mat4x4& base) {
 }
 
 // recursively fills a vector of nodes based on GLTF node tree
-void generate_nodes(std::vector<GLTFNode>& out_node_buf, fastgltf::Asset& asset, uint32_t root_node_idx,
-                    glm::mat4 parent_matrix = glm::mat4{1.f}) {
+void generate_nodes(std::vector<GLTFNode>& out_node_buf, fastgltf::Asset& asset,
+                    uint32_t root_node_idx, glm::mat4 parent_matrix = glm::mat4{1.f}) {
 
   auto& root_gltf_node = asset.nodes[root_node_idx];
 
@@ -138,50 +138,55 @@ std::vector<VkSampler> get_samplers(VkDevice device, fastgltf::Asset& asset) {
 }
 
 // allocates and fills an AllocatedImage with the textures data
-AllocatedImage generate_texture(VkBackend* backend, fastgltf::Asset& asset, fastgltf::Texture& gltf_texture) {
+AllocatedImage generate_texture(VkBackend* backend, fastgltf::Asset& asset,
+                                fastgltf::Texture& gltf_texture) {
   auto& image = asset.images[gltf_texture.imageIndex.value()];
   int width, height, nr_channels;
   AllocatedImage new_texture;
 
-  std::visit(fastgltf::visitor{
-                 []([[maybe_unused]] auto& arg) {
+  std::visit(
+      fastgltf::visitor{
+          []([[maybe_unused]] auto& arg) {
 
-                 },
-                 [&](fastgltf::sources::URI& file_path) {
-                   assert(file_path.fileByteOffset == 0);
-                   assert(file_path.uri.isLocalPath());
+          },
+          [&](fastgltf::sources::URI& file_path) {
+            assert(file_path.fileByteOffset == 0);
+            assert(file_path.uri.isLocalPath());
 
-                   const std::string path(file_path.uri.path().begin(),
-                                          file_path.uri.path().end()); // thanks C++.
-                   uint8_t* data = stbi_load(path.c_str(), &width, &height, &nr_channels, 4);
-                   new_texture = backend->upload_texture_image(data, VK_IMAGE_USAGE_SAMPLED_BIT, height, width);
-                   stbi_image_free(data);
-                 },
-                 [&](fastgltf::sources::Array& vector) {
-                   uint8_t* data = stbi_load_from_memory(vector.bytes.data(), static_cast<int>(vector.bytes.size()),
-                                                         &width, &height, &nr_channels, 4);
-                   new_texture = backend->upload_texture_image(data, VK_IMAGE_USAGE_SAMPLED_BIT, height, width);
-                   stbi_image_free(data);
-                 },
-                 [&](fastgltf::sources::BufferView& view) {
-                   auto& buffer_view = asset.bufferViews[view.bufferViewIndex];
-                   auto& buffer = asset.buffers[buffer_view.bufferIndex];
+            const std::string path(file_path.uri.path().begin(),
+                                   file_path.uri.path().end()); // thanks C++.
+            uint8_t* data = stbi_load(path.c_str(), &width, &height, &nr_channels, 4);
+            new_texture =
+                backend->upload_texture_image(data, VK_IMAGE_USAGE_SAMPLED_BIT, height, width);
+            stbi_image_free(data);
+          },
+          [&](fastgltf::sources::Array& vector) {
+            uint8_t* data =
+                stbi_load_from_memory(vector.bytes.data(), static_cast<int>(vector.bytes.size()),
+                                      &width, &height, &nr_channels, 4);
+            new_texture =
+                backend->upload_texture_image(data, VK_IMAGE_USAGE_SAMPLED_BIT, height, width);
+            stbi_image_free(data);
+          },
+          [&](fastgltf::sources::BufferView& view) {
+            auto& buffer_view = asset.bufferViews[view.bufferViewIndex];
+            auto& buffer = asset.buffers[buffer_view.bufferIndex];
 
-                   std::visit(fastgltf::visitor{
-                                  []([[maybe_unused]] auto& arg) {},
-                                  [&](fastgltf::sources::Array& vector) {
-                                    uint8_t* data = stbi_load_from_memory(vector.bytes.data() + buffer_view.byteOffset,
+            std::visit(fastgltf::visitor{[]([[maybe_unused]] auto& arg) {},
+                                         [&](fastgltf::sources::Array& vector) {
+                                           uint8_t* data = stbi_load_from_memory(
+                                               vector.bytes.data() + buffer_view.byteOffset,
 
-                                                                          static_cast<int>(buffer_view.byteLength),
-                                                                          &width, &height, &nr_channels, 4);
-                                    new_texture =
-                                        backend->upload_texture_image(data, VK_IMAGE_USAGE_SAMPLED_BIT, height, width);
-                                    stbi_image_free(data);
-                                  }},
-                              buffer.data);
-                 },
-             },
-             image.data);
+                                               static_cast<int>(buffer_view.byteLength), &width,
+                                               &height, &nr_channels, 4);
+                                           new_texture = backend->upload_texture_image(
+                                               data, VK_IMAGE_USAGE_SAMPLED_BIT, height, width);
+                                           stbi_image_free(data);
+                                         }},
+                       buffer.data);
+          },
+      },
+      image.data);
 
   return new_texture;
 };
@@ -191,15 +196,17 @@ Scene load_scene(VkBackend* backend, std::filesystem::path path) {
   constexpr auto supported_extensions =
       fastgltf::Extensions::KHR_mesh_quantization | fastgltf::Extensions::KHR_texture_transform |
       fastgltf::Extensions::KHR_materials_clearcoat | fastgltf::Extensions::KHR_materials_specular |
-      fastgltf::Extensions::KHR_materials_transmission | fastgltf::Extensions::KHR_materials_variants;
+      fastgltf::Extensions::KHR_materials_transmission |
+      fastgltf::Extensions::KHR_materials_variants;
 
   fastgltf::Parser parser(supported_extensions);
   fastgltf::GltfDataBuffer data;
   data.loadFromFile(path);
 
-  constexpr auto gltf_options = fastgltf::Options::DontRequireValidAssetMember | fastgltf::Options::AllowDouble |
-                                fastgltf::Options::LoadGLBBuffers | fastgltf::Options::LoadExternalBuffers |
-                                fastgltf::Options::LoadExternalImages | fastgltf::Options::GenerateMeshIndices;
+  constexpr auto gltf_options =
+      fastgltf::Options::DontRequireValidAssetMember | fastgltf::Options::AllowDouble |
+      fastgltf::Options::LoadGLBBuffers | fastgltf::Options::LoadExternalBuffers |
+      fastgltf::Options::LoadExternalImages | fastgltf::Options::GenerateMeshIndices;
 
   auto load = parser.loadGltf(&data, path.parent_path(), gltf_options);
 
@@ -240,13 +247,15 @@ Scene load_scene(VkBackend* backend, std::filesystem::path path) {
   layout_builder.add_binding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
   layout_builder.add_binding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
-  new_scene.mat_desc_set_layout = layout_builder.build(backend->_device_context.logical_device,
-                                                       VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
+  new_scene.mat_desc_set_layout =
+      layout_builder.build(backend->_device_context.logical_device,
+                           VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
 
   std::vector<PoolSizeRatio> mat_pool_sizes = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1},
                                                {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2}};
 
-  new_scene.mat_desc_allocator.create(backend->_device_context.logical_device, asset.materials.size(), mat_pool_sizes);
+  new_scene.mat_desc_allocator.create(backend->_device_context.logical_device,
+                                      asset.materials.size(), mat_pool_sizes);
 
   std::vector<GLTFMaterial> materials;
   materials.reserve(asset.materials.size());
@@ -313,7 +322,8 @@ Scene load_scene(VkBackend* backend, std::filesystem::path path) {
 
       texture_used[tex_index] = true;
 
-      new_mat.pbr.metal_rough_tex_coord = material.pbrData.metallicRoughnessTexture.value().texCoordIndex;
+      new_mat.pbr.metal_rough_tex_coord =
+          material.pbrData.metallicRoughnessTexture.value().texCoordIndex;
       new_bufs.metal_rough_tex = metal_texture.tex;
       // fmt::println("attaching metal tex {}", fmt::ptr(metal_texture.tex.image));
       metal_tex_sampler = metal_texture.sampler;
@@ -325,16 +335,17 @@ Scene load_scene(VkBackend* backend, std::filesystem::path path) {
       metal_tex_sampler = backend->_default_linear_sampler;
     }
 
-    new_bufs.mat_desc_set =
-        new_scene.mat_desc_allocator.allocate(backend->_device_context.logical_device, new_scene.mat_desc_set_layout);
+    new_bufs.mat_desc_set = new_scene.mat_desc_allocator.allocate(
+        backend->_device_context.logical_device, new_scene.mat_desc_set_layout);
 
     // 1. fill in the uniform material buffer
-    new_bufs.mat_uniform_buffer =
-        create_buffer(sizeof(MaterialUniformData), backend->_allocator, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                      VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
-                      VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT);
+    new_bufs.mat_uniform_buffer = create_buffer(
+        sizeof(MaterialUniformData), backend->_allocator, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT);
 
-    auto* material_uniform_data = (MaterialUniformData*)new_bufs.mat_uniform_buffer.info.pMappedData;
+    auto* material_uniform_data =
+        (MaterialUniformData*)new_bufs.mat_uniform_buffer.info.pMappedData;
 
     material_uniform_data->color_factors = new_mat.pbr.color_factors;
     material_uniform_data->metallic_factor = new_mat.pbr.metallic_factor;
@@ -347,10 +358,12 @@ Scene load_scene(VkBackend* backend, std::filesystem::path path) {
 
     // 2. put the texture information into the descriptor set
     desc_writer.write_image(1, new_bufs.color_tex.image_view, color_tex_sampler,
-                            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+                            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
     desc_writer.write_image(2, new_bufs.metal_rough_tex.image_view, metal_tex_sampler,
-                            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+                            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
     desc_writer.update_set(backend->_device_context.logical_device, new_bufs.mat_desc_set);
 
@@ -365,7 +378,8 @@ Scene load_scene(VkBackend* backend, std::filesystem::path path) {
     }
   }
 
-  assert(new_scene.material_buffers.size() == materials.size() && "material metadata and buffers do not match in size");
+  assert(new_scene.material_buffers.size() == materials.size() &&
+         "material metadata and buffers do not match in size");
 
   assert(new_scene.material_buffers.size() == asset.materials.size() &&
          "allocated material buffers do not match size of materials in GLTF file");
@@ -397,18 +411,20 @@ Scene load_scene(VkBackend* backend, std::filesystem::path path) {
 
       new_mesh.vertices.resize(vertex_count + pos_accessor.count);
 
-      fastgltf::iterateAccessorWithIndex<glm::vec3>(asset, pos_accessor, [&](glm::vec3 pos, std::size_t i) {
-        new_mesh.vertices[i + vertex_count].position = pos;
-        new_mesh.vertices[i + vertex_count].color = glm::vec4{1.f};
-        // default uv coords to top left of texture image
-        new_mesh.vertices[i + vertex_count].uv_x = 0.f;
-        new_mesh.vertices[i + vertex_count].uv_y = 0.f;
-      });
+      fastgltf::iterateAccessorWithIndex<glm::vec3>(
+          asset, pos_accessor, [&](glm::vec3 pos, std::size_t i) {
+            new_mesh.vertices[i + vertex_count].position = pos;
+            new_mesh.vertices[i + vertex_count].color = glm::vec4{1.f};
+            // default uv coords to top left of texture image
+            new_mesh.vertices[i + vertex_count].uv_x = 0.f;
+            new_mesh.vertices[i + vertex_count].uv_y = 0.f;
+          });
 
       auto normal_accessor = asset.accessors[primitive.findAttribute("NORMAL")->second];
-      fastgltf::iterateAccessorWithIndex<glm::vec3>(asset, normal_accessor, [&](glm::vec3 normal, std::size_t i) {
-        new_mesh.vertices[i + vertex_count].normal = normal;
-      });
+      fastgltf::iterateAccessorWithIndex<glm::vec3>(
+          asset, normal_accessor, [&](glm::vec3 normal, std::size_t i) {
+            new_mesh.vertices[i + vertex_count].normal = normal;
+          });
 
       // currently only loading in UV's for the color texture
       int color_tex_coord = materials[material_idx].pbr.color_tex_coord;
@@ -420,23 +436,25 @@ Scene load_scene(VkBackend* backend, std::filesystem::path path) {
       if (color_tex_attribute_it != primitive.attributes.end()) {
         // found tex coord attribute
         auto& color_tex_accessor = asset.accessors[color_tex_attribute_it->second];
-        fastgltf::iterateAccessorWithIndex<glm::vec2>(asset, color_tex_accessor, [&](glm::vec2 uv, std::size_t i) {
-          new_mesh.vertices[i + vertex_count].uv_x = uv.x;
-          new_mesh.vertices[i + vertex_count].uv_y = uv.y;
-        });
+        fastgltf::iterateAccessorWithIndex<glm::vec2>(
+            asset, color_tex_accessor, [&](glm::vec2 uv, std::size_t i) {
+              new_mesh.vertices[i + vertex_count].uv_x = uv.x;
+              new_mesh.vertices[i + vertex_count].uv_y = uv.y;
+            });
       }
 
       auto& idx_accessor = asset.accessors[primitive.indicesAccessor.value()];
 
       new_mesh.indices.resize(index_count + idx_accessor.count);
 
-      fastgltf::iterateAccessorWithIndex<std::uint16_t>(asset, idx_accessor, [&](std::uint16_t vert_index, size_t i) {
-        // index needs to be offset by vertex_count since we're combining all vertex data into
-        // one buffer
-        new_mesh.indices[i + index_count] = vert_index + vertex_count;
-        assert(vert_index + vertex_count < new_mesh.vertices.size() &&
-               "index is larger than the vertex buffer itself.");
-      });
+      fastgltf::iterateAccessorWithIndex<std::uint16_t>(
+          asset, idx_accessor, [&](std::uint16_t vert_index, size_t i) {
+            // index needs to be offset by vertex_count since we're combining all vertex data into
+            // one buffer
+            new_mesh.indices[i + index_count] = vert_index + vertex_count;
+            assert(vert_index + vertex_count < new_mesh.vertices.size() &&
+                   "index is larger than the vertex buffer itself.");
+          });
 
       GLTFPrimitive new_primitive;
       new_primitive.mat_idx = material_idx;
@@ -468,11 +486,13 @@ Scene load_scene(VkBackend* backend, std::filesystem::path path) {
   layout_builder.clear();
   layout_builder.add_binding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 
-  new_scene.obj_desc_set_layout = layout_builder.build(backend->_device_context.logical_device,
-                                                       VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
+  new_scene.obj_desc_set_layout =
+      layout_builder.build(backend->_device_context.logical_device,
+                           VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
 
   std::vector<PoolSizeRatio> obj_pool_sizes = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1}};
-  new_scene.obj_desc_allocator.create(backend->_device_context.logical_device, primitive_count, obj_pool_sizes);
+  new_scene.obj_desc_allocator.create(backend->_device_context.logical_device, primitive_count,
+                                      obj_pool_sizes);
 
   new_scene.draw_obj_uniform_buffers.reserve(primitive_count);
   new_scene.mesh_buffers.reserve(meshes.size());
@@ -496,13 +516,14 @@ Scene load_scene(VkBackend* backend, std::filesystem::path path) {
 
       AllocatedBuffer obj_uniform_buf;
 
-      VkDescriptorSet draw_obj_desc_set =
-          new_scene.obj_desc_allocator.allocate(backend->_device_context.logical_device, new_scene.obj_desc_set_layout);
+      VkDescriptorSet draw_obj_desc_set = new_scene.obj_desc_allocator.allocate(
+          backend->_device_context.logical_device, new_scene.obj_desc_set_layout);
 
       obj_uniform_buf =
-          create_buffer(sizeof(DrawObjUniformData), backend->_allocator, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                        VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
-                        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT);
+          create_buffer(sizeof(DrawObjUniformData), backend->_allocator,
+                        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+                        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+                            VMA_ALLOCATION_CREATE_MAPPED_BIT);
 
       auto* obj_uniform_data = (DrawObjUniformData*)obj_uniform_buf.info.pMappedData;
 
@@ -539,29 +560,33 @@ Scene load_scene(VkBackend* backend, std::filesystem::path path) {
   }
 
   // sort opaque draws by material
-  std::sort(opaque_draws.begin(), opaque_draws.end(), [&](const DrawObject& obj_a, const DrawObject& obj_b) {
-    if (obj_a.mat_desc_set == obj_b.mat_desc_set) {
-      return obj_a.indices_start < obj_b.indices_start;
-    } else {
-      return obj_a.mat_desc_set < obj_b.mat_desc_set;
-    }
-  });
+  std::sort(opaque_draws.begin(), opaque_draws.end(),
+            [&](const DrawObject& obj_a, const DrawObject& obj_b) {
+              if (obj_a.mat_desc_set == obj_b.mat_desc_set) {
+                return obj_a.indices_start < obj_b.indices_start;
+              } else {
+                return obj_a.mat_desc_set < obj_b.mat_desc_set;
+              }
+            });
 
   // sort transparent draws by material
-  std::sort(trans_draws.begin(), trans_draws.end(), [&](const DrawObject& obj_a, const DrawObject& obj_b) {
-    if (obj_a.mat_desc_set == obj_b.mat_desc_set) {
-      return obj_a.indices_start < obj_b.indices_start;
-    } else {
-      return obj_a.mat_desc_set < obj_b.mat_desc_set;
-    }
-  });
+  std::sort(trans_draws.begin(), trans_draws.end(),
+            [&](const DrawObject& obj_a, const DrawObject& obj_b) {
+              if (obj_a.mat_desc_set == obj_b.mat_desc_set) {
+                return obj_a.indices_start < obj_b.indices_start;
+              } else {
+                return obj_a.mat_desc_set < obj_b.mat_desc_set;
+              }
+            });
 
   new_scene.opaque_objs.resize(opaque_draws.size());
   new_scene.transparent_objs.resize(trans_draws.size());
 
   // copy sorted blocks of opaque/trans draws into final buffer
-  memcpy(new_scene.opaque_objs.data(), opaque_draws.data(), opaque_draws.size() * sizeof(DrawObject));
-  memcpy(new_scene.transparent_objs.data(), trans_draws.data(), trans_draws.size() * sizeof(DrawObject));
+  memcpy(new_scene.opaque_objs.data(), opaque_draws.data(),
+         opaque_draws.size() * sizeof(DrawObject));
+  memcpy(new_scene.transparent_objs.data(), trans_draws.data(),
+         trans_draws.size() * sizeof(DrawObject));
 
   return new_scene;
 }
@@ -600,10 +625,4 @@ void destroy_scene(VkBackend* backend, Scene& scene) {
 
   vkDestroyDescriptorSetLayout(device, scene.mat_desc_set_layout, nullptr);
   vkDestroyDescriptorSetLayout(device, scene.obj_desc_set_layout, nullptr);
-
-  vkDestroyPipelineLayout(device, scene.opaque_pipeline_info.pipeline_layout, nullptr);
-  vkDestroyPipelineLayout(device, scene.transparent_pipeline_info.pipeline_layout, nullptr);
-
-  vkDestroyPipeline(device, scene.opaque_pipeline_info.pipeline, nullptr);
-  vkDestroyPipeline(device, scene.transparent_pipeline_info.pipeline, nullptr);
 }

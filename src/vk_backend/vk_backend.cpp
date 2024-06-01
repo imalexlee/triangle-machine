@@ -2,8 +2,10 @@
 #include "vk_backend/vk_pipeline.h"
 #include "vk_options.h"
 #include <array>
+#include <cassert>
 #include <chrono>
 #include <core/camera.h>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <fastgltf/types.hpp>
@@ -23,16 +25,21 @@
 #include "vk_backend/resources/vk_descriptor.h"
 #include "vk_backend/resources/vk_image.h"
 #include "vk_backend/vk_scene.h"
+#include "vk_init.h"
 #include "vk_mem_alloc.h"
 
 #include "vk_backend/resources/vk_loader.h"
 #include "vk_backend/vk_backend.h"
 #include "vk_backend/vk_sync.h"
 
-constexpr uint64_t TIMEOUT_DURATION = 1'000'000'000;
 using namespace std::chrono;
 
+static VkBackend* active_backend = nullptr;
+
 void VkBackend::create(Window& window, Camera& camera) {
+  assert(active_backend == nullptr);
+  active_backend = this;
+
   create_instance();
   VkSurfaceKHR surface = window.get_vulkan_surface(_instance);
 
@@ -42,55 +49,117 @@ void VkBackend::create(Window& window, Camera& camera) {
   create_allocator();
 
   for (Frame& frame : _frames) {
-    frame.create(_device_context.logical_device, _allocator, _device_context.queues.graphics_family_index);
+    frame.create(_device_context.logical_device, _allocator,
+                 _device_context.queues.graphics_family_index);
   }
 
-  VkExtent2D image_extent{
-      .width = window.width,
-      .height = window.height,
-  };
+  _image_extent.width = window.width;
+  _image_extent.height = window.height;
 
-  _image_extent = image_extent;
-
-  _color_image = create_image(_device_context.logical_device, _allocator,
-                              VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT |
-                                  VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-                              image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, _device_context.raster_samples);
+  // if msaa is enabled, we will transfer the color resolve image to the swapchain
+  // and leave the larger color image as transient
+  VkImageUsageFlags color_img_flags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
   if constexpr (vk_opts::msaa_enabled) {
     _color_resolve_image =
         create_image(_device_context.logical_device, _allocator,
-                     VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                     image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
+                     VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                     _image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
+
+    color_img_flags |= VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
+  } else {
+    color_img_flags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
   }
 
-  _depth_image = create_image(_device_context.logical_device, _allocator, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                              image_extent, VK_FORMAT_D32_SFLOAT, _device_context.raster_samples);
+  _color_image =
+      create_image(_device_context.logical_device, _allocator, color_img_flags, _image_extent,
+                   VK_FORMAT_R16G16B16A16_SFLOAT, _device_context.raster_samples);
+
+  _depth_image = create_image(_device_context.logical_device, _allocator,
+                              VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, _image_extent,
+                              VK_FORMAT_D32_SFLOAT, _device_context.raster_samples);
 
   _imm_fence = create_fence(_device_context.logical_device, VK_FENCE_CREATE_SIGNALED_BIT);
-  _imm_cmd_context.create(_device_context.logical_device, _device_context.queues.graphics_family_index,
+  _imm_cmd_context.create(_device_context.logical_device,
+                          _device_context.queues.graphics_family_index,
                           VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
-
-  uint32_t thread_count = std::thread::hardware_concurrency();
-  _thread_pool.resize(thread_count);
 
   _camera = &camera;
 
+  // order matters here
   create_default_data();
+
+  // scenes need default fallback textures and samplers
+  configure_scene_resources();
+
+  load_scenes();
+
+  // pipelines need the desc set layouts in a scene
+  // TDOO: no they dont. all scenes should share layout anyways. dont tie them to a scene
   create_pipelines();
+
   create_gui(window);
 
   if constexpr (vk_opts::validation_enabled) {
     _debugger.create(_instance, _device_context.logical_device);
-    _debugger.set_handle_name(_color_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW, "color image view");
-    _debugger.set_handle_name(_depth_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW, "depth image view");
-    for (size_t i = 0; i < _frames.size(); i++) {
-      Frame& frame = _frames[i];
-      _debugger.set_handle_name(frame.command_context.primary_buffer, VK_OBJECT_TYPE_COMMAND_BUFFER,
-                                "frame " + std::to_string(i) + " cmd buf");
-    }
+    configure_debugger();
   }
 }
+
+// adding names to these 64 bit handles helps a lot when reading validation errors
+void VkBackend::configure_debugger() {
+  _debugger.set_handle_name(_color_image.image, VK_OBJECT_TYPE_IMAGE, "color image");
+  _debugger.set_handle_name(_depth_image.image, VK_OBJECT_TYPE_IMAGE, "depth image");
+
+  _debugger.set_handle_name(_color_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW, "color image view");
+  _debugger.set_handle_name(_depth_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW, "depth image view");
+
+  if constexpr (vk_opts::msaa_enabled) {
+    _debugger.set_handle_name(_color_resolve_image.image, VK_OBJECT_TYPE_IMAGE,
+                              "color resolve image");
+    _debugger.set_handle_name(_color_resolve_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW,
+                              "color resolve image view");
+  }
+
+  for (size_t i = 0; i < _frames.size(); i++) {
+    Frame& frame = _frames[i];
+    _debugger.set_handle_name(frame.command_context.primary_buffer, VK_OBJECT_TYPE_COMMAND_BUFFER,
+                              "frame " + std::to_string(i) + " cmd buf");
+  }
+
+  for (size_t i = 0; i < _swapchain_context.images.size(); i++) {
+    _debugger.set_handle_name(_swapchain_context.images[i], VK_OBJECT_TYPE_IMAGE,
+                              "swapchain image " + std::to_string(i));
+    _debugger.set_handle_name(_swapchain_context.image_views[i], VK_OBJECT_TYPE_IMAGE_VIEW,
+                              "swapchain image view" + std::to_string(i));
+  }
+}
+
+void VkBackend::configure_scene_resources() {
+  _scene_clear_value = {.color = {{1.f, 1.f, 1.f, 1.f}}};
+
+  VkImageView resolve_img_view = nullptr;
+  VkAttachmentStoreOp color_store_ap = VK_ATTACHMENT_STORE_OP_STORE;
+
+  if constexpr (vk_opts::msaa_enabled) {
+    resolve_img_view = _color_resolve_image.image_view;
+
+    // dont care about the multisampled buffer if it'll resolve into another img anyways
+    color_store_ap = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+  }
+
+  _scene_color_attachment =
+      create_color_attachment_info(_color_image.image_view, &_scene_clear_value,
+                                   VK_ATTACHMENT_LOAD_OP_CLEAR, color_store_ap, resolve_img_view);
+
+  _scene_depth_attachment = create_depth_attachment_info(
+      _depth_image.image_view, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE);
+
+  _scene_rendering_info =
+      create_rendering_info(_scene_color_attachment, _scene_depth_attachment, _image_extent);
+}
+
+void VkBackend::load_scenes() { _scene = load_scene(this, "../../assets/glb/crypt_location.glb"); }
 
 void VkBackend::create_default_data() {
 
@@ -98,16 +167,16 @@ void VkBackend::create_default_data() {
   sampler_ci.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
   sampler_ci.magFilter = VK_FILTER_LINEAR;
   sampler_ci.minFilter = VK_FILTER_LINEAR;
-  VK_CHECK(vkCreateSampler(_device_context.logical_device, &sampler_ci, nullptr, &_default_linear_sampler));
+  VK_CHECK(vkCreateSampler(_device_context.logical_device, &sampler_ci, nullptr,
+                           &_default_linear_sampler));
 
   sampler_ci.magFilter = VK_FILTER_NEAREST;
   sampler_ci.minFilter = VK_FILTER_NEAREST;
-  VK_CHECK(vkCreateSampler(_device_context.logical_device, &sampler_ci, nullptr, &_default_nearest_sampler));
+  VK_CHECK(vkCreateSampler(_device_context.logical_device, &sampler_ci, nullptr,
+                           &_default_nearest_sampler));
 
-  _default_texture =
-      upload_texture_image((void*)white_image.data(), VK_IMAGE_USAGE_SAMPLED_BIT, CHECKER_WIDTH, CHECKER_WIDTH);
-
-  _scene = load_scene(this, "../../assets/glb/crypt_location.glb");
+  _default_texture = upload_texture_image((void*)white_image.data(), VK_IMAGE_USAGE_SAMPLED_BIT,
+                                          CHECKER_WIDTH, CHECKER_WIDTH);
 }
 
 void VkBackend::create_gui(Window& window) {
@@ -133,7 +202,8 @@ void VkBackend::create_gui(Window& window) {
   pool_ci.poolSizeCount = pool_sizes.size();
   pool_ci.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
 
-  VK_CHECK(vkCreateDescriptorPool(_device_context.logical_device, &pool_ci, nullptr, &_imm_descriptor_pool));
+  VK_CHECK(vkCreateDescriptorPool(_device_context.logical_device, &pool_ci, nullptr,
+                                  &_imm_descriptor_pool));
 
   VkPipelineRenderingCreateInfoKHR pipeline_info{};
   pipeline_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
@@ -159,15 +229,17 @@ void VkBackend::create_gui(Window& window) {
 auto time1 = std::chrono::high_resolution_clock::now();
 void VkBackend::update_scene() {
   auto start_time = system_clock::now();
-  // auto time_span = duration_cast<std::chrono::duration<float>>(std::chrono::high_resolution_clock::now() - time1);
+  // auto time_span =
+  // duration_cast<std::chrono::duration<float>>(std::chrono::high_resolution_clock::now() - time1);
   _camera->update();
 
   glm::mat4 model = glm::mat4{1.f};
   //* glm::rotate(glm::mat4{1.f}, glm::radians(time_span.count() * 30), glm::vec3{0, 1, 0});
 
-  glm::mat4 projection = glm::perspective(
-      glm::radians(60.f), (float)_swapchain_context.extent.width / (float)_swapchain_context.extent.height, 10000.0f,
-      0.1f);
+  glm::mat4 projection = glm::perspective(glm::radians(60.f),
+                                          (float)_swapchain_context.extent.width /
+                                              (float)_swapchain_context.extent.height,
+                                          10000.0f, 0.1f);
 
   projection[1][1] *= -1;
 
@@ -187,7 +259,8 @@ void VkBackend::update_global_descriptors() {
   global_desc_set = get_current_frame().create_scene_desc_set(_device_context.logical_device);
 
   // fill in the buffer with the updated scene data
-  SceneData* scene_data = (SceneData*)get_current_frame().scene_data_buffer.allocation->GetMappedData();
+  SceneData* scene_data =
+      (SceneData*)get_current_frame().scene_data_buffer.allocation->GetMappedData();
   *scene_data = _scene_data;
 
   // connect buffer that was just filled to a binding then hook it up to the allocated desc set
@@ -231,9 +304,11 @@ void VkBackend::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& func
 
   function(_imm_cmd_context.primary_buffer);
 
-  _imm_cmd_context.submit_primary_buffer(_device_context.queues.graphics, nullptr, nullptr, _imm_fence);
+  _imm_cmd_context.submit_primary_buffer(_device_context.queues.graphics, nullptr, nullptr,
+                                         _imm_fence);
 
-  VK_CHECK(vkWaitForFences(_device_context.logical_device, 1, &_imm_fence, VK_TRUE, TIMEOUT_DURATION));
+  VK_CHECK(vkWaitForFences(_device_context.logical_device, 1, &_imm_fence, VK_TRUE,
+                           vk_opts::timeout_dur));
 }
 
 void VkBackend::create_allocator() {
@@ -287,10 +362,10 @@ void VkBackend::create_instance() {
 void VkBackend::create_pipelines() {
   PipelineBuilder builder;
   // cosider passing the shader locations in from the engine instead of here
-  VkShaderModule vert_shader =
-      load_shader_module(_device_context.logical_device, "../../shaders/vertex/indexed_triangle.vert.glsl.spv");
-  VkShaderModule frag_shader =
-      load_shader_module(_device_context.logical_device, "../../shaders/fragment/simple_lighting.frag.glsl.spv");
+  VkShaderModule vert_shader = load_shader_module(
+      _device_context.logical_device, "../../shaders/vertex/indexed_triangle.vert.glsl.spv");
+  VkShaderModule frag_shader = load_shader_module(
+      _device_context.logical_device, "../../shaders/fragment/simple_lighting.frag.glsl.spv");
 
   builder.set_shader_stages(vert_shader, frag_shader);
   builder.disable_blending();
@@ -304,19 +379,17 @@ void VkBackend::create_pipelines() {
   builder.set_render_info(_color_image.image_format, _depth_image.image_format);
 
   // all frames have the same layout so you can use the first one's layout
-  std::array<VkDescriptorSetLayout, 3> set_layouts{_frames[0].desc_set_layout, _scene.mat_desc_set_layout,
-                                                   _scene.obj_desc_set_layout};
+  std::array<VkDescriptorSetLayout, 3> set_layouts{
+      _frames[0].desc_set_layout, _scene.mat_desc_set_layout, _scene.obj_desc_set_layout};
 
   builder.set_layout(set_layouts, {}, 0);
 
-  PipelineInfo opaque_pipeline_info = builder.build_pipeline(_device_context.logical_device);
-  _scene.opaque_pipeline_info = opaque_pipeline_info;
+  _opaque_pipeline_info = builder.build_pipeline(_device_context.logical_device);
 
   builder.enable_blending_alphablend();
   builder.set_depth_stencil_state(true, false, VK_COMPARE_OP_GREATER_OR_EQUAL);
 
-  PipelineInfo transparent_pipeline_info = builder.build_pipeline(_device_context.logical_device);
-  _scene.transparent_pipeline_info = transparent_pipeline_info;
+  _transparent_pipeline_info = builder.build_pipeline(_device_context.logical_device);
 
   _deletion_queue.push_persistant([=, this]() {
     vkDestroyShaderModule(_device_context.logical_device, vert_shader, nullptr);
@@ -347,26 +420,27 @@ void VkBackend::draw() {
   VkCommandBuffer cmd_buffer = current_frame.command_context.primary_buffer;
 
   // wait for previous command buffer to finish executing
-  vkWaitForFences(_device_context.logical_device, 1, &current_frame.render_fence, VK_TRUE, TIMEOUT_DURATION);
+  vkWaitForFences(_device_context.logical_device, 1, &current_frame.render_fence, VK_TRUE,
+                  vk_opts::timeout_dur);
 
   uint32_t swapchain_image_index;
-  VkResult result =
-      vkAcquireNextImageKHR(_device_context.logical_device, _swapchain_context.swapchain, TIMEOUT_DURATION,
-                            current_frame.present_semaphore, nullptr, &swapchain_image_index);
+  VkResult result = vkAcquireNextImageKHR(
+      _device_context.logical_device, _swapchain_context.swapchain, vk_opts::timeout_dur,
+      current_frame.present_semaphore, nullptr, &swapchain_image_index);
 
-  if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+  if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+    // probably window resized. glfw event will trigger resize in that case, so just abort
     return;
   }
 
   VK_CHECK(vkResetFences(_device_context.logical_device, 1, &current_frame.render_fence));
 
+  VkImage swapchain_image = _swapchain_context.images[swapchain_image_index];
+
   VkCommandBufferBeginInfo command_buffer_bi{};
   command_buffer_bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
   command_buffer_bi.pNext = nullptr;
   command_buffer_bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-  // command_buffer_bi.pInheritanceInfo = &inheritance_info;
-
-  VkImage swapchain_image = _swapchain_context.images[swapchain_image_index];
 
   VK_CHECK(vkBeginCommandBuffer(current_frame.command_context.primary_buffer, &command_buffer_bi));
 
@@ -385,14 +459,18 @@ void VkBackend::draw() {
   insert_image_memory_barrier(cmd_buffer, _depth_image.image, VK_IMAGE_LAYOUT_UNDEFINED,
                               VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
+  vkCmdBeginRendering(cmd_buffer, &_scene_rendering_info);
+
   render_geometry(cmd_buffer);
 
   render_ui(cmd_buffer);
 
+  vkCmdEndRendering(cmd_buffer);
+
   insert_image_memory_barrier(cmd_buffer, copy_img, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                               VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
-  insert_image_memory_barrier(cmd_buffer, swapchain_image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+  insert_image_memory_barrier(cmd_buffer, swapchain_image, VK_IMAGE_LAYOUT_UNDEFINED,
                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
   // copy rendered image onto swapchain image
@@ -402,14 +480,15 @@ void VkBackend::draw() {
                               VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
   // tweak stage masks to make it more optimal
-  VkSemaphoreSubmitInfo wait_semaphore_si =
-      create_semaphore_submit_info(current_frame.present_semaphore, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
+  VkSemaphoreSubmitInfo wait_semaphore_si = create_semaphore_submit_info(
+      current_frame.present_semaphore, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
 
-  VkSemaphoreSubmitInfo signal_semaphore_si =
-      create_semaphore_submit_info(current_frame.render_semaphore, VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT);
+  VkSemaphoreSubmitInfo signal_semaphore_si = create_semaphore_submit_info(
+      current_frame.render_semaphore, VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT);
 
-  current_frame.command_context.submit_primary_buffer(_device_context.queues.graphics, &wait_semaphore_si,
-                                                      &signal_semaphore_si, current_frame.render_fence);
+  current_frame.command_context.submit_primary_buffer(_device_context.queues.graphics,
+                                                      &wait_semaphore_si, &signal_semaphore_si,
+                                                      current_frame.render_fence);
 
   VkPresentInfoKHR present_info{};
   present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -421,7 +500,9 @@ void VkBackend::draw() {
   present_info.waitSemaphoreCount = 1;
 
   result = vkQueuePresentKHR(_device_context.queues.present, &present_info);
+
   if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+    // probably window resized. glfw event will trigger resize in that case, so just abort
     return;
   }
 
@@ -434,81 +515,64 @@ void VkBackend::draw() {
   }
 }
 
+/*  Resize callback needs to conform to the interface for the glfw callback.
+ *  our resize method doesn't need these paramaters
+ */
+void VkBackend::resize_callback([[maybe_unused]] int new_width, [[maybe_unused]] int new_height) {
+  active_backend->resize();
+}
+
 void VkBackend::resize() {
   vkDeviceWaitIdle(_device_context.logical_device);
+
+  /* swapchain gets current width and height by querying the system capabilities
+   * which means we don't explicitly need to pass in those params
+   */
   _swapchain_context.reset_swapchain(_device_context);
 
   destroy_image(_device_context.logical_device, _allocator, _depth_image);
   destroy_image(_device_context.logical_device, _allocator, _color_image);
 
-  VkExtent2D image_extent{
-      .width = _swapchain_context.extent.width,
-      .height = _swapchain_context.extent.height,
-  };
+  _image_extent.width = _swapchain_context.extent.width;
+  _image_extent.height = _swapchain_context.extent.height;
 
-  _image_extent = image_extent;
-
-  _color_image = create_image(_device_context.logical_device, _allocator,
-                              VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
-                              image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, _device_context.raster_samples);
+  // if msaa is enabled, we will transfer the color resolve image to the swapchain
+  // and leave the larger color image as transient
+  VkImageUsageFlags color_img_flags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
   if constexpr (vk_opts::msaa_enabled) {
+    destroy_image(_device_context.logical_device, _allocator, _color_resolve_image);
+
     _color_resolve_image =
         create_image(_device_context.logical_device, _allocator,
-                     VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                     image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
+                     VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                     _image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
+
+    color_img_flags |= VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
+  } else {
+    color_img_flags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
   }
 
+  _color_image =
+      create_image(_device_context.logical_device, _allocator, color_img_flags, _image_extent,
+                   VK_FORMAT_R16G16B16A16_SFLOAT, _device_context.raster_samples);
+
   _depth_image = create_image(_device_context.logical_device, _allocator,
-                              VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
-                              image_extent, VK_FORMAT_D32_SFLOAT, _device_context.raster_samples);
+                              VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+                                  VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
+                              _image_extent, VK_FORMAT_D32_SFLOAT, _device_context.raster_samples);
+
+  configure_scene_resources();
 
   for (Frame& frame : _frames) {
     frame.reset_sync_structures(_device_context.logical_device);
   }
 }
 
-VkRenderingInfo create_rendering_info(VkRenderingAttachmentInfo& color_attachment,
-                                      VkRenderingAttachmentInfo& depth_attachment, VkExtent2D extent) {
-
-  VkRenderingInfo rendering_info{};
-  rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-  rendering_info.renderArea = VkRect2D{
-      .offset = VkOffset2D{0, 0},
-      .extent = extent,
-  };
-
-  rendering_info.flags = VK_RENDERING_CONTENTS_SECONDARY_COMMAND_BUFFERS_BIT;
-  rendering_info.pColorAttachments = &color_attachment;
-  rendering_info.colorAttachmentCount = 1;
-  rendering_info.layerCount = 1;
-  rendering_info.pStencilAttachment = nullptr;
-  rendering_info.pDepthAttachment = &depth_attachment;
-
-  return rendering_info;
-}
-
 void VkBackend::render_geometry(VkCommandBuffer cmd_buf) {
   auto buffer_recording_start = system_clock::now();
 
-  VkClearValue clear = {.color = {{1.f, 1.f, 1.f, 1.f}}};
-
-  VkImageView resolve_img_view = nullptr;
-  if constexpr (vk_opts::msaa_enabled) {
-    resolve_img_view = _color_resolve_image.image_view;
-  }
-
-  VkRenderingAttachmentInfo color_attachment = create_color_attachment_info(
-      _color_image.image_view, &clear, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, resolve_img_view);
-
-  VkRenderingAttachmentInfo depth_attachment =
-      create_depth_attachment_info(_depth_image.image_view, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE);
-
-  VkRenderingInfo rendering_info = create_rendering_info(color_attachment, depth_attachment, _image_extent);
-
   update_global_descriptors();
-
-  vkCmdBeginRendering(cmd_buf, &rendering_info);
 
   VkViewport viewport{};
   viewport.x = 0.0f;
@@ -528,19 +592,21 @@ void VkBackend::render_geometry(VkCommandBuffer cmd_buf) {
   const auto record_obj = [&](const DrawObject& obj) {
     if (obj.mat_desc_set != current_mat_desc) {
       current_mat_desc = obj.mat_desc_set;
-      vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline_info.pipeline_layout, 1, 1,
-                              &obj.mat_desc_set, 0, nullptr);
+      vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                              current_pipeline_info.pipeline_layout, 1, 1, &obj.mat_desc_set, 0,
+                              nullptr);
     }
 
-    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline_info.pipeline_layout, 2, 1,
-                            &obj.obj_desc_set, 0, nullptr);
+    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            current_pipeline_info.pipeline_layout, 2, 1, &obj.obj_desc_set, 0,
+                            nullptr);
 
     vkCmdBindIndexBuffer(cmd_buf, obj.index_buffer, 0, VK_INDEX_TYPE_UINT32);
 
     vkCmdDrawIndexed(cmd_buf, obj.indices_count, 1, obj.indices_start, 0, 0);
   };
 
-  current_pipeline_info = _scene.opaque_pipeline_info;
+  current_pipeline_info = _opaque_pipeline_info;
 
   vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline_info.pipeline);
 
@@ -548,22 +614,21 @@ void VkBackend::render_geometry(VkCommandBuffer cmd_buf) {
 
   vkCmdSetScissor(cmd_buf, 0, 1, &scissor);
 
-  vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline_info.pipeline_layout, 0, 1,
-                          &global_desc_set, 0, nullptr);
+  vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                          current_pipeline_info.pipeline_layout, 0, 1, &global_desc_set, 0,
+                          nullptr);
 
   for (const DrawObject& obj : _scene.opaque_objs) {
     record_obj(obj);
   }
 
-  current_pipeline_info = _scene.transparent_pipeline_info;
+  current_pipeline_info = _transparent_pipeline_info;
 
   vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline_info.pipeline);
 
   for (const DrawObject& obj : _scene.transparent_objs) {
     record_obj(obj);
   }
-
-  vkCmdEndRendering(cmd_buf);
 
   auto end_time = system_clock::now();
   auto dur = duration<float>(end_time - buffer_recording_start);
@@ -574,50 +639,17 @@ void VkBackend::render_geometry(VkCommandBuffer cmd_buf) {
 }
 
 void VkBackend::render_ui(VkCommandBuffer cmd_buf) {
-
-  VkImageView resolve_img_view = nullptr;
-  VkAttachmentStoreOp color_store_ap = VK_ATTACHMENT_STORE_OP_STORE;
-
-  if constexpr (vk_opts::msaa_enabled) {
-    resolve_img_view = _color_resolve_image.image_view;
-
-    // dont care about the multisampled buffer if it'll resolve into another img anyways
-    color_store_ap = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-  }
-
-  // load last render(s). aka, don't delete the scene when rendering ui.
-  VkRenderingAttachmentInfo color_attachment = create_color_attachment_info(
-      _color_image.image_view, nullptr, VK_ATTACHMENT_LOAD_OP_LOAD, color_store_ap, resolve_img_view);
-
-  VkRenderingAttachmentInfo depth_attachment = create_depth_attachment_info(
-      _depth_image.image_view, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_STORE_OP_DONT_CARE);
-
-  VkRenderingInfo rendering_info{};
-  rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-  rendering_info.renderArea = VkRect2D{
-      .offset = VkOffset2D{0, 0},
-      .extent = _swapchain_context.extent,
-  };
-  rendering_info.pColorAttachments = &color_attachment;
-  rendering_info.colorAttachmentCount = 1;
-  rendering_info.layerCount = 1;
-  rendering_info.pStencilAttachment = nullptr;
-  rendering_info.pDepthAttachment = &depth_attachment;
-
-  vkCmdBeginRendering(cmd_buf, &rendering_info);
-
   ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd_buf);
-
-  vkCmdEndRendering(cmd_buf);
 }
 
-MeshBuffers VkBackend::upload_mesh_buffers(std::span<uint32_t> indices, std::span<Vertex> vertices) {
+MeshBuffers VkBackend::upload_mesh_buffers(std::span<uint32_t> indices,
+                                           std::span<Vertex> vertices) {
   const size_t vertex_buffer_bytes = vertices.size() * sizeof(Vertex);
   const size_t index_buffer_bytes = indices.size() * sizeof(uint32_t);
 
-  AllocatedBuffer staging_buf =
-      create_buffer(vertex_buffer_bytes + index_buffer_bytes, _allocator, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                    VMA_MEMORY_USAGE_CPU_ONLY, VMA_ALLOCATION_CREATE_MAPPED_BIT);
+  AllocatedBuffer staging_buf = create_buffer(
+      vertex_buffer_bytes + index_buffer_bytes, _allocator, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+      VMA_MEMORY_USAGE_CPU_ONLY, VMA_ALLOCATION_CREATE_MAPPED_BIT);
 
   void* staging_data = staging_buf.allocation->GetMappedData();
 
@@ -626,12 +658,14 @@ MeshBuffers VkBackend::upload_mesh_buffers(std::span<uint32_t> indices, std::spa
   memcpy((char*)staging_data + vertex_buffer_bytes, indices.data(), index_buffer_bytes);
 
   MeshBuffers new_mesh_buffer;
-  new_mesh_buffer.vertices = create_buffer(vertex_buffer_bytes, _allocator,
-                                           VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                                               VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                                           VMA_MEMORY_USAGE_GPU_ONLY, 0);
+  new_mesh_buffer.vertices =
+      create_buffer(vertex_buffer_bytes, _allocator,
+                    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                    VMA_MEMORY_USAGE_GPU_ONLY, 0);
   new_mesh_buffer.indices =
-      create_buffer(index_buffer_bytes, _allocator, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+      create_buffer(index_buffer_bytes, _allocator,
+                    VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                     VMA_MEMORY_USAGE_GPU_ONLY, 0);
 
   immediate_submit([&](VkCommandBuffer cmd) {
@@ -640,33 +674,38 @@ MeshBuffers VkBackend::upload_mesh_buffers(std::span<uint32_t> indices, std::spa
     vertex_buffer_region.srcOffset = 0;
     vertex_buffer_region.dstOffset = 0;
 
-    vkCmdCopyBuffer(cmd, staging_buf.buffer, new_mesh_buffer.vertices.buffer, 1, &vertex_buffer_region);
+    vkCmdCopyBuffer(cmd, staging_buf.buffer, new_mesh_buffer.vertices.buffer, 1,
+                    &vertex_buffer_region);
 
     VkBufferCopy index_buffer_region{};
     index_buffer_region.size = index_buffer_bytes;
     index_buffer_region.srcOffset = vertex_buffer_bytes;
     index_buffer_region.dstOffset = 0;
 
-    vkCmdCopyBuffer(cmd, staging_buf.buffer, new_mesh_buffer.indices.buffer, 1, &index_buffer_region);
+    vkCmdCopyBuffer(cmd, staging_buf.buffer, new_mesh_buffer.indices.buffer, 1,
+                    &index_buffer_region);
   });
 
   destroy_buffer(_allocator, staging_buf);
   return new_mesh_buffer;
 }
 
-AllocatedImage VkBackend::upload_texture_image(void* data, VkImageUsageFlags usage, uint32_t height, uint32_t width) {
+AllocatedImage VkBackend::upload_texture_image(void* data, VkImageUsageFlags usage, uint32_t height,
+                                               uint32_t width) {
   VkExtent2D extent{.width = width, .height = height};
 
   uint32_t data_size = width * height * sizeof(uint32_t);
 
-  AllocatedBuffer staging_buf = create_buffer(data_size, _allocator, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                                              VMA_MEMORY_USAGE_CPU_ONLY, VMA_ALLOCATION_CREATE_MAPPED_BIT);
+  AllocatedBuffer staging_buf =
+      create_buffer(data_size, _allocator, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                    VMA_MEMORY_USAGE_CPU_ONLY, VMA_ALLOCATION_CREATE_MAPPED_BIT);
 
   memcpy(staging_buf.allocation->GetMappedData(), data, data_size);
 
   AllocatedImage new_texture;
-  new_texture = create_image(_device_context.logical_device, _allocator, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-                             extent, VK_FORMAT_R8G8B8A8_UNORM);
+  new_texture =
+      create_image(_device_context.logical_device, _allocator,
+                   usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT, extent, VK_FORMAT_R8G8B8A8_UNORM);
 
   VkBufferImageCopy copy_region;
   copy_region.bufferOffset = 0;
@@ -685,8 +724,8 @@ AllocatedImage VkBackend::upload_texture_image(void* data, VkImageUsageFlags usa
     insert_image_memory_barrier(cmd, new_texture.image, VK_IMAGE_LAYOUT_UNDEFINED,
                                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-    vkCmdCopyBufferToImage(cmd, staging_buf.buffer, new_texture.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
-                           &copy_region);
+    vkCmdCopyBufferToImage(cmd, staging_buf.buffer, new_texture.image,
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy_region);
 
     insert_image_memory_barrier(cmd, new_texture.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
@@ -732,6 +771,15 @@ void VkBackend::destroy() {
 
   vkDestroySampler(_device_context.logical_device, _default_nearest_sampler, nullptr);
   vkDestroySampler(_device_context.logical_device, _default_linear_sampler, nullptr);
+
+  vkDestroyPipelineLayout(_device_context.logical_device, _opaque_pipeline_info.pipeline_layout,
+                          nullptr);
+  vkDestroyPipelineLayout(_device_context.logical_device,
+                          _transparent_pipeline_info.pipeline_layout, nullptr);
+
+  vkDestroyPipeline(_device_context.logical_device, _opaque_pipeline_info.pipeline, nullptr);
+  vkDestroyPipeline(_device_context.logical_device, _transparent_pipeline_info.pipeline, nullptr);
+
   vkDestroyFence(_device_context.logical_device, _imm_fence, nullptr);
 
   vmaDestroyAllocator(_allocator);
