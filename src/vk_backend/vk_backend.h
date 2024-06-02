@@ -16,6 +16,7 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_vulkan.h>
 #include <vector>
+#include <vk_backend/vk_pipeline.h>
 #include <vk_backend/vk_scene.h>
 #include <vk_backend/vk_swapchain.h>
 #include <vk_backend/vk_types.h>
@@ -60,7 +61,12 @@ private:
   PipelineInfo _opaque_pipeline_info;
   PipelineInfo _transparent_pipeline_info;
 
-  VkDescriptorSet global_desc_set;
+  VkDescriptorSet _curr_global_desc_set;
+
+  VkDescriptorSetLayout _global_desc_set_layout;
+  VkDescriptorSetLayout _mat_desc_set_layout;
+  VkDescriptorSetLayout _draw_obj_desc_set_layout;
+
   Scene _scene;
   Camera* _camera;
   Stats _stats;
@@ -83,7 +89,7 @@ private:
 
   uint64_t _frame_num{1};
   std::array<Frame, FRAME_NUM> _frames;
-  SceneData _scene_data;
+  GlobalSceneData _scene_data;
 
   // defaults
   VkSampler _default_linear_sampler;
@@ -97,9 +103,10 @@ private:
   void create_allocator();
   void create_pipelines();
   void create_default_data();
+  void create_desc_layouts();
   void create_gui(Window& window);
   void configure_debugger();
-  void configure_scene_resources();
+  void configure_render_resources();
   void load_scenes();
 
   // state update

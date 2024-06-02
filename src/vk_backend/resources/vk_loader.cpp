@@ -240,17 +240,6 @@ Scene load_scene(VkBackend* backend, std::filesystem::path path) {
     textures.push_back(new_texture);
   }
 
-  // load materials
-  DescriptorLayoutBuilder layout_builder;
-  // create descriptor pool for all material data
-  layout_builder.add_binding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-  layout_builder.add_binding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-  layout_builder.add_binding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-
-  new_scene.mat_desc_set_layout =
-      layout_builder.build(backend->_device_context.logical_device,
-                           VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
-
   std::vector<PoolSizeRatio> mat_pool_sizes = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1},
                                                {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2}};
 
@@ -312,8 +301,6 @@ Scene load_scene(VkBackend* backend, std::filesystem::path path) {
     }
 
     if (material.pbrData.metallicRoughnessTexture.has_value()) {
-      // new_mat.pbr.metal_rough_tex =
-      // textures[material.pbrData.metallicRoughnessTexture->textureIndex];
       assert(material.pbrData.metallicRoughnessTexture.value().textureIndex < textures.size() &&
              "accessing invalid metal rough texture");
 
@@ -325,10 +312,7 @@ Scene load_scene(VkBackend* backend, std::filesystem::path path) {
       new_mat.pbr.metal_rough_tex_coord =
           material.pbrData.metallicRoughnessTexture.value().texCoordIndex;
       new_bufs.metal_rough_tex = metal_texture.tex;
-      // fmt::println("attaching metal tex {}", fmt::ptr(metal_texture.tex.image));
       metal_tex_sampler = metal_texture.sampler;
-      // fmt::println("accessing texture {}",
-      // material.pbrData.metallicRoughnessTexture.value().textureIndex);
     } else {
 
       new_bufs.metal_rough_tex = backend->_default_texture;
@@ -336,7 +320,7 @@ Scene load_scene(VkBackend* backend, std::filesystem::path path) {
     }
 
     new_bufs.mat_desc_set = new_scene.mat_desc_allocator.allocate(
-        backend->_device_context.logical_device, new_scene.mat_desc_set_layout);
+        backend->_device_context.logical_device, backend->_mat_desc_set_layout);
 
     // 1. fill in the uniform material buffer
     new_bufs.mat_uniform_buffer = create_buffer(
@@ -483,13 +467,6 @@ Scene load_scene(VkBackend* backend, std::filesystem::path path) {
     }
   }
 
-  layout_builder.clear();
-  layout_builder.add_binding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-
-  new_scene.obj_desc_set_layout =
-      layout_builder.build(backend->_device_context.logical_device,
-                           VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
-
   std::vector<PoolSizeRatio> obj_pool_sizes = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1}};
   new_scene.obj_desc_allocator.create(backend->_device_context.logical_device, primitive_count,
                                       obj_pool_sizes);
@@ -517,7 +494,7 @@ Scene load_scene(VkBackend* backend, std::filesystem::path path) {
       AllocatedBuffer obj_uniform_buf;
 
       VkDescriptorSet draw_obj_desc_set = new_scene.obj_desc_allocator.allocate(
-          backend->_device_context.logical_device, new_scene.obj_desc_set_layout);
+          backend->_device_context.logical_device, backend->_draw_obj_desc_set_layout);
 
       obj_uniform_buf =
           create_buffer(sizeof(DrawObjUniformData), backend->_allocator,
@@ -622,7 +599,4 @@ void destroy_scene(VkBackend* backend, Scene& scene) {
   for (auto& draw_obj_uniform : scene.draw_obj_uniform_buffers) {
     destroy_buffer(allocator, draw_obj_uniform);
   }
-
-  vkDestroyDescriptorSetLayout(device, scene.mat_desc_set_layout, nullptr);
-  vkDestroyDescriptorSetLayout(device, scene.obj_desc_set_layout, nullptr);
 }

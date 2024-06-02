@@ -7,8 +7,9 @@ struct AllocatedBuffer {
   VmaAllocationInfo info;
 };
 
-AllocatedBuffer create_buffer(VkDeviceSize byte_size, VmaAllocator allocator, VkBufferUsageFlags buffer_usage,
-                              VmaMemoryUsage memory_usage, VmaAllocationCreateFlags flags);
+AllocatedBuffer create_buffer(VkDeviceSize byte_size, VmaAllocator allocator,
+                              VkBufferUsageFlags buffer_usage, VmaMemoryUsage memory_usage,
+                              VmaAllocationCreateFlags flags);
 
 void destroy_buffer(VmaAllocator& allocator, AllocatedBuffer& allocated_buffer);
 

@@ -110,7 +110,8 @@ void PipelineBuilder::set_multisample_state(VkSampleCountFlagBits samples) {
   _multisample_state.alphaToCoverageEnable = VK_FALSE;
   _multisample_state.alphaToOneEnable = VK_FALSE;
 }
-void PipelineBuilder::set_depth_stencil_state(bool depth_test_enabled, bool write_enabled, VkCompareOp compare_op) {
+void PipelineBuilder::set_depth_stencil_state(bool depth_test_enabled, bool write_enabled,
+                                              VkCompareOp compare_op) {
   _depth_stencil_state.depthTestEnable = depth_test_enabled;
   _depth_stencil_state.depthWriteEnable = write_enabled;
   _depth_stencil_state.depthCompareOp = compare_op;
@@ -123,14 +124,14 @@ void PipelineBuilder::set_depth_stencil_state(bool depth_test_enabled, bool writ
 }
 
 void PipelineBuilder::disable_blending() {
-  _color_blend_attachment.colorWriteMask =
-      VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+  _color_blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                           VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
   _color_blend_attachment.blendEnable = VK_FALSE;
 }
 
 void PipelineBuilder::enable_blending_additive() {
-  _color_blend_attachment.colorWriteMask =
-      VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+  _color_blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                           VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
   _color_blend_attachment.blendEnable = VK_TRUE;
   _color_blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
   _color_blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_DST_ALPHA;
@@ -141,8 +142,8 @@ void PipelineBuilder::enable_blending_additive() {
 }
 
 void PipelineBuilder::enable_blending_alphablend() {
-  _color_blend_attachment.colorWriteMask =
-      VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+  _color_blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                           VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
   _color_blend_attachment.blendEnable = VK_TRUE;
   _color_blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
   _color_blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_DST_ALPHA;

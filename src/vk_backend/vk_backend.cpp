@@ -1,5 +1,11 @@
+#include "global_utils.h"
 #include "imgui.h"
+#include "vk_backend/resources/vk_buffer.h"
+#include "vk_backend/resources/vk_descriptor.h"
+#include "vk_backend/resources/vk_image.h"
 #include "vk_backend/vk_pipeline.h"
+#include "vk_backend/vk_scene.h"
+#include "vk_init.h"
 #include "vk_options.h"
 #include <array>
 #include <cassert>
@@ -18,15 +24,8 @@
 #include <vk_backend/vk_device.h>
 #include <vk_backend/vk_types.h>
 #include <vk_backend/vk_utils.h>
+#include <vk_mem_alloc.h>
 #include <vulkan/vulkan_core.h>
-#define VMA_IMPLEMENTATION
-#include "global_utils.h"
-#include "vk_backend/resources/vk_buffer.h"
-#include "vk_backend/resources/vk_descriptor.h"
-#include "vk_backend/resources/vk_image.h"
-#include "vk_backend/vk_scene.h"
-#include "vk_init.h"
-#include "vk_mem_alloc.h"
 
 #include "vk_backend/resources/vk_loader.h"
 #include "vk_backend/vk_backend.h"
@@ -41,16 +40,18 @@ void VkBackend::create(Window& window, Camera& camera) {
   active_backend = this;
 
   create_instance();
+
   VkSurfaceKHR surface = window.get_vulkan_surface(_instance);
 
   _device_context.create(_instance, surface);
   _swapchain_context.create(_instance, _device_context, surface, VK_PRESENT_MODE_FIFO_KHR);
 
   create_allocator();
+  create_desc_layouts();
 
   for (Frame& frame : _frames) {
     frame.create(_device_context.logical_device, _allocator,
-                 _device_context.queues.graphics_family_index);
+                 _device_context.queues.graphics_family_index, _global_desc_set_layout);
   }
 
   _image_extent.width = window.width;
@@ -79,6 +80,9 @@ void VkBackend::create(Window& window, Camera& camera) {
                               VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, _image_extent,
                               VK_FORMAT_D32_SFLOAT, _device_context.raster_samples);
 
+  // create color attachments and rendering information from our allocated images
+  configure_render_resources();
+
   _imm_fence = create_fence(_device_context.logical_device, VK_FENCE_CREATE_SIGNALED_BIT);
   _imm_cmd_context.create(_device_context.logical_device,
                           _device_context.queues.graphics_family_index,
@@ -86,19 +90,11 @@ void VkBackend::create(Window& window, Camera& camera) {
 
   _camera = &camera;
 
-  // order matters here
   create_default_data();
-
-  // scenes need default fallback textures and samplers
-  configure_scene_resources();
+  create_pipelines();
+  create_gui(window);
 
   load_scenes();
-
-  // pipelines need the desc set layouts in a scene
-  // TDOO: no they dont. all scenes should share layout anyways. dont tie them to a scene
-  create_pipelines();
-
-  create_gui(window);
 
   if constexpr (vk_opts::validation_enabled) {
     _debugger.create(_instance, _device_context.logical_device);
@@ -135,7 +131,30 @@ void VkBackend::configure_debugger() {
   }
 }
 
-void VkBackend::configure_scene_resources() {
+void VkBackend::create_desc_layouts() {
+
+  DescriptorLayoutBuilder layout_builder;
+  layout_builder.add_binding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+
+  _global_desc_set_layout = layout_builder.build(
+      _device_context.logical_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+
+  layout_builder.clear();
+  layout_builder.add_binding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+  layout_builder.add_binding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+  layout_builder.add_binding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+
+  _mat_desc_set_layout = layout_builder.build(
+      _device_context.logical_device, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
+
+  layout_builder.clear();
+  layout_builder.add_binding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+
+  _draw_obj_desc_set_layout = layout_builder.build(
+      _device_context.logical_device, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
+}
+
+void VkBackend::configure_render_resources() {
   _scene_clear_value = {.color = {{1.f, 1.f, 1.f, 1.f}}};
 
   VkImageView resolve_img_view = nullptr;
@@ -229,8 +248,6 @@ void VkBackend::create_gui(Window& window) {
 auto time1 = std::chrono::high_resolution_clock::now();
 void VkBackend::update_scene() {
   auto start_time = system_clock::now();
-  // auto time_span =
-  // duration_cast<std::chrono::duration<float>>(std::chrono::high_resolution_clock::now() - time1);
   _camera->update();
 
   glm::mat4 model = glm::mat4{1.f};
@@ -254,21 +271,8 @@ void VkBackend::update_scene() {
 }
 
 void VkBackend::update_global_descriptors() {
-  get_current_frame().clear_scene_desc_set(_device_context.logical_device);
-  // allocate an empty set with the layout to hold our global scene data
-  global_desc_set = get_current_frame().create_scene_desc_set(_device_context.logical_device);
-
-  // fill in the buffer with the updated scene data
-  SceneData* scene_data =
-      (SceneData*)get_current_frame().scene_data_buffer.allocation->GetMappedData();
-  *scene_data = _scene_data;
-
-  // connect buffer that was just filled to a binding then hook it up to the allocated desc set
-  DescriptorWriter writer;
-  writer.write_buffer(0, get_current_frame().scene_data_buffer.buffer, sizeof(SceneData), 0,
-                      VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-
-  writer.update_set(_device_context.logical_device, global_desc_set);
+  get_current_frame().update_global_desc_set(_device_context.logical_device, _allocator,
+                                             _scene_data);
 }
 
 bool show_demo_window = true;
@@ -373,14 +377,13 @@ void VkBackend::create_pipelines() {
   builder.set_raster_culling(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
   builder.set_raster_poly_mode(VK_POLYGON_MODE_FILL);
   builder.set_multisample_state((VkSampleCountFlagBits)_device_context.raster_samples);
-  // builder.set_multisample_state(VK_SAMPLE_COUNT_1_BIT);
 
   builder.set_depth_stencil_state(true, true, VK_COMPARE_OP_GREATER_OR_EQUAL);
   builder.set_render_info(_color_image.image_format, _depth_image.image_format);
 
   // all frames have the same layout so you can use the first one's layout
-  std::array<VkDescriptorSetLayout, 3> set_layouts{
-      _frames[0].desc_set_layout, _scene.mat_desc_set_layout, _scene.obj_desc_set_layout};
+  std::array<VkDescriptorSetLayout, 3> set_layouts{_global_desc_set_layout, _mat_desc_set_layout,
+                                                   _draw_obj_desc_set_layout};
 
   builder.set_layout(set_layouts, {}, 0);
 
@@ -562,7 +565,7 @@ void VkBackend::resize() {
                                   VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
                               _image_extent, VK_FORMAT_D32_SFLOAT, _device_context.raster_samples);
 
-  configure_scene_resources();
+  configure_render_resources();
 
   for (Frame& frame : _frames) {
     frame.reset_sync_structures(_device_context.logical_device);
@@ -615,8 +618,8 @@ void VkBackend::render_geometry(VkCommandBuffer cmd_buf) {
   vkCmdSetScissor(cmd_buf, 0, 1, &scissor);
 
   vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                          current_pipeline_info.pipeline_layout, 0, 1, &global_desc_set, 0,
-                          nullptr);
+                          current_pipeline_info.pipeline_layout, 0, 1,
+                          &get_current_frame().global_desc_set, 0, nullptr);
 
   for (const DrawObject& obj : _scene.opaque_objs) {
     record_obj(obj);
@@ -649,13 +652,13 @@ MeshBuffers VkBackend::upload_mesh_buffers(std::span<uint32_t> indices,
 
   AllocatedBuffer staging_buf = create_buffer(
       vertex_buffer_bytes + index_buffer_bytes, _allocator, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-      VMA_MEMORY_USAGE_CPU_ONLY, VMA_ALLOCATION_CREATE_MAPPED_BIT);
+      VMA_MEMORY_USAGE_AUTO_PREFER_HOST, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
 
-  void* staging_data = staging_buf.allocation->GetMappedData();
+  vmaCopyMemoryToAllocation(_allocator, vertices.data(), staging_buf.allocation, 0,
+                            vertex_buffer_bytes);
 
-  // share staging buffer for vertices and indices
-  memcpy(staging_data, vertices.data(), vertex_buffer_bytes);
-  memcpy((char*)staging_data + vertex_buffer_bytes, indices.data(), index_buffer_bytes);
+  vmaCopyMemoryToAllocation(_allocator, indices.data(), staging_buf.allocation, vertex_buffer_bytes,
+                            index_buffer_bytes);
 
   MeshBuffers new_mesh_buffer;
   new_mesh_buffer.vertices =
@@ -696,11 +699,11 @@ AllocatedImage VkBackend::upload_texture_image(void* data, VkImageUsageFlags usa
 
   uint32_t data_size = width * height * sizeof(uint32_t);
 
-  AllocatedBuffer staging_buf =
-      create_buffer(data_size, _allocator, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                    VMA_MEMORY_USAGE_CPU_ONLY, VMA_ALLOCATION_CREATE_MAPPED_BIT);
+  AllocatedBuffer staging_buf = create_buffer(
+      data_size, _allocator, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
+      VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
 
-  memcpy(staging_buf.allocation->GetMappedData(), data, data_size);
+  vmaCopyMemoryToAllocation(_allocator, data, staging_buf.allocation, 0, data_size);
 
   AllocatedImage new_texture;
   new_texture =
@@ -730,6 +733,7 @@ AllocatedImage VkBackend::upload_texture_image(void* data, VkImageUsageFlags usa
     insert_image_memory_barrier(cmd, new_texture.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
   });
+
   destroy_buffer(_allocator, staging_buf);
 
   return new_texture;
@@ -776,6 +780,10 @@ void VkBackend::destroy() {
                           nullptr);
   vkDestroyPipelineLayout(_device_context.logical_device,
                           _transparent_pipeline_info.pipeline_layout, nullptr);
+
+  vkDestroyDescriptorSetLayout(_device_context.logical_device, _global_desc_set_layout, nullptr);
+  vkDestroyDescriptorSetLayout(_device_context.logical_device, _mat_desc_set_layout, nullptr);
+  vkDestroyDescriptorSetLayout(_device_context.logical_device, _draw_obj_desc_set_layout, nullptr);
 
   vkDestroyPipeline(_device_context.logical_device, _opaque_pipeline_info.pipeline, nullptr);
   vkDestroyPipeline(_device_context.logical_device, _transparent_pipeline_info.pipeline, nullptr);

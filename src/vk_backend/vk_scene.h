@@ -4,7 +4,6 @@
 #include "vk_backend/resources/vk_buffer.h"
 #include "vk_backend/resources/vk_descriptor.h"
 #include "vk_backend/resources/vk_image.h"
-#include "vk_backend/vk_pipeline.h"
 #include <cstdint>
 #include <vector>
 #include <vk_backend/vk_types.h>
@@ -16,6 +15,12 @@ struct Vertex {
   glm::vec3 normal;
   float uv_y;
   glm::vec4 color;
+};
+
+// contains per-frame shader information
+struct GlobalSceneData {
+  glm::mat4 view_proj{1.f};
+  glm::vec3 eye_pos;
 };
 
 struct DrawObjUniformData {
@@ -113,9 +118,6 @@ struct Scene {
   std::vector<DrawObject> transparent_objs;
   std::vector<DrawObject> opaque_objs;
   std::vector<VkSampler> samplers;
-
-  VkDescriptorSetLayout mat_desc_set_layout;
-  VkDescriptorSetLayout obj_desc_set_layout;
 
   DescriptorAllocator mat_desc_allocator;
   DescriptorAllocator obj_desc_allocator;
