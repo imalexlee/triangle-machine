@@ -2,17 +2,12 @@
 #include "imgui.h"
 #include "vk_backend/resources/vk_buffer.h"
 #include "vk_backend/resources/vk_descriptor.h"
-#include "vk_backend/resources/vk_image.h"
 #include "vk_backend/vk_pipeline.h"
 #include "vk_backend/vk_scene.h"
 #include "vk_init.h"
-#include "vk_options.h"
-#include <array>
 #include <cassert>
 #include <chrono>
 #include <core/camera.h>
-#include <cstddef>
-#include <cstdint>
 #include <cstring>
 #include <fastgltf/types.hpp>
 #include <fmt/base.h>
@@ -20,7 +15,6 @@
 #include <glm/ext/quaternion_transform.hpp>
 #include <span>
 #include <string>
-#include <unistd.h>
 #include <vk_backend/vk_device.h>
 #include <vk_backend/vk_types.h>
 #include <vk_backend/vk_utils.h>
@@ -44,7 +38,7 @@ void VkBackend::create(Window& window, Camera& camera) {
   VkSurfaceKHR surface = window.get_vulkan_surface(_instance);
 
   _device_context.create(_instance, surface);
-  _swapchain_context.create(_instance, _device_context, surface, VK_PRESENT_MODE_FIFO_KHR);
+  _swapchain_context.create(_instance, _device_context, surface, VK_PRESENT_MODE_MAILBOX_KHR);
 
   create_allocator();
   create_desc_layouts();
@@ -178,9 +172,13 @@ void VkBackend::configure_render_resources() {
       create_rendering_info(_scene_color_attachment, _scene_depth_attachment, _image_extent);
 }
 
-void VkBackend::load_scenes() { _scene = load_scene(this, "../../assets/glb/crypt_location.glb"); }
+void VkBackend::load_scenes() { _scene = load_scene(*this, "../../assets/glb/structure.glb"); }
 
 void VkBackend::create_default_data() {
+
+  _stats.total_fps = 0;
+  _stats.total_frame_time = 0;
+  _stats.total_draw_time = 0;
 
   VkSamplerCreateInfo sampler_ci{};
   sampler_ci.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -194,8 +192,8 @@ void VkBackend::create_default_data() {
   VK_CHECK(vkCreateSampler(_device_context.logical_device, &sampler_ci, nullptr,
                            &_default_nearest_sampler));
 
-  _default_texture = upload_texture_image((void*)white_image.data(), VK_IMAGE_USAGE_SAMPLED_BIT,
-                                          CHECKER_WIDTH, CHECKER_WIDTH);
+  _default_texture = upload_texture(*this, (void*)white_image.data(), VK_IMAGE_USAGE_SAMPLED_BIT,
+                                    IMAGE_WIDTH, IMAGE_WIDTH);
 }
 
 void VkBackend::create_gui(Window& window) {
@@ -440,12 +438,7 @@ void VkBackend::draw() {
 
   VkImage swapchain_image = _swapchain_context.images[swapchain_image_index];
 
-  VkCommandBufferBeginInfo command_buffer_bi{};
-  command_buffer_bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-  command_buffer_bi.pNext = nullptr;
-  command_buffer_bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-  VK_CHECK(vkBeginCommandBuffer(current_frame.command_context.primary_buffer, &command_buffer_bi));
+  current_frame.command_context.begin_primary_buffer(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
   insert_image_memory_barrier(cmd_buffer, _color_image.image, VK_IMAGE_LAYOUT_UNDEFINED,
                               VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
@@ -511,9 +504,11 @@ void VkBackend::draw() {
 
   _frame_num++;
 
+  auto end_time = system_clock::now();
+  auto dur = duration<float>(end_time - start_frame_time);
+  _stats.total_fps += 1000000.f / (float)duration_cast<microseconds>(dur).count();
+  _stats.total_frame_time += duration_cast<microseconds>(dur).count();
   if (_frame_num % 60 == 0) {
-    auto end_time = system_clock::now();
-    auto dur = duration<float>(end_time - start_frame_time);
     _stats.frame_time = duration_cast<microseconds>(dur).count() / 1000.f;
   }
 }
@@ -645,106 +640,15 @@ void VkBackend::render_ui(VkCommandBuffer cmd_buf) {
   ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd_buf);
 }
 
-MeshBuffers VkBackend::upload_mesh_buffers(std::span<uint32_t> indices,
-                                           std::span<Vertex> vertices) {
-  const size_t vertex_buffer_bytes = vertices.size() * sizeof(Vertex);
-  const size_t index_buffer_bytes = indices.size() * sizeof(uint32_t);
-
-  AllocatedBuffer staging_buf = create_buffer(
-      vertex_buffer_bytes + index_buffer_bytes, _allocator, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-      VMA_MEMORY_USAGE_AUTO_PREFER_HOST, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
-
-  vmaCopyMemoryToAllocation(_allocator, vertices.data(), staging_buf.allocation, 0,
-                            vertex_buffer_bytes);
-
-  vmaCopyMemoryToAllocation(_allocator, indices.data(), staging_buf.allocation, vertex_buffer_bytes,
-                            index_buffer_bytes);
-
-  MeshBuffers new_mesh_buffer;
-  new_mesh_buffer.vertices =
-      create_buffer(vertex_buffer_bytes, _allocator,
-                    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                    VMA_MEMORY_USAGE_GPU_ONLY, 0);
-  new_mesh_buffer.indices =
-      create_buffer(index_buffer_bytes, _allocator,
-                    VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                    VMA_MEMORY_USAGE_GPU_ONLY, 0);
-
-  immediate_submit([&](VkCommandBuffer cmd) {
-    VkBufferCopy vertex_buffer_region{};
-    vertex_buffer_region.size = vertex_buffer_bytes;
-    vertex_buffer_region.srcOffset = 0;
-    vertex_buffer_region.dstOffset = 0;
-
-    vkCmdCopyBuffer(cmd, staging_buf.buffer, new_mesh_buffer.vertices.buffer, 1,
-                    &vertex_buffer_region);
-
-    VkBufferCopy index_buffer_region{};
-    index_buffer_region.size = index_buffer_bytes;
-    index_buffer_region.srcOffset = vertex_buffer_bytes;
-    index_buffer_region.dstOffset = 0;
-
-    vkCmdCopyBuffer(cmd, staging_buf.buffer, new_mesh_buffer.indices.buffer, 1,
-                    &index_buffer_region);
-  });
-
-  destroy_buffer(_allocator, staging_buf);
-  return new_mesh_buffer;
-}
-
-AllocatedImage VkBackend::upload_texture_image(void* data, VkImageUsageFlags usage, uint32_t height,
-                                               uint32_t width) {
-  VkExtent2D extent{.width = width, .height = height};
-
-  uint32_t data_size = width * height * sizeof(uint32_t);
-
-  AllocatedBuffer staging_buf = create_buffer(
-      data_size, _allocator, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
-      VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
-
-  vmaCopyMemoryToAllocation(_allocator, data, staging_buf.allocation, 0, data_size);
-
-  AllocatedImage new_texture;
-  new_texture =
-      create_image(_device_context.logical_device, _allocator,
-                   usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT, extent, VK_FORMAT_R8G8B8A8_UNORM);
-
-  VkBufferImageCopy copy_region;
-  copy_region.bufferOffset = 0;
-  copy_region.bufferRowLength = 0;
-  copy_region.bufferImageHeight = 0;
-
-  copy_region.imageOffset = {.x = 0, .y = 0, .z = 0};
-  copy_region.imageExtent = {.width = extent.width, .height = extent.height, .depth = 1};
-
-  copy_region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-  copy_region.imageSubresource.mipLevel = 0;
-  copy_region.imageSubresource.baseArrayLayer = 0;
-  copy_region.imageSubresource.layerCount = 1;
-
-  immediate_submit([&](VkCommandBuffer cmd) {
-    insert_image_memory_barrier(cmd, new_texture.image, VK_IMAGE_LAYOUT_UNDEFINED,
-                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-
-    vkCmdCopyBufferToImage(cmd, staging_buf.buffer, new_texture.image,
-                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy_region);
-
-    insert_image_memory_barrier(cmd, new_texture.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-  });
-
-  destroy_buffer(_allocator, staging_buf);
-
-  return new_texture;
-}
-
 void VkBackend::destroy() {
 
   vkDeviceWaitIdle(_device_context.logical_device);
   DEBUG_PRINT("destroying Vulkan Backend");
 
-  fmt::println("average draw time: {}", _stats.total_draw_time / _frame_num);
+  fmt::println("average draw time: {:.3f} us", (float)_stats.total_draw_time / (float)_frame_num);
+  fmt::println("average frame time: {:.3f} ms",
+               (float)_stats.total_frame_time / 1000.f / (float)_frame_num);
+  fmt::println("average fps: {:.3f}", (float)_stats.total_fps / (float)_frame_num);
 
   _deletion_queue.flush();
 
@@ -757,7 +661,7 @@ void VkBackend::destroy() {
     destroy_buffer(_allocator, frame.scene_data_buffer);
   }
 
-  destroy_scene(this, _scene);
+  destroy_scene(*this, _scene);
 
   ImGui_ImplGlfw_Shutdown();
   ImGui_ImplVulkan_Shutdown();

@@ -3,8 +3,10 @@
 #include "resources/vk_image.h"
 #include "vk_backend/vk_device.h"
 #include "vk_backend/vk_utils.h"
+#include <algorithm>
 #include <cstdint>
 #include <set>
+#include <vk_backend/vk_options.h>
 #include <vulkan/vulkan_core.h>
 
 // not to be used when resizing as it inits the entire context
@@ -49,13 +51,15 @@ void SwapchainContext::create_swapchain(DeviceContext& device_context) {
   }
   format = surface_format.format;
 
-  // I want triple buffering
-  uint32_t desired_image_count{3};
-  // max image count of 0 means it's unbounded, so ignore this and go with the 3 images
+  uint32_t desired_image_count = vk_opts::frame_count;
+
+  // max image count of 0 means its unbounded. so just go with our config.
+  // otherwise, clamp the desired count to our physical bounds
   if (_support_details.capabilities.maxImageCount != 0) {
-    // if 3 images are not available, just use the maximum amount of images possible
+
     desired_image_count =
-        std::min(desired_image_count, _support_details.capabilities.maxImageCount);
+        std::clamp(desired_image_count, _support_details.capabilities.minImageCount,
+                   _support_details.capabilities.maxImageCount);
   }
 
   VkSwapchainCreateInfoKHR swapchain_ci{};

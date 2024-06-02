@@ -16,31 +16,32 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_vulkan.h>
 #include <vector>
+#include <vk_backend/vk_options.h>
 #include <vk_backend/vk_pipeline.h>
 #include <vk_backend/vk_scene.h>
 #include <vk_backend/vk_swapchain.h>
 #include <vk_backend/vk_types.h>
 #include <vulkan/vulkan_core.h>
 
-constexpr uint64_t FRAME_NUM = 3;
+constexpr uint32_t IMAGE_WIDTH = 1;
 
-constexpr uint32_t CHECKER_WIDTH = 1;
-
-[[maybe_unused]] static constexpr std::array<uint32_t, CHECKER_WIDTH * CHECKER_WIDTH> white_image =
-    []() {
-      std::array<uint32_t, CHECKER_WIDTH * CHECKER_WIDTH> result{};
-      uint32_t black = __builtin_bswap32(0xFFFFFFFF);
-      for (uint32_t& el : result) {
-        el = black;
-      }
-      return result;
-    }();
+// generate white image at compile time to later act as the default color texture
+static constexpr std::array<uint32_t, IMAGE_WIDTH * IMAGE_WIDTH> white_image = []() {
+  std::array<uint32_t, IMAGE_WIDTH * IMAGE_WIDTH> result{};
+  uint32_t white = 0xFFFFFFFF;
+  for (uint32_t& el : result) {
+    el = white;
+  }
+  return result;
+}();
 
 struct Stats {
-  float frame_time;
+  uint64_t total_draw_time;
+  uint64_t total_frame_time;
+  uint64_t total_fps;
   float scene_update_time;
+  float frame_time;
   float draw_time;
-  uint32_t total_draw_time;
 };
 
 class VkBackend {
@@ -60,8 +61,6 @@ private:
 
   PipelineInfo _opaque_pipeline_info;
   PipelineInfo _transparent_pipeline_info;
-
-  VkDescriptorSet _curr_global_desc_set;
 
   VkDescriptorSetLayout _global_desc_set_layout;
   VkDescriptorSetLayout _mat_desc_set_layout;
@@ -88,7 +87,7 @@ private:
   AllocatedImage _depth_image;
 
   uint64_t _frame_num{1};
-  std::array<Frame, FRAME_NUM> _frames;
+  std::array<Frame, vk_opts::frame_count> _frames;
   GlobalSceneData _scene_data;
 
   // defaults
@@ -120,15 +119,16 @@ private:
   void render_ui(VkCommandBuffer cmd_buf);
 
   // utils
-  inline Frame& get_current_frame() { return _frames[_frame_num % FRAME_NUM]; }
+  inline Frame& get_current_frame() { return _frames[_frame_num % vk_opts::frame_count]; }
   std::vector<const char*> get_instance_extensions();
   void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
-  MeshBuffers upload_mesh_buffers(std::span<uint32_t> indices, std::span<Vertex> vertices);
-  AllocatedImage upload_texture_image(void* data, VkImageUsageFlags usage, uint32_t height,
-                                      uint32_t width);
 
-  friend Scene load_scene(VkBackend* backend, std::filesystem::path path);
-  friend void destroy_scene(VkBackend* backend, Scene& scene);
-  friend AllocatedImage generate_texture(VkBackend* backend, fastgltf::Asset& asset,
+  friend Scene load_scene(VkBackend& backend, std::filesystem::path path);
+  friend void destroy_scene(VkBackend& backend, Scene& scene);
+  friend AllocatedImage download_texture(VkBackend& backend, fastgltf::Asset& asset,
                                          fastgltf::Texture& gltf_texture);
+  friend AllocatedImage upload_texture(VkBackend& backend, void* data, VkImageUsageFlags usage,
+                                       uint32_t height, uint32_t width);
+  friend MeshBuffers upload_mesh_buffers(VkBackend& backend, std::span<uint32_t> indices,
+                                         std::span<Vertex> vertices);
 };
