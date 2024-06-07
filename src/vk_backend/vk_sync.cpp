@@ -1,7 +1,8 @@
 #include "vk_sync.h"
 #include "vk_backend/resources/vk_image.h"
 
-VkSemaphore create_semaphore(VkDevice device, VkSemaphoreType type, uint64_t initial_timeline_value) {
+VkSemaphore create_semaphore(VkDevice device, VkSemaphoreType type,
+                             uint64_t initial_timeline_value) {
   VkSemaphore semaphore;
   VkSemaphoreCreateInfo semaphore_ci{};
   VkSemaphoreTypeCreateInfo semaphore_type_ci{};
@@ -31,7 +32,8 @@ VkFence create_fence(VkDevice device, VkFenceCreateFlags flags) {
   return fence;
 }
 
-VkSemaphoreSubmitInfo create_semaphore_submit_info(VkSemaphore semaphore, VkPipelineStageFlags2 stages,
+VkSemaphoreSubmitInfo create_semaphore_submit_info(VkSemaphore semaphore,
+                                                   VkPipelineStageFlags2 stages,
                                                    uint64_t timeline_value) {
   VkSemaphoreSubmitInfo semaphore_si{};
   semaphore_si.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
@@ -44,8 +46,9 @@ VkSemaphoreSubmitInfo create_semaphore_submit_info(VkSemaphore semaphore, VkPipe
   return semaphore_si;
 }
 
-void insert_image_memory_barrier(VkCommandBuffer cmd_buf, VkImage image, VkImageLayout current_layout,
-                                 VkImageLayout new_layout, VkPipelineStageFlags2 src_stages,
+void insert_image_memory_barrier(VkCommandBuffer cmd_buf, VkImage image,
+                                 VkImageLayout current_layout, VkImageLayout new_layout,
+                                 VkPipelineStageFlags2 src_stages,
                                  VkPipelineStageFlags2 dst_stages) {
 
   VkImageMemoryBarrier2 image_mem_barrier{};

@@ -9,7 +9,7 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
-set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 if(UNIX AND NOT APPLE)
@@ -32,6 +32,7 @@ add_executable(
   src/vk_backend/vk_sync.cpp
   src/vk_backend/vk_frame.cpp
   src/vk_backend/vk_scene.cpp
+  src/vk_backend/vk_init.cpp
   src/vk_backend/vk_vma_usage.cpp
   src/vk_backend/resources/vk_descriptor.cpp
   src/vk_backend/resources/vk_loader.cpp
@@ -42,7 +43,7 @@ target_compile_options(
   ${PROJECT_NAME}
   PRIVATE "$<$<CONFIG:DEBUG>:-g;-Wall;-Wextra>;-Wno-missing-field-initializers")
 
-target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_23)
+target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
 target_compile_options(
   ${PROJECT_NAME}
   PUBLIC
@@ -54,7 +55,6 @@ if(APPLE)
 endif()
 
 add_subdirectory(thirdparty/fmt)
-add_subdirectory(thirdparty/VulkanMemoryAllocator)
 add_subdirectory(thirdparty/fastgltf)
 add_subdirectory(thirdparty)
 
@@ -64,18 +64,12 @@ target_include_directories(
   PRIVATE thirdparty/glm
   PRIVATE thirdparty/fmt/include
   PRIVATE thirdparty/stb_image
+  PRIVATE thirdparty/VulkanMemoryAllocator
   PRIVATE thirdparty/fastgltf/include
-  PRIVATE thirdparty/fastgltf/include
-  PRIVATE thirdparty/VulkanMemoryAllocator/include)
+  PRIVATE thirdparty/fastgltf/include)
 
-target_link_directories(
-  ${PROJECT_NAME}
-  PUBLIC
-  thirdparty/fmt/src
-  PUBLIC
-  thirdparty/fastgltf/src
-  PUBLIC
-  thirdparty/VulkanMemoryAllocator/src)
+target_link_directories(${PROJECT_NAME} PUBLIC thirdparty/fmt/src PUBLIC
+                        thirdparty/fastgltf/src)
 
 target_link_libraries(
   ${PROJECT_NAME}
@@ -83,7 +77,6 @@ target_link_libraries(
   PRIVATE fastgltf
   PRIVATE fmt
   PRIVATE imgui
-  PRIVATE VulkanMemoryAllocator
   PRIVATE Vulkan::Vulkan)
 
 find_program(

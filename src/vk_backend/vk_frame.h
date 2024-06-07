@@ -3,13 +3,9 @@
 #include "vk_backend/resources/vk_buffer.h"
 #include "vk_backend/resources/vk_descriptor.h"
 #include "vk_backend/vk_command.h"
+#include <vk_backend/vk_scene.h>
 #include <vk_backend/vk_types.h>
-
-// contains per-frame shader information
-struct SceneData {
-  glm::mat4 view_proj{1.f};
-  glm::vec3 eye_pos;
-};
+#include <vulkan/vulkan_core.h>
 
 class Frame {
 public:
@@ -18,13 +14,16 @@ public:
   VkSemaphore present_semaphore;
   VkFence render_fence;
   AllocatedBuffer scene_data_buffer;
-  // descriptor layout and allocator for the overall scene data
-  VkDescriptorSetLayout desc_set_layout;
+  VkDescriptorSet global_desc_set;
+
   DescriptorAllocator desc_allocator;
 
-  void create(VkDevice device, VmaAllocator allocator, uint32_t graphics_family_index);
-  VkDescriptorSet create_scene_desc_set(VkDevice device);
+  void create(VkDevice device, VmaAllocator allocator, uint32_t graphics_family_index,
+              VkDescriptorSetLayout global_desc_layout);
+
+  VkDescriptorSet create_scene_desc_set(VkDevice device, VkDescriptorSetLayout set_layout);
   void clear_scene_desc_set(VkDevice device);
+  void update_global_desc_set(VkDevice device, VmaAllocator allocator, GlobalSceneData scene_data);
   void destroy();
   void reset_sync_structures(VkDevice device);
 

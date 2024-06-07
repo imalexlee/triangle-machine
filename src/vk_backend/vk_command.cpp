@@ -46,11 +46,6 @@ void CommandContext::create(VkDevice device, uint32_t queue_index, VkCommandPool
     VK_CHECK(vkAllocateCommandBuffers(device, &secondary_buffer_ai, &secondary_buffers[i]));
   }
 
-  // fmt::println("primary handle: {}", fmt::ptr(_primary_pool));
-  // for (auto& secondary_pool : _secondary_pools) {
-  //   fmt::println("secondary handle: {}", fmt::ptr(secondary_pool.vk_pool));
-  // }
-
   _deletion_queue.push_persistant([=, this]() {
     for (const auto& pool : _secondary_pools) {
       vkDestroyCommandPool(device, pool.vk_pool, nullptr);
@@ -71,8 +66,10 @@ void CommandContext::begin_primary_buffer(VkCommandBufferUsageFlags flags) {
   VK_CHECK(vkBeginCommandBuffer(primary_buffer, &command_buffer_bi));
 }
 
-void CommandContext::submit_primary_buffer(VkQueue queue, VkSemaphoreSubmitInfo* wait_semaphore_info,
-                                           VkSemaphoreSubmitInfo* signal_semaphore_info, VkFence fence) {
+void CommandContext::submit_primary_buffer(VkQueue queue,
+                                           VkSemaphoreSubmitInfo* wait_semaphore_info,
+                                           VkSemaphoreSubmitInfo* signal_semaphore_info,
+                                           VkFence fence) {
 
   VK_CHECK(vkEndCommandBuffer(primary_buffer));
 

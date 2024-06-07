@@ -1,4 +1,5 @@
 #include "vk_device.h"
+#include "vk_options.h"
 #include <algorithm>
 #include <array>
 #include <iostream>
@@ -31,8 +32,12 @@ void DeviceContext::create_physical_device(VkInstance instance) {
       continue;
     }
 
-    // use up to 2x2 msaa sampling
-    msaa_sample_count = std::clamp(properties.limits.framebufferColorSampleCounts, 1u, 4u);
+    // use up to 2x2 msaa
+    if constexpr (vk_opts::msaa_enabled) {
+      raster_samples = std::min(properties.limits.framebufferColorSampleCounts, 4u);
+    } else {
+      raster_samples = 1;
+    }
 
     // prefer dedicated GPU if we find one
     if (properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
@@ -43,7 +48,7 @@ void DeviceContext::create_physical_device(VkInstance instance) {
   }
 
   if (!physical_device) {
-    std::cout << "Cannot find a suitable GPU!" << std::endl;
+    std::cout << "Cannot find a suitable GPU !" << std::endl;
     exit(EXIT_FAILURE);
   }
 }
@@ -55,17 +60,17 @@ void DeviceContext::get_queue_family_indices(VkSurfaceKHR surface) {
   uint32_t family_property_count;
   vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &family_property_count, nullptr);
   queue_family_properties.resize(family_property_count);
-  vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &family_property_count, queue_family_properties.data());
+  vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &family_property_count,
+                                           queue_family_properties.data());
 
   std::optional<uint32_t> graphics_index;
   std::optional<uint32_t> present_index;
 
-  // attempt to use the same queue family for graphics and presentation operations
   for (uint32_t i = 0; i < queue_family_properties.size(); i++) {
     VkBool32 present_supported = VK_FALSE;
     vkGetPhysicalDeviceSurfaceSupportKHR(physical_device, i, surface, &present_supported);
-    // iterate through all queues and hope to find one queue family that supports both.
-    // otherwise, pick out queues that either present or graphics can use.
+    // iterate through all queues and hope to find one queue family that supports both.otherwise,
+    // pick out queues that either present or graphics can use.
     if (present_supported && queue_family_properties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
       graphics_index = i;
       present_index = i;
@@ -78,7 +83,7 @@ void DeviceContext::get_queue_family_indices(VkSurfaceKHR surface) {
   }
 
   if (!present_index.has_value() || !graphics_index.has_value()) {
-    std::cout << "Cannot find suitable queues!" << std::endl;
+    std::cout << "Cannot find suitabl e queues !" << std::endl;
     exit(EXIT_FAILURE);
   }
 
@@ -87,7 +92,8 @@ void DeviceContext::get_queue_family_indices(VkSurfaceKHR surface) {
 }
 
 void DeviceContext::create_logical_device() {
-  std::set<uint32_t> unique_family_indices{queues.graphics_family_index, queues.present_family_index};
+  std::set<uint32_t> unique_family_indices{queues.graphics_family_index,
+                                           queues.present_family_index};
   std::vector<VkDeviceQueueCreateInfo> queue_infos;
 
   constexpr float priority = 1.f;
@@ -106,9 +112,9 @@ void DeviceContext::create_logical_device() {
       VK_KHR_SWAPCHAIN_EXTENSION_NAME,
   };
 
-  // so that secondary command buffers can inherit the state of the viewport and scissor during rendering
   VkPhysicalDeviceInheritedViewportScissorFeaturesNV inherited_scissor_feature{};
-  inherited_scissor_feature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INHERITED_VIEWPORT_SCISSOR_FEATURES_NV;
+  inherited_scissor_feature.sType =
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INHERITED_VIEWPORT_SCISSOR_FEATURES_NV;
   inherited_scissor_feature.inheritedViewportScissor2D = VK_TRUE;
 
   VkPhysicalDeviceVulkan13Features features_1_3{};

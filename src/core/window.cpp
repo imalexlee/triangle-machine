@@ -12,7 +12,7 @@ void Window::destroy() {
   glfwTerminate();
 };
 
-void Window::create(uint32_t width, uint32_t height, const char *title) {
+void Window::create(uint32_t width, uint32_t height, const char* title) {
 
   if (!glfwInit()) {
     exit(EXIT_FAILURE);
@@ -20,7 +20,6 @@ void Window::create(uint32_t width, uint32_t height, const char *title) {
 
   this->width = width;
   this->height = height;
-  resized = false;
   _title = title;
 
   glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
@@ -34,7 +33,7 @@ void Window::create(uint32_t width, uint32_t height, const char *title) {
   }
 
   // infinite cursor movement. no visible cursor
-  glfwSetInputMode(glfw_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+  //  glfwSetInputMode(glfw_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
   // try to enable unscaled and unaccelerated cursor capture
   if (glfwRawMouseMotionSupported()) {
@@ -53,36 +52,42 @@ VkSurfaceKHR Window::get_vulkan_surface(const VkInstance instance) {
   return surface;
 }
 
-void Window::register_key_callback(std::function<void(int, int, int, int)> fn_ptr) { _key_callbacks.push_back(fn_ptr); }
+void Window::register_key_callback(std::function<void(int, int, int, int)> fn_ptr) {
+  _key_callbacks.push_back(fn_ptr);
+}
+
+void Window::register_resize_callback(std::function<void(int, int)> fn_ptr) {
+  _resize_callbacks.push_back(fn_ptr);
+}
 
 void Window::register_cursor_callback(std::function<void(double, double)> fn_ptr) {
   _cursor_callbacks.push_back(fn_ptr);
 }
 
-void Window::key_callback(GLFWwindow *window, int key, [[maybe_unused]] int scancode, int action,
+void Window::key_callback(GLFWwindow* window, int key, [[maybe_unused]] int scancode, int action,
                           [[maybe_unused]] int mods) {
 
   if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
     glfwSetWindowShouldClose(window, GLFW_TRUE);
   }
 
-  for (auto &callback : _key_callbacks) {
+  for (auto& callback : _key_callbacks) {
     callback(key, scancode, action, mods);
   }
 }
 
-void Window::cursor_callback([[maybe_unused]] GLFWwindow *window, double x_pos, double y_pos) {
-  for (auto &callback : _cursor_callbacks) {
+void Window::cursor_callback([[maybe_unused]] GLFWwindow* window, double x_pos, double y_pos) {
+  for (auto& callback : _cursor_callbacks) {
     callback(x_pos, y_pos);
   }
 };
 
-void Window::error_callback([[maybe_unused]] int error, const char *description) {
-  fmt::println("GLFW errow: {}", description);
+void Window::resize_callback([[maybe_unused]] GLFWwindow* window, int new_width, int new_height) {
+  for (auto& callback : _resize_callbacks) {
+    callback(new_width, new_height);
+  }
 }
 
-void Window::resize_callback([[maybe_unused]] GLFWwindow *window, int new_width, int new_height) {
-  width = new_width;
-  height = new_height;
-  resized = true;
+void Window::error_callback([[maybe_unused]] int error, const char* description) {
+  fmt::println("GLFW errow: {}", description);
 }

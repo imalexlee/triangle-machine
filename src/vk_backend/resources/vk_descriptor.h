@@ -36,15 +36,18 @@ private:
   std::vector<PoolSizeRatio> _ratios;
   uint32_t _sets_per_pool;
 
-  VkDescriptorPool create_pool(VkDevice device, uint32_t max_sets, std::span<PoolSizeRatio> pool_size_ratios);
+  VkDescriptorPool create_pool(VkDevice device, uint32_t max_sets,
+                               std::span<PoolSizeRatio> pool_size_ratios);
   VkDescriptorPool get_pool(VkDevice device);
 };
 
 // 3. fill in an allocated set with actual data
 class DescriptorWriter {
 public:
-  void write_image(int binding, VkImageView image, VkSampler sampler, VkImageLayout layout, VkDescriptorType type);
-  void write_buffer(int binding, VkBuffer buffer, size_t size, size_t offset, VkDescriptorType type);
+  void write_image(int binding, VkImageView image, VkSampler sampler, VkImageLayout layout,
+                   VkDescriptorType type);
+  void write_buffer(int binding, VkBuffer buffer, size_t size, size_t offset,
+                    VkDescriptorType type);
   void clear();
   void update_set(VkDevice device, VkDescriptorSet set);
 

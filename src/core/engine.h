@@ -10,11 +10,11 @@ public:
   void create();
   void run();
 
-  static Engine &get();
+  static Engine& get();
 
 private:
   void destroy();
-  VkBackend _vk_backend;
+  VkBackend _backend;
   Window _window;
   Camera _camera;
 };

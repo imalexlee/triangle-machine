@@ -1,6 +1,6 @@
 #include "vk_pipeline.h"
-#include "global_utils.h"
 #include "vk_backend/vk_utils.h"
+#include <fmt/base.h>
 #include <vulkan/vulkan_core.h>
 
 PipelineInfo PipelineBuilder::build_pipeline(VkDevice device) {
@@ -45,11 +45,9 @@ PipelineInfo PipelineBuilder::build_pipeline(VkDevice device) {
   pipeline_ci.pInputAssemblyState = &_input_assembly_state;
   pipeline_ci.pDynamicState = &dynamic_ci;
   pipeline_ci.pViewportState = &viewport_ci;
-  // depth info on rasterization state is relevant for shadow mapping
   pipeline_ci.pRasterizationState = &_rasterization_state;
   pipeline_ci.pMultisampleState = &_multisample_state;
   pipeline_ci.pDepthStencilState = &_depth_stencil_state;
-  // find RTR pages referencing equation again
   pipeline_ci.pColorBlendState = &color_blend_state;
   pipeline_ci.layout = pipeline_layout;
 
@@ -109,7 +107,8 @@ void PipelineBuilder::set_multisample_state(VkSampleCountFlagBits samples) {
   _multisample_state.alphaToCoverageEnable = VK_FALSE;
   _multisample_state.alphaToOneEnable = VK_FALSE;
 }
-void PipelineBuilder::set_depth_stencil_state(bool depth_test_enabled, bool write_enabled, VkCompareOp compare_op) {
+void PipelineBuilder::set_depth_stencil_state(bool depth_test_enabled, bool write_enabled,
+                                              VkCompareOp compare_op) {
   _depth_stencil_state.depthTestEnable = depth_test_enabled;
   _depth_stencil_state.depthWriteEnable = write_enabled;
   _depth_stencil_state.depthCompareOp = compare_op;
@@ -122,14 +121,14 @@ void PipelineBuilder::set_depth_stencil_state(bool depth_test_enabled, bool writ
 }
 
 void PipelineBuilder::disable_blending() {
-  _color_blend_attachment.colorWriteMask =
-      VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+  _color_blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                           VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
   _color_blend_attachment.blendEnable = VK_FALSE;
 }
 
 void PipelineBuilder::enable_blending_additive() {
-  _color_blend_attachment.colorWriteMask =
-      VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+  _color_blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                           VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
   _color_blend_attachment.blendEnable = VK_TRUE;
   _color_blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
   _color_blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_DST_ALPHA;
@@ -140,8 +139,8 @@ void PipelineBuilder::enable_blending_additive() {
 }
 
 void PipelineBuilder::enable_blending_alphablend() {
-  _color_blend_attachment.colorWriteMask =
-      VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+  _color_blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                           VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
   _color_blend_attachment.blendEnable = VK_TRUE;
   _color_blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
   _color_blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_DST_ALPHA;
@@ -154,8 +153,6 @@ void PipelineBuilder::enable_blending_alphablend() {
 void PipelineBuilder::set_layout(std::span<VkDescriptorSetLayout> desc_set_layouts,
                                  std::span<VkPushConstantRange> push_constant_ranges,
                                  VkPipelineLayoutCreateFlags flags) {
-  DEBUG_PRINT("set layout count: %d", (int)desc_set_layouts.size());
-  DEBUG_PRINT("push constant ranges count: %d", (int)push_constant_ranges.size());
   _pipeline_layout_ci.flags = flags;
   _pipeline_layout_ci.pSetLayouts = desc_set_layouts.data();
   _pipeline_layout_ci.setLayoutCount = desc_set_layouts.size();

@@ -3,20 +3,27 @@
 #include <deque>
 #include <functional>
 
-#define VK_CHECK(x)                                                                                                    \
-  do {                                                                                                                 \
-    VkResult err = x;                                                                                                  \
-    if (err) {                                                                                                         \
-      fmt::println("Detected Vulkan error: {}", string_VkResult(err));                                                 \
-      abort();                                                                                                         \
-    }                                                                                                                  \
+#define VK_CHECK(x)                                                                                \
+  do {                                                                                             \
+    VkResult err = x;                                                                              \
+    if (err) {                                                                                     \
+      fmt::println("Detect"                                                                        \
+                   "ed "                                                                           \
+                   "Vulkan"                                                                        \
+                   " error"                                                                        \
+                   ": {}",                                                                         \
+                   string_VkResult(err));                                                          \
+      abort();                                                                                     \
+    }                                                                                              \
   } while (0)
 
 // allows the pushing and flushing of consistently updating data and long living data
 class DeletionQueue {
 public:
   void push_volatile(std::function<void()>&& function) { _volatile_deletors.push_back(function); }
-  void push_persistant(std::function<void()>&& function) { _persistant_deletors.push_back(function); }
+  void push_persistant(std::function<void()>&& function) {
+    _persistant_deletors.push_back(function);
+  }
 
   // flushes everything
   void flush() {

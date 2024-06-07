@@ -1,8 +1,9 @@
 #include "vk_buffer.h"
 #include <vulkan/vulkan_core.h>
 
-AllocatedBuffer create_buffer(VkDeviceSize byte_size, VmaAllocator allocator, VkBufferUsageFlags buffer_usage,
-                              VmaMemoryUsage memory_usage, VmaAllocationCreateFlags flags) {
+AllocatedBuffer create_buffer(VkDeviceSize byte_size, VmaAllocator allocator,
+                              VkBufferUsageFlags buffer_usage, VmaMemoryUsage memory_usage,
+                              VmaAllocationCreateFlags flags) {
 
   VkBufferCreateInfo buffer_ci{};
   buffer_ci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;

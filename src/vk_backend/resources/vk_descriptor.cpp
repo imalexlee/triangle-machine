@@ -13,7 +13,8 @@ void DescriptorLayoutBuilder::add_binding(uint32_t binding, VkDescriptorType typ
 
 void DescriptorLayoutBuilder::clear() { _bindings.clear(); }
 
-VkDescriptorSetLayout DescriptorLayoutBuilder::build(VkDevice device, VkShaderStageFlags shader_stages) {
+VkDescriptorSetLayout DescriptorLayoutBuilder::build(VkDevice device,
+                                                     VkShaderStageFlags shader_stages) {
 
   for (auto& binding : _bindings) {
     binding.stageFlags |= shader_stages;
@@ -33,14 +34,16 @@ VkDescriptorSetLayout DescriptorLayoutBuilder::build(VkDevice device, VkShaderSt
   return set;
 }
 
-void DescriptorWriter::write_buffer(int binding, VkBuffer buffer, size_t size, size_t offset, VkDescriptorType type) {
-  VkDescriptorBufferInfo& info =
-      _buffer_infos.emplace_back(VkDescriptorBufferInfo{.buffer = buffer, .offset = offset, .range = size});
+void DescriptorWriter::write_buffer(int binding, VkBuffer buffer, size_t size, size_t offset,
+                                    VkDescriptorType type) {
+  VkDescriptorBufferInfo& info = _buffer_infos.emplace_back(
+      VkDescriptorBufferInfo{.buffer = buffer, .offset = offset, .range = size});
 
   VkWriteDescriptorSet write = {.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
 
   write.dstBinding = binding;
-  write.dstSet = VK_NULL_HANDLE; // left empty for now until we need to write it
+  // left empty for now until we need to write it. see update_set()
+  write.dstSet = VK_NULL_HANDLE;
   write.descriptorCount = 1;
   write.descriptorType = type;
   write.pBufferInfo = &info;
@@ -48,15 +51,16 @@ void DescriptorWriter::write_buffer(int binding, VkBuffer buffer, size_t size, s
   _writes.push_back(write);
 }
 
-void DescriptorWriter::write_image(int binding, VkImageView image, VkSampler sampler, VkImageLayout layout,
-                                   VkDescriptorType type) {
-  VkDescriptorImageInfo& info =
-      _image_infos.emplace_back(VkDescriptorImageInfo{.sampler = sampler, .imageView = image, .imageLayout = layout});
+void DescriptorWriter::write_image(int binding, VkImageView image, VkSampler sampler,
+                                   VkImageLayout layout, VkDescriptorType type) {
+  VkDescriptorImageInfo& info = _image_infos.emplace_back(
+      VkDescriptorImageInfo{.sampler = sampler, .imageView = image, .imageLayout = layout});
 
   VkWriteDescriptorSet write = {.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
 
   write.dstBinding = binding;
-  write.dstSet = VK_NULL_HANDLE; // left empty for now until we need to write it. see update_set()
+  // left empty for now until we need to write it. see update_set()
+  write.dstSet = VK_NULL_HANDLE;
   write.descriptorCount = 1;
   write.descriptorType = type;
   write.pImageInfo = &info;
@@ -78,7 +82,8 @@ void DescriptorWriter::update_set(VkDevice device, VkDescriptorSet set) {
   vkUpdateDescriptorSets(device, _writes.size(), _writes.data(), 0, nullptr);
 }
 
-void DescriptorAllocator::create(VkDevice device, uint32_t max_sets, std::span<PoolSizeRatio> pool_size_ratios) {
+void DescriptorAllocator::create(VkDevice device, uint32_t max_sets,
+                                 std::span<PoolSizeRatio> pool_size_ratios) {
   _ratios.clear();
 
   std::vector<VkDescriptorPoolSize> sizes;
@@ -88,7 +93,7 @@ void DescriptorAllocator::create(VkDevice device, uint32_t max_sets, std::span<P
 
   VkDescriptorPool new_pool = create_pool(device, max_sets, pool_size_ratios);
   _ready_pools.push_back(new_pool);
-  // set a bigger size for the next pool if few run out of space
+  // set a bigger size for the next pool if we run out of space
   _sets_per_pool = max_sets * 1.5;
 }
 
@@ -173,8 +178,6 @@ VkDescriptorPool DescriptorAllocator::create_pool(VkDevice device, uint32_t max_
   pool_ci.maxSets = max_sets;
   pool_ci.pPoolSizes = sizes.data();
   pool_ci.poolSizeCount = sizes.size();
-  // allows allocation past maxSets
-  // pool_ci.flags = VK_DESCRIPTOR_POOL_CREATE_ALLOW_OVERALLOCATION_SETS_BIT_NV;
 
   VkDescriptorPool pool;
   VK_CHECK(vkCreateDescriptorPool(device, &pool_ci, nullptr, &pool));

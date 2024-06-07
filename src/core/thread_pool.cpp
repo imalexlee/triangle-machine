@@ -1,7 +1,12 @@
 #include "thread_pool.h"
 
 void ThreadPool::create() {
-  // try doing threads - 1 because the main thread counts as a thread
+  // try doing
+  // threads - 1
+  // because the
+  // main thread
+  // counts as a
+  // thread
   int thread_count = std::thread::hardware_concurrency();
   for (int i = 0; i < thread_count; ++i) {
     _threads.emplace_back([this] {
@@ -14,7 +19,12 @@ void ThreadPool::create() {
             return;
           }
 
-          // Get the next task from the queue
+          // Get the
+          // next
+          // task
+          // from
+          // the
+          // queue
           job = std::move(_jobs.front());
           _jobs.pop();
         }
@@ -24,9 +34,12 @@ void ThreadPool::create() {
     });
   }
 }
-// void ThreadPool::push_job(std::function<void()> job) {
+// void
+// ThreadPool::push_job(std::function<void()>
+// job) {
 //   {
-//     std::unique_lock<std::mutex> lock(_queue_mutex);
+//     std::unique_lock<std::mutex>
+//     lock(_queue_mutex);
 //     _jobs.emplace(std::move(job));
 //   }
 //   _cv.notify_one();
