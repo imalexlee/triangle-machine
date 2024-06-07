@@ -13,12 +13,7 @@ static constexpr std::array<VkValidationFeatureEnableEXT, 3> enabled_validation_
         VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
     VkValidationFeatureEnableEXT::VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
 };
-static constexpr std::array<const char*, 1> validation_layers{"VK_"
-                                                              "LAYER_"
-                                                              "KHRONO"
-                                                              "S_"
-                                                              "valida"
-                                                              "tion"};
+static constexpr std::array<const char*, 1> validation_layers{"VK_LAYER_KHRONOS_validation"};
 
 VkBool32
 Debugger::debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
@@ -39,41 +34,21 @@ VkResult Debugger::create(VkInstance instance, VkDevice device) {
 
   logical_device = device;
 
-  auto msg_fn = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCr"
-                                                                                    "eate"
-                                                                                    "Debu"
-                                                                                    "gUti"
-                                                                                    "lsMe"
-                                                                                    "ssen"
-                                                                                    "gerE"
-                                                                                    "XT");
+  auto msg_fn = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(
+      instance, "vkCreateDebugUtilsMessengerEXT");
   VkDebugUtilsMessengerCreateInfoEXT messenger_ci = create_messenger_info();
 
   if (msg_fn != nullptr) {
 
-    obj_name_fn = (PFN_vkSetDebugUtilsObjectNameEXT)(vkGetInstanceProcAddr(instance, "vkSetD"
-                                                                                     "ebugUt"
-                                                                                     "ilsObj"
-                                                                                     "ectNam"
-                                                                                     "eEX"
-                                                                                     "T"));
+    obj_name_fn = (PFN_vkSetDebugUtilsObjectNameEXT)(vkGetInstanceProcAddr(
+        instance, "vkSetDebugUtilsObjectNameEXT"));
 
     VkResult result = msg_fn(instance, &messenger_ci, nullptr, &messenger);
     if (result == VK_SUCCESS) {
       _deletion_queue.push_persistant([=, this]() {
-        DEBUG_PRINT("de"
-                    "st"
-                    "ro"
-                    "yi"
-                    "ng"
-                    " d"
-                    "eb"
-                    "ug"
-                    "ge"
-                    "r");
+        DEBUG_PRINT("Destroying Debugger");
         auto destroy_messenger_fn = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(
-            instance, "vkDestroyDebugUtil"
-                      "sMessengerEXT");
+            instance, "vkDestroyDebugUtilsMessengerEXT");
         if (destroy_messenger_fn != nullptr) {
           destroy_messenger_fn(instance, messenger, nullptr);
         }

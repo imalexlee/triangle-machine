@@ -11,9 +11,7 @@ struct PoolSizeRatio {
   uint32_t desc_per_set;
 };
 
-// 1. create the
-// layout of a
-// descriptor set
+// 1. create the layout of a descriptor set
 class DescriptorLayoutBuilder {
 public:
   void add_binding(uint32_t binding, VkDescriptorType type);
@@ -24,11 +22,7 @@ private:
   std::vector<VkDescriptorSetLayoutBinding> _bindings;
 };
 
-// 2. create a pool
-// and allow user to
-// allocate a set
-// with whatever
-// layout
+// 2. create a pool and allow user to allocate a set with whatever layout
 class DescriptorAllocator {
 public:
   void create(VkDevice device, uint32_t max_sets, std::span<PoolSizeRatio> pool_size_ratios);
@@ -47,9 +41,7 @@ private:
   VkDescriptorPool get_pool(VkDevice device);
 };
 
-// 3. fill in an
-// allocated set
-// with actual data
+// 3. fill in an allocated set with actual data
 class DescriptorWriter {
 public:
   void write_image(int binding, VkImageView image, VkSampler sampler, VkImageLayout layout,

@@ -2,9 +2,7 @@
 #include <vulkan/vk_enum_string_helper.h>
 #include <vulkan/vulkan_core.h>
 
-// creates a 2D
-// image along with
-// its image_view
+// creates a 2D image along with its image_view
 AllocatedImage create_image(VkDevice device, VmaAllocator allocator, VkImageUsageFlags usage,
                             VkExtent2D extent, VkFormat format, uint32_t samples) {
 
@@ -33,23 +31,16 @@ AllocatedImage create_image(VkDevice device, VmaAllocator allocator, VkImageUsag
   allocation_ci.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
   allocation_ci.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-  // creates an
-  // image handle
-  // and allocates
-  // the data for it
+  // creates an image handle and allocates the memory for it
   VK_CHECK(vmaCreateImage(allocator, &image_ci, &allocation_ci, &allocated_image.image,
                           &allocated_image.allocation, nullptr));
 
-  // handle the case
-  // where we create
-  // a depth image
+  // handle the case where we create a depth image
   VkImageAspectFlags aspect_flag = VK_IMAGE_ASPECT_COLOR_BIT;
   if (format == VK_FORMAT_D32_SFLOAT) {
     aspect_flag = VK_IMAGE_ASPECT_DEPTH_BIT;
   }
 
-  // create the
-  // image view
   allocated_image.image_view =
       create_image_view(device, allocated_image.image, format, aspect_flag);
 

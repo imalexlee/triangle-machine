@@ -11,16 +11,9 @@ void Engine::create() {
   active_engine = this;
 
   glm::vec3 init_cam_pos = {0, -1, -8};
-  // glm::vec3
-  // init_cam_pos =
-  // {-86.7, 3.3,
-  // -30.8};
-  //-86.78253 3.3122897
-  //-30.813347
+  // glm::vec3 init_cam_pos = {-86.7, 3.3, -30.8};
 
-  _window.create(core_opts::initial_width, core_opts::initial_height,
-                 "Triangle "
-                 "Machine");
+  _window.create(core_opts::initial_width, core_opts::initial_height, "Triangle Machine");
 
   _camera.create(_window, init_cam_pos);
 
@@ -28,7 +21,6 @@ void Engine::create() {
 
   _window.register_key_callback(_camera.key_callback);
   _window.register_cursor_callback(_camera.cursor_callback);
-  _window.register_resize_callback(_backend.resize_callback);
 }
 
 void Engine::run() {

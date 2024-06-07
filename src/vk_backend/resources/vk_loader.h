@@ -15,17 +15,10 @@ void destroy_scene(VkBackend& backend, Scene& scene);
 MeshBuffers upload_mesh_buffers(VkBackend& backend, std::span<uint32_t> indices,
                                 std::span<Vertex> vertices);
 
-// downloads texture
-// from external
-// image data (png
-// or jpg) to then
-// load onto the gpu
+// downloads texture from external image data (png or jpg) to then load onto the gpu
 AllocatedImage download_texture(VkBackend& backend, fastgltf::Asset& asset,
                                 fastgltf::Texture& gltf_texture);
 
-// uploads
-// downloaded
-// texture to gpu
-// memory
+// uploads downloaded texture to gpu memory
 AllocatedImage upload_texture(VkBackend& backend, void* data, VkImageUsageFlags usage,
                               uint32_t height, uint32_t width);

@@ -69,8 +69,7 @@ void Frame::reset_sync_structures(VkDevice device) {
 }
 
 void Frame::destroy() {
-  DEBUG_PRINT("destroying "
-              "frame");
+  DEBUG_PRINT("Destroying Frame");
   command_context.destroy();
   _deletion_queue.flush();
 }

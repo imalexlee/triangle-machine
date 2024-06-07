@@ -42,8 +42,8 @@ void DescriptorWriter::write_buffer(int binding, VkBuffer buffer, size_t size, s
   VkWriteDescriptorSet write = {.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
 
   write.dstBinding = binding;
-  write.dstSet = VK_NULL_HANDLE; // left empty for now until
-                                 // we need to write it
+  // left empty for now until we need to write it. see update_set()
+  write.dstSet = VK_NULL_HANDLE;
   write.descriptorCount = 1;
   write.descriptorType = type;
   write.pBufferInfo = &info;
@@ -59,9 +59,8 @@ void DescriptorWriter::write_image(int binding, VkImageView image, VkSampler sam
   VkWriteDescriptorSet write = {.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
 
   write.dstBinding = binding;
-  write.dstSet = VK_NULL_HANDLE; // left empty for now until
-                                 // we need to write it. see
-                                 // update_set()
+  // left empty for now until we need to write it. see update_set()
+  write.dstSet = VK_NULL_HANDLE;
   write.descriptorCount = 1;
   write.descriptorType = type;
   write.pImageInfo = &info;
@@ -94,11 +93,7 @@ void DescriptorAllocator::create(VkDevice device, uint32_t max_sets,
 
   VkDescriptorPool new_pool = create_pool(device, max_sets, pool_size_ratios);
   _ready_pools.push_back(new_pool);
-  // set a bigger
-  // size for the
-  // next pool if
-  // few run out of
-  // space
+  // set a bigger size for the next pool if we run out of space
   _sets_per_pool = max_sets * 1.5;
 }
 
@@ -148,10 +143,7 @@ void DescriptorAllocator::destroy_pools(VkDevice device) {
   _full_pools.clear();
 }
 
-// gets a ready pool
-// or allocates
-// another with more
-// sets
+// gets a ready pool or allocates another with more sets
 VkDescriptorPool DescriptorAllocator::get_pool(VkDevice device) {
 
   VkDescriptorPool new_pool;
@@ -186,11 +178,6 @@ VkDescriptorPool DescriptorAllocator::create_pool(VkDevice device, uint32_t max_
   pool_ci.maxSets = max_sets;
   pool_ci.pPoolSizes = sizes.data();
   pool_ci.poolSizeCount = sizes.size();
-  // allows
-  // allocation past
-  // maxSets
-  // pool_ci.flags =
-  // VK_DESCRIPTOR_POOL_CREATE_ALLOW_OVERALLOCATION_SETS_BIT_NV;
 
   VkDescriptorPool pool;
   VK_CHECK(vkCreateDescriptorPool(device, &pool_ci, nullptr, &pool));

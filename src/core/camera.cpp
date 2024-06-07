@@ -17,12 +17,6 @@ void Camera::create(Window& window, glm::vec3 initial_pos, float init_pitch_thet
 void Camera::key_callback(int key, [[maybe_unused]] int scancode, int action,
                           [[maybe_unused]] int mods) {
   if (action == GLFW_PRESS) {
-    // directions
-    // are inversed
-    // to move world
-    // in opposite
-    // direction as
-    // you
     if (key == GLFW_KEY_W) {
       velocity.z = MOVEMENT_SPEED;
     }

@@ -25,12 +25,8 @@
 
 constexpr uint32_t IMAGE_WIDTH = 1;
 
-// generate white
-// image at compile
-// time to later act
-// as the default
-// color texture
-static constexpr std::array<uint32_t, IMAGE_WIDTH* IMAGE_WIDTH> white_image = []() {
+// generate white image at compile time to later act as the default color texture
+static constexpr std::array<uint32_t, IMAGE_WIDTH * IMAGE_WIDTH> white_image = []() {
   std::array<uint32_t, IMAGE_WIDTH * IMAGE_WIDTH> result{};
   uint32_t white = 0xFFFFFFFF;
   for (uint32_t& el : result) {
@@ -82,8 +78,7 @@ private:
   AllocatedImage _color_resolve_image;
   VkExtent2D _image_extent;
 
-  // for geometry
-  // and ui
+  // for geometry and ui
   VkClearValue _scene_clear_value;
   VkRenderingAttachmentInfo _scene_color_attachment;
   VkRenderingAttachmentInfo _scene_depth_attachment;

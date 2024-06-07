@@ -7,9 +7,7 @@
 #include <vk_backend/vk_debug.h>
 
 void Window::destroy() {
-  DEBUG_PRINT("destroying "
-              "GLFW "
-              "window");
+  DEBUG_PRINT("destroying GLFW window");
   glfwDestroyWindow(glfw_window);
   glfwTerminate();
 };
@@ -34,15 +32,10 @@ void Window::create(uint32_t width, uint32_t height, const char* title) {
     exit(EXIT_FAILURE);
   }
 
-  // infinite cursor
-  // movement. no
-  // visible cursor
-  glfwSetInputMode(glfw_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+  // infinite cursor movement. no visible cursor
+  //  glfwSetInputMode(glfw_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
-  // try to enable
-  // unscaled and
-  // unaccelerated
-  // cursor capture
+  // try to enable unscaled and unaccelerated cursor capture
   if (glfwRawMouseMotionSupported()) {
     glfwSetInputMode(glfw_window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
   }
@@ -96,7 +89,5 @@ void Window::resize_callback([[maybe_unused]] GLFWwindow* window, int new_width,
 }
 
 void Window::error_callback([[maybe_unused]] int error, const char* description) {
-  fmt::println("GLFW errow: "
-               "{}",
-               description);
+  fmt::println("GLFW errow: {}", description);
 }

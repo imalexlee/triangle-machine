@@ -17,12 +17,7 @@
     }                                                                                              \
   } while (0)
 
-// allows the
-// pushing and
-// flushing of
-// consistently
-// updating data and
-// long living data
+// allows the pushing and flushing of consistently updating data and long living data
 class DeletionQueue {
 public:
   void push_volatile(std::function<void()>&& function) { _volatile_deletors.push_back(function); }
@@ -30,8 +25,7 @@ public:
     _persistant_deletors.push_back(function);
   }
 
-  // flushes
-  // everything
+  // flushes everything
   void flush() {
     for (auto it = _volatile_deletors.rbegin(); it != _volatile_deletors.rend(); it++) {
       (*it)();

@@ -47,13 +47,6 @@ VkShaderModule load_shader_module(VkDevice device, const char* file_path) {
 }
 
 glm::mat4 get_transform_matrix(const fastgltf::Node& node, glm::mat4x4& base) {
-  /** Both a matrix
-   * and TRS values
-   * are not allowed
-   * to exist at the
-   * same time
-   * according to
-   * the spec */
   if (const auto* pMatrix = std::get_if<fastgltf::Node::TransformMatrix>(&node.transform)) {
     return base * glm::mat4x4(glm::make_mat4x4(pMatrix->data()));
   }
@@ -67,10 +60,7 @@ glm::mat4 get_transform_matrix(const fastgltf::Node& node, glm::mat4x4& base) {
   return base;
 }
 
-// recursively fills
-// a vector of nodes
-// based on GLTF
-// node tree
+// recursively fills a vector of nodes based on GLTF node tree
 void generate_nodes(std::vector<GLTFNode>& out_node_buf, fastgltf::Asset& asset,
                     uint32_t root_node_idx, glm::mat4 parent_matrix = glm::mat4{1.f}) {
 
@@ -146,11 +136,6 @@ std::vector<VkSampler> get_samplers(VkDevice device, fastgltf::Asset& asset) {
   return samplers;
 }
 
-// allocates and
-// fills an
-// AllocatedImage
-// with the textures
-// data
 AllocatedImage download_texture(VkBackend& backend, fastgltf::Asset& asset,
                                 fastgltf::Texture& gltf_texture) {
   auto& image = asset.images[gltf_texture.imageIndex.value()];
@@ -223,9 +208,7 @@ Scene load_scene(VkBackend& backend, std::filesystem::path path) {
   auto load = parser.loadGltf(&data, path.parent_path(), gltf_options);
 
   if (auto error = load.error(); error != fastgltf::Error::None) {
-    fmt::println("ERROR "
-                 "LOADING "
-                 "GLTF");
+    fmt::println("ERROR LOADING GLTF");
     std::exit(1);
   }
 
@@ -235,14 +218,6 @@ Scene load_scene(VkBackend& backend, std::filesystem::path path) {
   Scene new_scene;
 
   new_scene.samplers = get_samplers(backend._device_context.logical_device, asset);
-  assert(new_scene.samplers.size() == asset.samplers.size() && "amount of "
-                                                               "samplers in "
-                                                               "scene does "
-                                                               "not "
-                                                               "match the "
-                                                               "amount in "
-                                                               "the GLTF "
-                                                               "file.");
 
   // load textures
   std::vector<GLTFTexture> textures;
@@ -275,23 +250,15 @@ Scene load_scene(VkBackend& backend, std::filesystem::path path) {
   std::vector<bool> texture_used;
 
   /*
-   * textures arent
-   * garunteed to be
-   * used in GLTF
-   * save used
-   * texture indices
-   * to clean up
-   * unused images
-   * at the end of
-   * scope
+   * textures arent garunteed to be used in GLTF save used texture indices
+   * to clean up unused image memory at the end of scope
    */
   texture_used.resize(textures.size(), false);
 
   for (uint32_t i = 0; i < asset.materials.size(); i++) {
     // metadata
     GLTFMaterial new_mat;
-    // meat and
-    // potatoes
+    // meat and potatoes
     MaterialBuffers new_bufs;
 
     const auto& material = asset.materials[i];
@@ -305,9 +272,6 @@ Scene load_scene(VkBackend& backend, std::filesystem::path path) {
     VkSampler metal_tex_sampler;
 
     if (material.pbrData.baseColorTexture.has_value()) {
-      // new_mat.pbr.color_tex
-      // =
-      // textures[material.pbrData.baseColorTexture->textureIndex];
       assert(material.pbrData.baseColorTexture.value().textureIndex < textures.size() && "accessin"
                                                                                          "g "
                                                                                          "invalid "
@@ -318,17 +282,9 @@ Scene load_scene(VkBackend& backend, std::filesystem::path path) {
       const GLTFTexture& color_texture = textures[tex_index];
 
       texture_used[tex_index] = true;
-      // fmt::println("accessing
-      // texture
-      // {}",
-      // material.pbrData.baseColorTexture.value().textureIndex);
 
       new_mat.pbr.color_tex_coord = material.pbrData.baseColorTexture.value().texCoordIndex;
       new_bufs.color_tex = color_texture.tex;
-      // fmt::println("attaching
-      // color tex
-      // {}",
-      // fmt::ptr(color_texture.tex.image));
       color_tex_sampler = color_texture.sampler;
 
     } else {
@@ -339,15 +295,6 @@ Scene load_scene(VkBackend& backend, std::filesystem::path path) {
     }
 
     if (material.pbrData.metallicRoughnessTexture.has_value()) {
-      assert(material.pbrData.metallicRoughnessTexture.value().textureIndex < textures.size() &&
-             "accessin"
-             "g "
-             "invalid "
-             "metal "
-             "rough "
-             "textur"
-             "e");
-
       uint32_t tex_index = material.pbrData.metallicRoughnessTexture.value().textureIndex;
       const GLTFTexture& metal_texture = textures[tex_index];
 
@@ -366,10 +313,7 @@ Scene load_scene(VkBackend& backend, std::filesystem::path path) {
     new_bufs.mat_desc_set = new_scene.mat_desc_allocator.allocate(
         backend._device_context.logical_device, backend._mat_desc_set_layout);
 
-    // 1. fill in
-    // the uniform
-    // material
-    // buffer
+    // 1. fill in the uniform material buffer
     new_bufs.mat_uniform_buffer = create_buffer(
         sizeof(MaterialUniformData), backend._allocator, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
         VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
@@ -387,12 +331,7 @@ Scene load_scene(VkBackend& backend, std::filesystem::path path) {
     desc_writer.write_buffer(0, new_bufs.mat_uniform_buffer.buffer, sizeof(MaterialUniformData), 0,
                              VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 
-    // 2. put the
-    // texture
-    // information
-    // into the
-    // descriptor
-    // set
+    // 2. put the texture information into the descriptor set
     desc_writer.write_image(1, new_bufs.color_tex.image_view, color_tex_sampler,
                             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                             VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
@@ -407,41 +346,12 @@ Scene load_scene(VkBackend& backend, std::filesystem::path path) {
     materials.push_back(new_mat);
   }
 
-  // free unused
-  // textures from
-  // vram
+  // free unused textures memory
   for (uint32_t i = 0; i < texture_used.size(); i++) {
     if (!texture_used[i]) {
       destroy_image(backend._device_context.logical_device, backend._allocator, textures[i].tex);
     }
   }
-
-  assert(new_scene.material_buffers.size() == materials.size() && "material "
-                                                                  "metadata "
-                                                                  "and buffers "
-                                                                  "do not "
-                                                                  "match in "
-                                                                  "size");
-
-  assert(new_scene.material_buffers.size() == asset.materials.size() && "allocated "
-                                                                        "material "
-                                                                        "buffers do "
-                                                                        "not "
-                                                                        "match size "
-                                                                        "of "
-                                                                        "materials "
-                                                                        "in GLTF "
-                                                                        "file");
-
-  assert(materials.size() == asset.materials.size() && "temp "
-                                                       "material "
-                                                       "metadata "
-                                                       "does not "
-                                                       "match "
-                                                       "size of "
-                                                       "materials "
-                                                       "in GLTF "
-                                                       "file");
 
   // load meshes
   std::vector<GLTFMesh> meshes;
@@ -454,16 +364,8 @@ Scene load_scene(VkBackend& backend, std::filesystem::path path) {
     new_mesh.primitives.reserve(mesh.primitives.size());
     primitive_count += mesh.primitives.size();
 
-    // creating one
-    // index and one
-    // vertex buffer
-    // per mesh.
-    // primitives
-    // are given an
-    // offset and
-    // length into
-    // the index
-    // buffer.
+    // creating one index and one vertex buffer per mesh.primitives are given an offset and length
+    // into the index buffer.
     uint32_t index_count = 0;
     uint32_t vertex_count = 0;
 
@@ -479,15 +381,7 @@ Scene load_scene(VkBackend& backend, std::filesystem::path path) {
           asset, pos_accessor, [&](glm::vec3 pos, std::size_t i) {
             new_mesh.vertices[i + vertex_count].position = pos;
             new_mesh.vertices[i + vertex_count].color = glm::vec4{1.f};
-            // default
-            // uv
-            // coords
-            // to
-            // top
-            // left
-            // of
-            // texture
-            // image
+            // default uv
             new_mesh.vertices[i + vertex_count].uv_x = 0.f;
             new_mesh.vertices[i + vertex_count].uv_y = 0.f;
           });
@@ -505,23 +399,15 @@ Scene load_scene(VkBackend& backend, std::filesystem::path path) {
       // the color
       // texture
       int color_tex_coord = materials[material_idx].pbr.color_tex_coord;
-      std::string color_tex_coord_key = "TEXC"
-                                        "OORD"
-                                        "_";
-      // 48 is ASCII
-      // for '0'.
-      // breaks if
-      // color_text_coord
-      // > 9 for
-      // now. shiver
-      // me timbers
+      std::string color_tex_coord_key = "TEXCOORD_ ";
+      // 48 is ASCII for '0'.
+      // breaks if color_text_coord > 9 for now.
+      // shiver me timbers
       color_tex_coord_key.push_back(48 + color_tex_coord);
 
       auto* color_tex_attribute_it = primitive.findAttribute(color_tex_coord_key);
       if (color_tex_attribute_it != primitive.attributes.end()) {
-        // found tex
-        // coord
-        // attribute
+        // found tex coord attribute
         auto& color_tex_accessor = asset.accessors[color_tex_attribute_it->second];
         fastgltf::iterateAccessorWithIndex<glm::vec2>(
             asset, color_tex_accessor, [&](glm::vec2 uv, std::size_t i) {
@@ -536,46 +422,7 @@ Scene load_scene(VkBackend& backend, std::filesystem::path path) {
 
       fastgltf::iterateAccessorWithIndex<std::uint16_t>(
           asset, idx_accessor, [&](std::uint16_t vert_index, size_t i) {
-            // index
-            // needs
-            // to be
-            // offset
-            // by
-            // vertex_count
-            // since
-            // we're
-            // combining
-            // all
-            // vertex
-            // data
-            // into
-            // one
-            // buffer
             new_mesh.indices[i + index_count] = vert_index + vertex_count;
-            assert(vert_index + vertex_count < new_mesh.vertices.size() && "in"
-                                                                           "de"
-                                                                           "x "
-                                                                           "is"
-                                                                           " l"
-                                                                           "ar"
-                                                                           "ge"
-                                                                           "r "
-                                                                           "th"
-                                                                           "an"
-                                                                           " t"
-                                                                           "he"
-                                                                           " "
-                                                                           "ve"
-                                                                           "rt"
-                                                                           "ex"
-                                                                           " b"
-                                                                           "uf"
-                                                                           "fe"
-                                                                           "r "
-                                                                           "it"
-                                                                           "se"
-                                                                           "lf"
-                                                                           ".");
           });
 
       GLTFPrimitive new_primitive;
@@ -588,17 +435,6 @@ Scene load_scene(VkBackend& backend, std::filesystem::path path) {
 
       new_mesh.primitives.push_back(new_primitive);
     }
-    assert(new_mesh.primitives.size() == mesh.primitives.size() && "temp mesh "
-                                                                   "and "
-                                                                   "actual "
-                                                                   "GLTF mesh "
-                                                                   "do not "
-                                                                   "have the "
-                                                                   "same "
-                                                                   "amount of "
-                                                                   "primitive"
-                                                                   "s");
-
     meshes.push_back(new_mesh);
   }
 
@@ -682,9 +518,7 @@ Scene load_scene(VkBackend& backend, std::filesystem::path path) {
     }
   }
 
-  // sort opaque
-  // draws by
-  // material
+  // sort by material
   std::sort(opaque_draws.begin(), opaque_draws.end(),
             [&](const DrawObject& obj_a, const DrawObject& obj_b) {
               if (obj_a.mat_desc_set == obj_b.mat_desc_set) {
@@ -694,10 +528,6 @@ Scene load_scene(VkBackend& backend, std::filesystem::path path) {
               }
             });
 
-  // sort
-  // transparent
-  // draws by
-  // material
   std::sort(trans_draws.begin(), trans_draws.end(),
             [&](const DrawObject& obj_a, const DrawObject& obj_b) {
               if (obj_a.mat_desc_set == obj_b.mat_desc_set) {
@@ -710,11 +540,6 @@ Scene load_scene(VkBackend& backend, std::filesystem::path path) {
   new_scene.opaque_objs.resize(opaque_draws.size());
   new_scene.transparent_objs.resize(trans_draws.size());
 
-  // copy sorted
-  // blocks of
-  // opaque/trans
-  // draws into
-  // final buffer
   memcpy(new_scene.opaque_objs.data(), opaque_draws.data(),
          opaque_draws.size() * sizeof(DrawObject));
   memcpy(new_scene.transparent_objs.data(), trans_draws.data(),
@@ -725,8 +550,7 @@ Scene load_scene(VkBackend& backend, std::filesystem::path path) {
 
 void destroy_scene(VkBackend& backend, Scene& scene) {
 
-  DEBUG_PRINT("Destroying "
-              "Scene");
+  DEBUG_PRINT("Destroying Scene");
 
   VkDevice device = backend._device_context.logical_device;
   VmaAllocator allocator = backend._allocator;

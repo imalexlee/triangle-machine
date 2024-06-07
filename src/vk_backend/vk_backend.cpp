@@ -38,7 +38,7 @@ void VkBackend::create(Window& window, Camera& camera) {
   VkSurfaceKHR surface = window.get_vulkan_surface(_instance);
 
   _device_context.create(_instance, surface);
-  _swapchain_context.create(_instance, _device_context, surface, VK_PRESENT_MODE_MAILBOX_KHR);
+  _swapchain_context.create(_instance, _device_context, surface, vk_opts::desired_present_mode);
 
   create_allocator();
   create_desc_layouts();
@@ -51,17 +51,8 @@ void VkBackend::create(Window& window, Camera& camera) {
   _image_extent.width = window.width;
   _image_extent.height = window.height;
 
-  // if msaa is
-  // enabled, we
-  // will transfer
-  // the color
-  // resolve image
-  // to the
-  // swapchain and
-  // leave the
-  // larger color
-  // image as
-  // transient
+  // if msaa is enabled, we will transfer the color resolve image to the swapchain and leave the
+  // larger color image as transient
   VkImageUsageFlags color_img_flags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
   if constexpr (vk_opts::msaa_enabled) {
@@ -83,13 +74,7 @@ void VkBackend::create(Window& window, Camera& camera) {
                               VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, _image_extent,
                               VK_FORMAT_D32_SFLOAT, _device_context.raster_samples);
 
-  // create color
-  // attachments and
-  // rendering
-  // information
-  // from our
-  // allocated
-  // images
+  // create color attachments and  rendering information from our allocated images
   configure_render_resources();
 
   _imm_fence = create_fence(_device_context.logical_device, VK_FENCE_CREATE_SIGNALED_BIT);
@@ -111,56 +96,32 @@ void VkBackend::create(Window& window, Camera& camera) {
   }
 }
 
-// adding names to
-// these 64 bit
-// handles helps a
-// lot when reading
-// validation errors
+// adding names to these 64 bit handles helps a lot when reading validation errors
 void VkBackend::configure_debugger() {
-  _debugger.set_handle_name(_color_image.image, VK_OBJECT_TYPE_IMAGE,
-                            "color "
-                            "image");
-  _debugger.set_handle_name(_depth_image.image, VK_OBJECT_TYPE_IMAGE,
-                            "depth "
-                            "image");
+  _debugger.set_handle_name(_color_image.image, VK_OBJECT_TYPE_IMAGE, "color image");
+  _debugger.set_handle_name(_depth_image.image, VK_OBJECT_TYPE_IMAGE, "depth image");
 
-  _debugger.set_handle_name(_color_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW,
-                            "color image "
-                            "view");
-  _debugger.set_handle_name(_depth_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW,
-                            "depth image "
-                            "view");
+  _debugger.set_handle_name(_color_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW, "color image view");
+  _debugger.set_handle_name(_depth_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW, "depth image view");
 
   if constexpr (vk_opts::msaa_enabled) {
     _debugger.set_handle_name(_color_resolve_image.image, VK_OBJECT_TYPE_IMAGE,
-                              "color "
-                              "resolve "
-                              "image");
+                              "color resolve image");
     _debugger.set_handle_name(_color_resolve_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW,
-                              "color "
-                              "resolve "
-                              "image "
-                              "view");
+                              "color resolve image view");
   }
 
   for (size_t i = 0; i < _frames.size(); i++) {
     Frame& frame = _frames[i];
     _debugger.set_handle_name(frame.command_context.primary_buffer, VK_OBJECT_TYPE_COMMAND_BUFFER,
-                              "frame " + std::to_string(i) +
-                                  " cmd "
-                                  "buf");
+                              "frame " + std::to_string(i) + " cmd buf");
   }
 
   for (size_t i = 0; i < _swapchain_context.images.size(); i++) {
     _debugger.set_handle_name(_swapchain_context.images[i], VK_OBJECT_TYPE_IMAGE,
-                              "swapchain "
-                              "image " +
-                                  std::to_string(i));
+                              "swapchain  image " + std::to_string(i));
     _debugger.set_handle_name(_swapchain_context.image_views[i], VK_OBJECT_TYPE_IMAGE_VIEW,
-                              "swapchain "
-                              "image "
-                              "view" +
-                                  std::to_string(i));
+                              "swapchain image view " + std::to_string(i));
   }
 }
 
@@ -195,13 +156,8 @@ void VkBackend::configure_render_resources() {
   if constexpr (vk_opts::msaa_enabled) {
     resolve_img_view = _color_resolve_image.image_view;
 
-    // dont care
-    // about the
-    // multisampled
-    // buffer if
-    // it'll resolve
-    // into another
-    // img anyways
+    // dont care about the multisampled buffer if it'll resolve
+    // into another img anyways
     color_store_ap = VK_ATTACHMENT_STORE_OP_DONT_CARE;
   }
 
@@ -218,13 +174,7 @@ void VkBackend::configure_render_resources() {
       create_rendering_info(_scene_color_attachment, _scene_depth_attachment, _image_extent);
 }
 
-void VkBackend::load_scenes() {
-  _scene = load_scene(*this, "../../"
-                             "assets/"
-                             "glb/"
-                             "structur"
-                             "e.glb");
-}
+void VkBackend::load_scenes() { _scene = load_scene(*this, "../../assets/glb/structure.glb"); }
 
 void VkBackend::create_default_data() {
 
@@ -253,12 +203,9 @@ void VkBackend::create_gui(Window& window) {
   ImGui::CreateContext();
 
   ImGuiIO& io = ImGui::GetIO();
-  io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable
-                                                        // Keyboard
-                                                        // Controls
-  io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;  // Enable
-                                                        // Gamepad
-                                                        // Controls
+  io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+
+  io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
 
   ImGui_ImplGlfw_InitForVulkan(window.glfw_window, true);
 
@@ -434,28 +381,10 @@ void VkBackend::create_instance() {
 
 void VkBackend::create_pipelines() {
   PipelineBuilder builder;
-  // cosider passing
-  // the shader
-  // locations in
-  // from the engine
-  // instead of here
-  VkShaderModule vert_shader = load_shader_module(_device_context.logical_device, "../../"
-                                                                                  "shaders/"
-                                                                                  "vertex/"
-                                                                                  "indexed_"
-                                                                                  "triangle"
-                                                                                  ".vert."
-                                                                                  "glsl."
-                                                                                  "spv");
-  VkShaderModule frag_shader = load_shader_module(_device_context.logical_device, "../../"
-                                                                                  "shaders/"
-                                                                                  "fragment"
-                                                                                  "/"
-                                                                                  "simple_"
-                                                                                  "lighting"
-                                                                                  ".frag."
-                                                                                  "glsl."
-                                                                                  "spv");
+  VkShaderModule vert_shader = load_shader_module(
+      _device_context.logical_device, "../../shaders/vertex/indexed_triangle.vert.glsl.spv");
+  VkShaderModule frag_shader = load_shader_module(
+      _device_context.logical_device, "../../shaders/fragment/simple_lighting.frag.glsl.spv");
 
   builder.set_shader_stages(vert_shader, frag_shader);
   builder.disable_blending();
@@ -467,11 +396,6 @@ void VkBackend::create_pipelines() {
   builder.set_depth_stencil_state(true, true, VK_COMPARE_OP_GREATER_OR_EQUAL);
   builder.set_render_info(_color_image.image_format, _depth_image.image_format);
 
-  // all frames have
-  // the same layout
-  // so you can use
-  // the first one's
-  // layout
   std::array<VkDescriptorSetLayout, 3> set_layouts{_global_desc_set_layout, _mat_desc_set_layout,
                                                    _draw_obj_desc_set_layout};
 
@@ -512,11 +436,6 @@ void VkBackend::draw() {
   Frame& current_frame = get_current_frame();
   VkCommandBuffer cmd_buffer = current_frame.command_context.primary_buffer;
 
-  // wait for
-  // previous
-  // command buffer
-  // to finish
-  // executing
   vkWaitForFences(_device_context.logical_device, 1, &current_frame.render_fence, VK_TRUE,
                   vk_opts::timeout_dur);
 
@@ -526,14 +445,7 @@ void VkBackend::draw() {
       current_frame.present_semaphore, nullptr, &swapchain_image_index);
 
   if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
-    // probably
-    // window
-    // resized. glfw
-    // event will
-    // trigger
-    // resize in
-    // that case, so
-    // just abort
+    resize();
     return;
   }
 
@@ -605,14 +517,7 @@ void VkBackend::draw() {
   result = vkQueuePresentKHR(_device_context.queues.present, &present_info);
 
   if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
-    // probably
-    // window
-    // resized. glfw
-    // event will
-    // trigger
-    // resize in
-    // that case, so
-    // just abort
+    resize();
     return;
   }
 
@@ -627,15 +532,7 @@ void VkBackend::draw() {
   }
 }
 
-/*  Resize callback
- * needs to conform
- * to the interface
- * for the glfw
- * callback. our
- * resize method
- * doesn't need
- * these paramaters
- */
+// currently unused
 void VkBackend::resize_callback([[maybe_unused]] int new_width, [[maybe_unused]] int new_height) {
   active_backend->resize();
 }
@@ -643,18 +540,6 @@ void VkBackend::resize_callback([[maybe_unused]] int new_width, [[maybe_unused]]
 void VkBackend::resize() {
   vkDeviceWaitIdle(_device_context.logical_device);
 
-  /* swapchain gets
-   * current width
-   * and height by
-   * querying the
-   * system
-   * capabilities
-   * which means we
-   * don't
-   * explicitly need
-   * to pass in
-   * those params
-   */
   _swapchain_context.reset_swapchain(_device_context);
 
   destroy_image(_device_context.logical_device, _allocator, _depth_image);
@@ -663,17 +548,6 @@ void VkBackend::resize() {
   _image_extent.width = _swapchain_context.extent.width;
   _image_extent.height = _swapchain_context.extent.height;
 
-  // if msaa is
-  // enabled, we
-  // will transfer
-  // the color
-  // resolve image
-  // to the
-  // swapchain and
-  // leave the
-  // larger color
-  // image as
-  // transient
   VkImageUsageFlags color_img_flags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
   if constexpr (vk_opts::msaa_enabled) {
