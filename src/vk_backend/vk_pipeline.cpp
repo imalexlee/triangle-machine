@@ -19,7 +19,10 @@ PipelineInfo PipelineBuilder::build_pipeline(VkDevice device) {
   dynamic_ci.pDynamicStates = dynamic_states.data();
   dynamic_ci.dynamicStateCount = dynamic_states.size();
 
-  // not setting the viewport and scissor as its dynamic state
+  // not setting the
+  // viewport and
+  // scissor as its
+  // dynamic state
   VkPipelineViewportStateCreateInfo viewport_ci{};
   viewport_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
   viewport_ci.scissorCount = 1;
@@ -38,7 +41,8 @@ PipelineInfo PipelineBuilder::build_pipeline(VkDevice device) {
 
   VkGraphicsPipelineCreateInfo pipeline_ci{};
   pipeline_ci.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-  // for dynamic rendering
+  // for dynamic
+  // rendering
   pipeline_ci.pNext = &_rendering_ci;
   pipeline_ci.pStages = _shader_stages.data();
   pipeline_ci.stageCount = _shader_stages.size();
@@ -46,11 +50,9 @@ PipelineInfo PipelineBuilder::build_pipeline(VkDevice device) {
   pipeline_ci.pInputAssemblyState = &_input_assembly_state;
   pipeline_ci.pDynamicState = &dynamic_ci;
   pipeline_ci.pViewportState = &viewport_ci;
-  // depth info on rasterization state is relevant for shadow mapping
   pipeline_ci.pRasterizationState = &_rasterization_state;
   pipeline_ci.pMultisampleState = &_multisample_state;
   pipeline_ci.pDepthStencilState = &_depth_stencil_state;
-  // find RTR pages referencing equation again
   pipeline_ci.pColorBlendState = &color_blend_state;
   pipeline_ci.layout = pipeline_layout;
 
@@ -156,8 +158,14 @@ void PipelineBuilder::enable_blending_alphablend() {
 void PipelineBuilder::set_layout(std::span<VkDescriptorSetLayout> desc_set_layouts,
                                  std::span<VkPushConstantRange> push_constant_ranges,
                                  VkPipelineLayoutCreateFlags flags) {
-  DEBUG_PRINT("set layout count: %d", (int)desc_set_layouts.size());
-  DEBUG_PRINT("push constant ranges count: %d", (int)push_constant_ranges.size());
+  DEBUG_PRINT("set layout "
+              "count: %d",
+              (int)desc_set_layouts.size());
+  DEBUG_PRINT("push "
+              "constant "
+              "ranges "
+              "count: %d",
+              (int)push_constant_ranges.size());
   _pipeline_layout_ci.flags = flags;
   _pipeline_layout_ci.pSetLayouts = desc_set_layouts.data();
   _pipeline_layout_ci.setLayoutCount = desc_set_layouts.size();

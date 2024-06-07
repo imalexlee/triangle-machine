@@ -9,13 +9,19 @@
 #include <vk_backend/vk_options.h>
 #include <vulkan/vulkan_core.h>
 
-// not to be used when resizing as it inits the entire context
+// not to be used
+// when resizing as
+// it inits the
+// entire context
 void SwapchainContext::create(VkInstance& instance, DeviceContext& device_context,
                               VkSurfaceKHR surface, VkPresentModeKHR desired_present_mode) {
   this->surface = surface;
   _present_mode = desired_present_mode;
 
-  // normal fifo is a good default unless ur an epic gamer
+  // normal fifo is
+  // a good default
+  // unless ur an
+  // epic gamer
   if (desired_present_mode != VK_PRESENT_MODE_FIFO_KHR) {
     for (const auto& mode : _support_details.present_modes) {
       if (mode == desired_present_mode) {
@@ -53,8 +59,16 @@ void SwapchainContext::create_swapchain(DeviceContext& device_context) {
 
   uint32_t desired_image_count = vk_opts::frame_count;
 
-  // max image count of 0 means its unbounded. so just go with our config.
-  // otherwise, clamp the desired count to our physical bounds
+  // max image count
+  // of 0 means its
+  // unbounded. so
+  // just go with
+  // our config.
+  // otherwise,
+  // clamp the
+  // desired count
+  // to our physical
+  // bounds
   if (_support_details.capabilities.maxImageCount != 0) {
 
     desired_image_count =
@@ -76,18 +90,37 @@ void SwapchainContext::create_swapchain(DeviceContext& device_context) {
   swapchain_ci.imageUsage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
   swapchain_ci.clipped = VK_TRUE;
 
-  // try this out later
-  // swapchain_ci.oldSwapchain = swapchain;
+  // try this out
+  // later
+  // swapchain_ci.oldSwapchain
+  // = swapchain;
 
   const std::set<uint32_t> unique_queue_families{device_context.queues.graphics_family_index,
                                                  device_context.queues.present_family_index};
   std::vector<uint32_t> queue_family_indices;
 
-  // if graphics and presentation operations are using seperate queue families, make swapchain share
-  // image data across them. if they do share the same queue, using exlusive sharing mode is
-  // probably more performant
+  // if graphics and
+  // presentation
+  // operations are
+  // using seperate
+  // queue families,
+  // make swapchain
+  // share image
+  // data across
+  // them. if they
+  // do share the
+  // same queue,
+  // using exlusive
+  // sharing mode is
+  // probably more
+  // performant
   if (unique_queue_families.size() > 1) {
-    DEBUG_PRINT("using swapchain sharing mode CONCURRENT");
+    DEBUG_PRINT("using "
+                "swapchain "
+                "sharing "
+                "mode "
+                "CONCURREN"
+                "T");
     queue_family_indices.resize(unique_queue_families.size());
     for (const auto& family_index : unique_queue_families) {
       queue_family_indices.push_back(family_index);
@@ -96,7 +129,12 @@ void SwapchainContext::create_swapchain(DeviceContext& device_context) {
     swapchain_ci.queueFamilyIndexCount = queue_family_indices.size();
     swapchain_ci.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
   } else {
-    DEBUG_PRINT("using swapchain sharing mode EXCLUSIVE");
+    DEBUG_PRINT("using "
+                "swapchain "
+                "sharing "
+                "mode "
+                "EXCLUSIV"
+                "E");
     swapchain_ci.pQueueFamilyIndices = nullptr;
     swapchain_ci.queueFamilyIndexCount = 0;
     swapchain_ci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -108,7 +146,9 @@ void SwapchainContext::create_swapchain(DeviceContext& device_context) {
   VK_CHECK(vkGetSwapchainImagesKHR(device_context.logical_device, swapchain, &actual_image_count,
                                    nullptr));
 
-  DEBUG_PRINT("created %d images", actual_image_count);
+  DEBUG_PRINT("created %d "
+              "images",
+              actual_image_count);
 
   images.resize(actual_image_count);
   VK_CHECK(vkGetSwapchainImagesKHR(device_context.logical_device, swapchain, &actual_image_count,
@@ -121,7 +161,12 @@ void SwapchainContext::create_swapchain(DeviceContext& device_context) {
 }
 
 void SwapchainContext::destroy_swapchain(VkDevice device) {
-  // this call implicitely destroys the VkImage's it gave us in create_swapchain
+  // this call
+  // implicitely
+  // destroys the
+  // VkImage's it
+  // gave us in
+  // create_swapchain
   vkDestroySwapchainKHR(device, swapchain, nullptr);
   for (const auto& image_view : image_views) {
     vkDestroyImageView(device, image_view, nullptr);

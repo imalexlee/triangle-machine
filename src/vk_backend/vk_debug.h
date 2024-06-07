@@ -27,7 +27,8 @@ public:
 private:
   static VkBool32 debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
                                  VkDebugUtilsMessageTypeFlagsEXT messageTypes,
-                                 const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData);
+                                 const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+                                 void* pUserData);
   DeletionQueue _deletion_queue;
   VkDevice logical_device;
 };

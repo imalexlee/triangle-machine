@@ -17,7 +17,9 @@ struct Vertex {
   glm::vec4 color;
 };
 
-// contains per-frame shader information
+// contains
+// per-frame shader
+// information
 struct GlobalSceneData {
   glm::mat4 view_proj{1.f};
   glm::vec3 eye_pos;
@@ -34,8 +36,10 @@ struct GLTFTexture {
 };
 
 struct PBRMetallicRoughness {
-  // GLTFTexture color_tex;
-  // GLTFTexture metal_rough_tex;
+  // GLTFTexture
+  // color_tex;
+  // GLTFTexture
+  // metal_rough_tex;
   glm::vec4 color_factors;
   uint32_t color_tex_coord{0};
   uint32_t metal_rough_tex_coord{0};
@@ -82,10 +86,13 @@ struct MaterialBuffers {
   AllocatedImage color_tex;
   AllocatedImage metal_rough_tex;
   /*
-   * this set contains bindings..
-   * 0. mat_uniform_buffer
+   * this set
+   * contains
+   * bindings.. 0.
+   * mat_uniform_buffer
    * 1. color_tex
-   * 2. metal_rough_tex
+   * 2.
+   * metal_rough_tex
    */
   VkDescriptorSet mat_desc_set;
 };
@@ -112,8 +119,14 @@ struct DrawObject {
 struct Scene {
   std::vector<MeshBuffers> mesh_buffers;
   std::vector<MaterialBuffers> material_buffers;
-  // GPU allocated buffers for per-draw_object data.
-  // this uniform buffer is referenced by obj_desc_set in DrawObject
+  // GPU allocated
+  // buffers for
+  // per-draw_object
+  // data. this
+  // uniform buffer
+  // is referenced
+  // by obj_desc_set
+  // in DrawObject
   std::vector<AllocatedBuffer> draw_obj_uniform_buffers;
   std::vector<DrawObject> transparent_objs;
   std::vector<DrawObject> opaque_objs;

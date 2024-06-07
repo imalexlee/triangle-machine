@@ -13,7 +13,6 @@ VkRenderingInfo create_rendering_info(VkRenderingAttachmentInfo& color_attachmen
       .extent = extent,
   };
 
-  rendering_info.flags = VK_RENDERING_CONTENTS_SECONDARY_COMMAND_BUFFERS_BIT;
   rendering_info.pColorAttachments = &color_attachment;
   rendering_info.colorAttachmentCount = 1;
   rendering_info.layerCount = 1;

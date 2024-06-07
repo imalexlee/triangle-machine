@@ -16,7 +16,8 @@ public:
 
   PipelineInfo build_pipeline(VkDevice device);
   void set_shader_stages(VkShaderModule vert_shader, VkShaderModule frag_shader,
-                         const char* entry_name = "main");
+                         const char* entry_name = "mai"
+                                                  "n");
   void set_input_assembly(VkPrimitiveTopology topology);
   void set_raster_culling(VkCullModeFlags cull_mode, VkFrontFace front_face);
   void set_raster_poly_mode(VkPolygonMode poly_mode);

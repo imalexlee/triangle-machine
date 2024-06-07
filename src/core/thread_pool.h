@@ -13,7 +13,8 @@ public:
   ~ThreadPool() { destroy(); }
   void create();
   void destroy();
-  template <typename Func, typename... Args> std::future<void> push_job(Func&& func, Args&&... args) {
+  template <typename Func, typename... Args>
+  std::future<void> push_job(Func&& func, Args&&... args) {
     using ReturnType = void;
     auto job = std::make_shared<std::packaged_task<ReturnType()>>(
         [func = std::forward<Func>(func), ... args = std::forward<Args>(args)]() mutable {

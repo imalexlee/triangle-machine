@@ -1,11 +1,12 @@
 #include "vk_image.h"
-#include "vk_backend/vk_options.h"
 #include <vulkan/vk_enum_string_helper.h>
 #include <vulkan/vulkan_core.h>
 
-// creates a 2D image along with its image_view
-AllocatedImage create_image(VkDevice device, VmaAllocator allocator, VkImageUsageFlags usage, VkExtent2D extent,
-                            VkFormat format, uint32_t samples) {
+// creates a 2D
+// image along with
+// its image_view
+AllocatedImage create_image(VkDevice device, VmaAllocator allocator, VkImageUsageFlags usage,
+                            VkExtent2D extent, VkFormat format, uint32_t samples) {
 
   VkExtent3D extent_3D{
       .width = extent.width,
@@ -27,24 +28,36 @@ AllocatedImage create_image(VkDevice device, VmaAllocator allocator, VkImageUsag
   image_ci.imageType = VK_IMAGE_TYPE_2D;
   image_ci.arrayLayers = 1;
   image_ci.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
   VmaAllocationCreateInfo allocation_ci{};
-  allocation_ci.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-  allocation_ci.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+  allocation_ci.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+  allocation_ci.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-  VK_CHECK(vmaCreateImage(allocator, &image_ci, &allocation_ci, &allocated_image.image, &allocated_image.allocation,
-                          nullptr));
+  // creates an
+  // image handle
+  // and allocates
+  // the data for it
+  VK_CHECK(vmaCreateImage(allocator, &image_ci, &allocation_ci, &allocated_image.image,
+                          &allocated_image.allocation, nullptr));
 
+  // handle the case
+  // where we create
+  // a depth image
   VkImageAspectFlags aspect_flag = VK_IMAGE_ASPECT_COLOR_BIT;
   if (format == VK_FORMAT_D32_SFLOAT) {
     aspect_flag = VK_IMAGE_ASPECT_DEPTH_BIT;
   }
-  allocated_image.image_view = create_image_view(device, allocated_image.image, format, aspect_flag);
+
+  // create the
+  // image view
+  allocated_image.image_view =
+      create_image_view(device, allocated_image.image, format, aspect_flag);
 
   return allocated_image;
 }
 
-VkImageView create_image_view(VkDevice device, VkImage image, VkFormat format, VkImageAspectFlags aspect_flags,
-                              uint32_t mip_levels) {
+VkImageView create_image_view(VkDevice device, VkImage image, VkFormat format,
+                              VkImageAspectFlags aspect_flags, uint32_t mip_levels) {
 
   VkImageView image_view;
   VkImageViewCreateInfo image_view_ci{};
@@ -55,7 +68,8 @@ VkImageView create_image_view(VkDevice device, VkImage image, VkFormat format, V
   image_view_ci.image = image;
   image_view_ci.viewType = VK_IMAGE_VIEW_TYPE_2D;
 
-  VkImageSubresourceRange subresource_range = create_image_subresource_range(aspect_flags, mip_levels);
+  VkImageSubresourceRange subresource_range =
+      create_image_subresource_range(aspect_flags, mip_levels);
 
   image_view_ci.subresourceRange = subresource_range;
 
@@ -64,7 +78,8 @@ VkImageView create_image_view(VkDevice device, VkImage image, VkFormat format, V
   return image_view;
 }
 
-void blit_image(VkCommandBuffer cmd, VkImage src, VkImage dest, VkExtent2D src_extent, VkExtent2D dst_extent) {
+void blit_image(VkCommandBuffer cmd, VkImage src, VkImage dest, VkExtent2D src_extent,
+                VkExtent2D dst_extent) {
   VkImageBlit2 blit_region{.sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2, .pNext = nullptr};
   blit_region.srcOffsets[1].x = src_extent.width;
   blit_region.srcOffsets[1].y = src_extent.height;
@@ -102,7 +117,8 @@ void destroy_image(VkDevice device, VmaAllocator allocator, AllocatedImage& allo
   vkDestroyImageView(device, allocated_image.image_view, nullptr);
 }
 
-VkImageSubresourceRange create_image_subresource_range(VkImageAspectFlags aspect_flags, uint32_t mip_levels) {
+VkImageSubresourceRange create_image_subresource_range(VkImageAspectFlags aspect_flags,
+                                                       uint32_t mip_levels) {
   VkImageSubresourceRange subresource_range{};
   subresource_range.aspectMask = aspect_flags;
   subresource_range.baseMipLevel = 0;

@@ -51,8 +51,17 @@ void VkBackend::create(Window& window, Camera& camera) {
   _image_extent.width = window.width;
   _image_extent.height = window.height;
 
-  // if msaa is enabled, we will transfer the color resolve image to the swapchain
-  // and leave the larger color image as transient
+  // if msaa is
+  // enabled, we
+  // will transfer
+  // the color
+  // resolve image
+  // to the
+  // swapchain and
+  // leave the
+  // larger color
+  // image as
+  // transient
   VkImageUsageFlags color_img_flags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
   if constexpr (vk_opts::msaa_enabled) {
@@ -74,7 +83,13 @@ void VkBackend::create(Window& window, Camera& camera) {
                               VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, _image_extent,
                               VK_FORMAT_D32_SFLOAT, _device_context.raster_samples);
 
-  // create color attachments and rendering information from our allocated images
+  // create color
+  // attachments and
+  // rendering
+  // information
+  // from our
+  // allocated
+  // images
   configure_render_resources();
 
   _imm_fence = create_fence(_device_context.logical_device, VK_FENCE_CREATE_SIGNALED_BIT);
@@ -96,32 +111,56 @@ void VkBackend::create(Window& window, Camera& camera) {
   }
 }
 
-// adding names to these 64 bit handles helps a lot when reading validation errors
+// adding names to
+// these 64 bit
+// handles helps a
+// lot when reading
+// validation errors
 void VkBackend::configure_debugger() {
-  _debugger.set_handle_name(_color_image.image, VK_OBJECT_TYPE_IMAGE, "color image");
-  _debugger.set_handle_name(_depth_image.image, VK_OBJECT_TYPE_IMAGE, "depth image");
+  _debugger.set_handle_name(_color_image.image, VK_OBJECT_TYPE_IMAGE,
+                            "color "
+                            "image");
+  _debugger.set_handle_name(_depth_image.image, VK_OBJECT_TYPE_IMAGE,
+                            "depth "
+                            "image");
 
-  _debugger.set_handle_name(_color_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW, "color image view");
-  _debugger.set_handle_name(_depth_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW, "depth image view");
+  _debugger.set_handle_name(_color_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW,
+                            "color image "
+                            "view");
+  _debugger.set_handle_name(_depth_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW,
+                            "depth image "
+                            "view");
 
   if constexpr (vk_opts::msaa_enabled) {
     _debugger.set_handle_name(_color_resolve_image.image, VK_OBJECT_TYPE_IMAGE,
-                              "color resolve image");
+                              "color "
+                              "resolve "
+                              "image");
     _debugger.set_handle_name(_color_resolve_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW,
-                              "color resolve image view");
+                              "color "
+                              "resolve "
+                              "image "
+                              "view");
   }
 
   for (size_t i = 0; i < _frames.size(); i++) {
     Frame& frame = _frames[i];
     _debugger.set_handle_name(frame.command_context.primary_buffer, VK_OBJECT_TYPE_COMMAND_BUFFER,
-                              "frame " + std::to_string(i) + " cmd buf");
+                              "frame " + std::to_string(i) +
+                                  " cmd "
+                                  "buf");
   }
 
   for (size_t i = 0; i < _swapchain_context.images.size(); i++) {
     _debugger.set_handle_name(_swapchain_context.images[i], VK_OBJECT_TYPE_IMAGE,
-                              "swapchain image " + std::to_string(i));
+                              "swapchain "
+                              "image " +
+                                  std::to_string(i));
     _debugger.set_handle_name(_swapchain_context.image_views[i], VK_OBJECT_TYPE_IMAGE_VIEW,
-                              "swapchain image view" + std::to_string(i));
+                              "swapchain "
+                              "image "
+                              "view" +
+                                  std::to_string(i));
   }
 }
 
@@ -149,30 +188,43 @@ void VkBackend::create_desc_layouts() {
 }
 
 void VkBackend::configure_render_resources() {
-  _scene_clear_value = {.color = {{1.f, 1.f, 1.f, 1.f}}};
 
-  VkImageView resolve_img_view = nullptr;
   VkAttachmentStoreOp color_store_ap = VK_ATTACHMENT_STORE_OP_STORE;
 
+  VkImageView resolve_img_view = nullptr;
   if constexpr (vk_opts::msaa_enabled) {
     resolve_img_view = _color_resolve_image.image_view;
 
-    // dont care about the multisampled buffer if it'll resolve into another img anyways
+    // dont care
+    // about the
+    // multisampled
+    // buffer if
+    // it'll resolve
+    // into another
+    // img anyways
     color_store_ap = VK_ATTACHMENT_STORE_OP_DONT_CARE;
   }
+
+  _scene_clear_value = {.color = {{1.f, 1.f, 1.f, 1.f}}};
 
   _scene_color_attachment =
       create_color_attachment_info(_color_image.image_view, &_scene_clear_value,
                                    VK_ATTACHMENT_LOAD_OP_CLEAR, color_store_ap, resolve_img_view);
 
   _scene_depth_attachment = create_depth_attachment_info(
-      _depth_image.image_view, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE);
+      _depth_image.image_view, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_DONT_CARE);
 
   _scene_rendering_info =
       create_rendering_info(_scene_color_attachment, _scene_depth_attachment, _image_extent);
 }
 
-void VkBackend::load_scenes() { _scene = load_scene(*this, "../../assets/glb/structure.glb"); }
+void VkBackend::load_scenes() {
+  _scene = load_scene(*this, "../../"
+                             "assets/"
+                             "glb/"
+                             "structur"
+                             "e.glb");
+}
 
 void VkBackend::create_default_data() {
 
@@ -201,8 +253,12 @@ void VkBackend::create_gui(Window& window) {
   ImGui::CreateContext();
 
   ImGuiIO& io = ImGui::GetIO();
-  io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
-  io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;  // Enable Gamepad Controls
+  io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable
+                                                        // Keyboard
+                                                        // Controls
+  io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;  // Enable
+                                                        // Gamepad
+                                                        // Controls
 
   ImGui_ImplGlfw_InitForVulkan(window.glfw_window, true);
 
@@ -249,7 +305,11 @@ void VkBackend::update_scene() {
   _camera->update();
 
   glm::mat4 model = glm::mat4{1.f};
-  //* glm::rotate(glm::mat4{1.f}, glm::radians(time_span.count() * 30), glm::vec3{0, 1, 0});
+  //* glm::rotate(glm::mat4{1.f},
+  // glm::radians(time_span.count()
+  // * 30),
+  // glm::vec3{0, 1,
+  // 0});
 
   glm::mat4 projection = glm::perspective(glm::radians(60.f),
                                           (float)_swapchain_context.extent.width /
@@ -289,9 +349,19 @@ void VkBackend::update_ui() {
 
   ImGui::Begin("Stats", &show_window, window_flags);
 
-  ImGui::Text("Host buffer recording: %.3f us", _stats.draw_time);
-  ImGui::Text("Frame time: %.3f ms (%.1f FPS)", _stats.frame_time, 1000.f / _stats.frame_time);
-  ImGui::Text("Scene update time: %.3f us", _stats.scene_update_time);
+  ImGui::Text("Host buffer "
+              "recording: "
+              "%.3f us",
+              _stats.draw_time);
+  ImGui::Text("Frame time: "
+              "%.3f ms "
+              "(%.1f FPS)",
+              _stats.frame_time, 1000.f / _stats.frame_time);
+  ImGui::Text("Scene "
+              "update "
+              "time: %.3f "
+              "us",
+              _stats.scene_update_time);
 
   ImGui::End();
 
@@ -329,7 +399,8 @@ void VkBackend::create_instance() {
   app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
   app_info.pNext = nullptr;
   app_info.pApplicationName = "awesome app";
-  app_info.pEngineName = "awesome engine";
+  app_info.pEngineName = "awesome "
+                         "engine";
   app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
   app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
   app_info.apiVersion = VK_API_VERSION_1_3;
@@ -363,11 +434,28 @@ void VkBackend::create_instance() {
 
 void VkBackend::create_pipelines() {
   PipelineBuilder builder;
-  // cosider passing the shader locations in from the engine instead of here
-  VkShaderModule vert_shader = load_shader_module(
-      _device_context.logical_device, "../../shaders/vertex/indexed_triangle.vert.glsl.spv");
-  VkShaderModule frag_shader = load_shader_module(
-      _device_context.logical_device, "../../shaders/fragment/simple_lighting.frag.glsl.spv");
+  // cosider passing
+  // the shader
+  // locations in
+  // from the engine
+  // instead of here
+  VkShaderModule vert_shader = load_shader_module(_device_context.logical_device, "../../"
+                                                                                  "shaders/"
+                                                                                  "vertex/"
+                                                                                  "indexed_"
+                                                                                  "triangle"
+                                                                                  ".vert."
+                                                                                  "glsl."
+                                                                                  "spv");
+  VkShaderModule frag_shader = load_shader_module(_device_context.logical_device, "../../"
+                                                                                  "shaders/"
+                                                                                  "fragment"
+                                                                                  "/"
+                                                                                  "simple_"
+                                                                                  "lighting"
+                                                                                  ".frag."
+                                                                                  "glsl."
+                                                                                  "spv");
 
   builder.set_shader_stages(vert_shader, frag_shader);
   builder.disable_blending();
@@ -379,7 +467,11 @@ void VkBackend::create_pipelines() {
   builder.set_depth_stencil_state(true, true, VK_COMPARE_OP_GREATER_OR_EQUAL);
   builder.set_render_info(_color_image.image_format, _depth_image.image_format);
 
-  // all frames have the same layout so you can use the first one's layout
+  // all frames have
+  // the same layout
+  // so you can use
+  // the first one's
+  // layout
   std::array<VkDescriptorSetLayout, 3> set_layouts{_global_desc_set_layout, _mat_desc_set_layout,
                                                    _draw_obj_desc_set_layout};
 
@@ -420,7 +512,11 @@ void VkBackend::draw() {
   Frame& current_frame = get_current_frame();
   VkCommandBuffer cmd_buffer = current_frame.command_context.primary_buffer;
 
-  // wait for previous command buffer to finish executing
+  // wait for
+  // previous
+  // command buffer
+  // to finish
+  // executing
   vkWaitForFences(_device_context.logical_device, 1, &current_frame.render_fence, VK_TRUE,
                   vk_opts::timeout_dur);
 
@@ -430,7 +526,14 @@ void VkBackend::draw() {
       current_frame.present_semaphore, nullptr, &swapchain_image_index);
 
   if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
-    // probably window resized. glfw event will trigger resize in that case, so just abort
+    // probably
+    // window
+    // resized. glfw
+    // event will
+    // trigger
+    // resize in
+    // that case, so
+    // just abort
     return;
   }
 
@@ -469,13 +572,17 @@ void VkBackend::draw() {
   insert_image_memory_barrier(cmd_buffer, swapchain_image, VK_IMAGE_LAYOUT_UNDEFINED,
                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-  // copy rendered image onto swapchain image
+  // copy rendered
+  // image onto
+  // swapchain image
   blit_image(cmd_buffer, copy_img, swapchain_image, _swapchain_context.extent, _image_extent);
 
   insert_image_memory_barrier(cmd_buffer, swapchain_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                               VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
-  // tweak stage masks to make it more optimal
+  // tweak stage
+  // masks to make
+  // it more optimal
   VkSemaphoreSubmitInfo wait_semaphore_si = create_semaphore_submit_info(
       current_frame.present_semaphore, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
 
@@ -498,7 +605,14 @@ void VkBackend::draw() {
   result = vkQueuePresentKHR(_device_context.queues.present, &present_info);
 
   if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
-    // probably window resized. glfw event will trigger resize in that case, so just abort
+    // probably
+    // window
+    // resized. glfw
+    // event will
+    // trigger
+    // resize in
+    // that case, so
+    // just abort
     return;
   }
 
@@ -513,8 +627,14 @@ void VkBackend::draw() {
   }
 }
 
-/*  Resize callback needs to conform to the interface for the glfw callback.
- *  our resize method doesn't need these paramaters
+/*  Resize callback
+ * needs to conform
+ * to the interface
+ * for the glfw
+ * callback. our
+ * resize method
+ * doesn't need
+ * these paramaters
  */
 void VkBackend::resize_callback([[maybe_unused]] int new_width, [[maybe_unused]] int new_height) {
   active_backend->resize();
@@ -523,8 +643,17 @@ void VkBackend::resize_callback([[maybe_unused]] int new_width, [[maybe_unused]]
 void VkBackend::resize() {
   vkDeviceWaitIdle(_device_context.logical_device);
 
-  /* swapchain gets current width and height by querying the system capabilities
-   * which means we don't explicitly need to pass in those params
+  /* swapchain gets
+   * current width
+   * and height by
+   * querying the
+   * system
+   * capabilities
+   * which means we
+   * don't
+   * explicitly need
+   * to pass in
+   * those params
    */
   _swapchain_context.reset_swapchain(_device_context);
 
@@ -534,8 +663,17 @@ void VkBackend::resize() {
   _image_extent.width = _swapchain_context.extent.width;
   _image_extent.height = _swapchain_context.extent.height;
 
-  // if msaa is enabled, we will transfer the color resolve image to the swapchain
-  // and leave the larger color image as transient
+  // if msaa is
+  // enabled, we
+  // will transfer
+  // the color
+  // resolve image
+  // to the
+  // swapchain and
+  // leave the
+  // larger color
+  // image as
+  // transient
   VkImageUsageFlags color_img_flags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
   if constexpr (vk_opts::msaa_enabled) {
@@ -643,12 +781,21 @@ void VkBackend::render_ui(VkCommandBuffer cmd_buf) {
 void VkBackend::destroy() {
 
   vkDeviceWaitIdle(_device_context.logical_device);
-  DEBUG_PRINT("destroying Vulkan Backend");
+  DEBUG_PRINT("destroying "
+              "Vulkan "
+              "Backend");
 
-  fmt::println("average draw time: {:.3f} us", (float)_stats.total_draw_time / (float)_frame_num);
-  fmt::println("average frame time: {:.3f} ms",
+  fmt::println("average "
+               "draw time: "
+               "{:.3f} us",
+               (float)_stats.total_draw_time / (float)_frame_num);
+  fmt::println("average "
+               "frame time: "
+               "{:.3f} ms",
                (float)_stats.total_frame_time / 1000.f / (float)_frame_num);
-  fmt::println("average fps: {:.3f}", (float)_stats.total_fps / (float)_frame_num);
+  fmt::println("average "
+               "fps: {:.3f}",
+               (float)_stats.total_fps / (float)_frame_num);
 
   _deletion_queue.flush();
 
