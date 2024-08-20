@@ -31,7 +31,6 @@ add_executable(
   src/vk_backend/vk_pipeline.cpp
   src/vk_backend/vk_sync.cpp
   src/vk_backend/vk_frame.cpp
-  src/vk_backend/vk_scene.cpp
   src/vk_backend/vk_init.cpp
   src/vk_backend/vk_vma_usage.cpp
   src/vk_backend/resources/vk_descriptor.cpp

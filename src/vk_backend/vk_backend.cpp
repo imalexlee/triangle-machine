@@ -51,24 +51,15 @@ void VkBackend::create(Window& window, Camera& camera) {
   _image_extent.width = window.width;
   _image_extent.height = window.height;
 
-  // if msaa is enabled, we will transfer the color resolve image to the swapchain and leave the
-  // larger color image as transient
-  VkImageUsageFlags color_img_flags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-
-  if constexpr (vk_opts::msaa_enabled) {
-    _color_resolve_image =
-        create_image(_device_context.logical_device, _allocator,
-                     VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                     _image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
-
-    color_img_flags |= VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
-  } else {
-    color_img_flags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-  }
+  _color_resolve_image =
+      create_image(_device_context.logical_device, _allocator,
+                   VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                   _image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
 
   _color_image =
-      create_image(_device_context.logical_device, _allocator, color_img_flags, _image_extent,
-                   VK_FORMAT_R16G16B16A16_SFLOAT, _device_context.raster_samples);
+      create_image(_device_context.logical_device, _allocator,
+                   VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
+                   _image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, _device_context.raster_samples);
 
   _depth_image = create_image(_device_context.logical_device, _allocator,
                               VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, _image_extent,
@@ -104,12 +95,10 @@ void VkBackend::configure_debugger() {
   _debugger.set_handle_name(_color_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW, "color image view");
   _debugger.set_handle_name(_depth_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW, "depth image view");
 
-  if constexpr (vk_opts::msaa_enabled) {
-    _debugger.set_handle_name(_color_resolve_image.image, VK_OBJECT_TYPE_IMAGE,
-                              "color resolve image");
-    _debugger.set_handle_name(_color_resolve_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW,
-                              "color resolve image view");
-  }
+  _debugger.set_handle_name(_color_resolve_image.image, VK_OBJECT_TYPE_IMAGE,
+                            "color resolve image");
+  _debugger.set_handle_name(_color_resolve_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW,
+                            "color resolve image view");
 
   for (size_t i = 0; i < _frames.size(); i++) {
     Frame& frame = _frames[i];
@@ -150,22 +139,11 @@ void VkBackend::create_desc_layouts() {
 
 void VkBackend::configure_render_resources() {
 
-  VkAttachmentStoreOp color_store_ap = VK_ATTACHMENT_STORE_OP_STORE;
-
-  VkImageView resolve_img_view = nullptr;
-  if constexpr (vk_opts::msaa_enabled) {
-    resolve_img_view = _color_resolve_image.image_view;
-
-    // dont care about the multisampled buffer if it'll resolve
-    // into another img anyways
-    color_store_ap = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-  }
-
   _scene_clear_value = {.color = {{1.f, 1.f, 1.f, 1.f}}};
 
-  _scene_color_attachment =
-      create_color_attachment_info(_color_image.image_view, &_scene_clear_value,
-                                   VK_ATTACHMENT_LOAD_OP_CLEAR, color_store_ap, resolve_img_view);
+  _scene_color_attachment = create_color_attachment_info(
+      _color_image.image_view, &_scene_clear_value, VK_ATTACHMENT_LOAD_OP_CLEAR,
+      VK_ATTACHMENT_STORE_OP_DONT_CARE, _color_resolve_image.image_view);
 
   _scene_depth_attachment = create_depth_attachment_info(
       _depth_image.image_view, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_DONT_CARE);
@@ -458,14 +436,8 @@ void VkBackend::draw() {
   insert_image_memory_barrier(cmd_buffer, _color_image.image, VK_IMAGE_LAYOUT_UNDEFINED,
                               VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-  VkImage copy_img;
-  if constexpr (vk_opts::msaa_enabled) {
-    copy_img = _color_resolve_image.image;
-    insert_image_memory_barrier(cmd_buffer, _color_resolve_image.image, VK_IMAGE_LAYOUT_UNDEFINED,
-                                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-  } else {
-    copy_img = _color_image.image;
-  }
+  insert_image_memory_barrier(cmd_buffer, _color_resolve_image.image, VK_IMAGE_LAYOUT_UNDEFINED,
+                              VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
   insert_image_memory_barrier(cmd_buffer, _depth_image.image, VK_IMAGE_LAYOUT_UNDEFINED,
                               VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
@@ -478,23 +450,19 @@ void VkBackend::draw() {
 
   vkCmdEndRendering(cmd_buffer);
 
-  insert_image_memory_barrier(cmd_buffer, copy_img, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+  insert_image_memory_barrier(cmd_buffer, _color_resolve_image.image,
+                              VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                               VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
   insert_image_memory_barrier(cmd_buffer, swapchain_image, VK_IMAGE_LAYOUT_UNDEFINED,
                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-  // copy rendered
-  // image onto
-  // swapchain image
-  blit_image(cmd_buffer, copy_img, swapchain_image, _swapchain_context.extent, _image_extent);
+  blit_image(cmd_buffer, _color_resolve_image.image, swapchain_image, _swapchain_context.extent,
+             _image_extent);
 
   insert_image_memory_barrier(cmd_buffer, swapchain_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                               VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
-  // tweak stage
-  // masks to make
-  // it more optimal
   VkSemaphoreSubmitInfo wait_semaphore_si = create_semaphore_submit_info(
       current_frame.present_semaphore, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
 
@@ -548,24 +516,17 @@ void VkBackend::resize() {
   _image_extent.width = _swapchain_context.extent.width;
   _image_extent.height = _swapchain_context.extent.height;
 
-  VkImageUsageFlags color_img_flags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+  destroy_image(_device_context.logical_device, _allocator, _color_resolve_image);
 
-  if constexpr (vk_opts::msaa_enabled) {
-    destroy_image(_device_context.logical_device, _allocator, _color_resolve_image);
-
-    _color_resolve_image =
-        create_image(_device_context.logical_device, _allocator,
-                     VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                     _image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
-
-    color_img_flags |= VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
-  } else {
-    color_img_flags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-  }
+  _color_resolve_image =
+      create_image(_device_context.logical_device, _allocator,
+                   VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                   _image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
 
   _color_image =
-      create_image(_device_context.logical_device, _allocator, color_img_flags, _image_extent,
-                   VK_FORMAT_R16G16B16A16_SFLOAT, _device_context.raster_samples);
+      create_image(_device_context.logical_device, _allocator,
+                   VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                   _image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, _device_context.raster_samples);
 
   _depth_image = create_image(_device_context.logical_device, _allocator,
                               VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
@@ -694,9 +655,7 @@ void VkBackend::destroy() {
   destroy_image(_device_context.logical_device, _allocator, _color_image);
   destroy_image(_device_context.logical_device, _allocator, _depth_image);
   destroy_image(_device_context.logical_device, _allocator, _default_texture);
-  if constexpr (vk_opts::msaa_enabled) {
-    destroy_image(_device_context.logical_device, _allocator, _color_resolve_image);
-  }
+  destroy_image(_device_context.logical_device, _allocator, _color_resolve_image);
 
   vkDestroySampler(_device_context.logical_device, _default_nearest_sampler, nullptr);
   vkDestroySampler(_device_context.logical_device, _default_linear_sampler, nullptr);
