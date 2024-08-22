@@ -3,11 +3,11 @@
 #include <vk_backend/vk_types.h>
 
 struct AllocatedImage {
-  VkImage image;
-  VkImageView image_view;
-  VmaAllocation allocation;
-  VkExtent3D image_extent;
-  VkFormat image_format;
+    VkImage image;
+    VkImageView image_view;
+    VmaAllocation allocation;
+    VkExtent3D image_extent;
+    VkFormat image_format;
 };
 
 AllocatedImage create_image(VkDevice device, VmaAllocator allocator, VkImageUsageFlags usage,

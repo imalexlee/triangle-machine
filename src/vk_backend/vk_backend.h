@@ -27,108 +27,109 @@ constexpr uint32_t IMAGE_WIDTH = 1;
 
 // generate white image at compile time to later act as the default color texture
 static constexpr std::array<uint32_t, IMAGE_WIDTH * IMAGE_WIDTH> white_image = []() {
-  std::array<uint32_t, IMAGE_WIDTH * IMAGE_WIDTH> result{};
-  uint32_t white = 0xFFFFFFFF;
-  for (uint32_t& el : result) {
-    el = white;
-  }
-  return result;
+    std::array<uint32_t, IMAGE_WIDTH * IMAGE_WIDTH> result{};
+    uint32_t white = 0xFFFFFFFF;
+    for (uint32_t& el : result) {
+        el = white;
+    }
+    return result;
 }();
 
 struct Stats {
-  uint64_t total_draw_time;
-  uint64_t total_frame_time;
-  uint64_t total_fps;
-  float scene_update_time;
-  float frame_time;
-  float draw_time;
+    uint64_t total_draw_time;
+    uint64_t total_frame_time;
+    uint64_t total_fps;
+    float scene_update_time;
+    float frame_time;
+    float draw_time;
 };
 
 class VkBackend {
-public:
-  void create(Window& window, Camera& camera);
-  void destroy();
-  void draw();
-  static void resize_callback(int new_width, int new_height);
+  public:
+    void create(Window& window, Camera& camera);
+    void destroy();
+    void draw();
+    static void resize_callback(int new_width, int new_height);
 
-private:
-  VkInstance _instance;
-  DeviceContext _device_context;
-  VkSurfaceKHR _surface;
-  Debugger _debugger;
-  SwapchainContext _swapchain_context;
-  VmaAllocator _allocator;
+    DeviceContext device_ctx;
 
-  PipelineInfo _opaque_pipeline_info;
-  PipelineInfo _transparent_pipeline_info;
+  private:
+    VkInstance _instance;
+    VkSurfaceKHR _surface;
+    Debugger _debugger;
+    SwapchainContext _swapchain_context;
+    VmaAllocator _allocator;
 
-  VkDescriptorSetLayout _global_desc_set_layout;
-  VkDescriptorSetLayout _mat_desc_set_layout;
-  VkDescriptorSetLayout _draw_obj_desc_set_layout;
+    PipelineInfo _opaque_pipeline_info;
+    PipelineInfo _transparent_pipeline_info;
 
-  Scene _scene;
-  Camera* _camera;
-  Stats _stats;
+    VkDescriptorSetLayout _global_desc_set_layout;
+    VkDescriptorSetLayout _mat_desc_set_layout;
+    VkDescriptorSetLayout _draw_obj_desc_set_layout;
 
-  CommandContext _imm_cmd_context;
-  VkDescriptorPool _imm_descriptor_pool;
-  VkFence _imm_fence;
+    Scene _scene;
+    Camera* _camera;
+    Stats _stats;
 
-  AllocatedImage _color_image;
-  AllocatedImage _color_resolve_image;
-  VkExtent2D _image_extent;
+    CommandContext imm_cmd_context;
+    VkDescriptorPool _imm_descriptor_pool;
+    VkFence _imm_fence;
 
-  // for geometry and ui
-  VkClearValue _scene_clear_value;
-  VkRenderingAttachmentInfo _scene_color_attachment;
-  VkRenderingAttachmentInfo _scene_depth_attachment;
-  VkRenderingInfo _scene_rendering_info;
+    AllocatedImage _color_image;
+    AllocatedImage _color_resolve_image;
+    VkExtent2D _image_extent;
 
-  AllocatedImage _depth_image;
+    // for geometry and ui
+    VkClearValue _scene_clear_value;
+    VkRenderingAttachmentInfo _scene_color_attachment;
+    VkRenderingAttachmentInfo _scene_depth_attachment;
+    VkRenderingInfo _scene_rendering_info;
 
-  uint64_t _frame_num{1};
-  std::array<Frame, vk_opts::frame_count> _frames;
-  GlobalSceneData _scene_data;
+    AllocatedImage _depth_image;
 
-  // defaults
-  VkSampler _default_linear_sampler;
-  VkSampler _default_nearest_sampler;
-  AllocatedImage _default_texture;
+    uint64_t _frame_num{1};
+    std::array<Frame, vk_opts::frame_count> _frames;
+    GlobalSceneData _scene_data;
 
-  DeletionQueue _deletion_queue;
+    // defaults
+    VkSampler _default_linear_sampler;
+    VkSampler _default_nearest_sampler;
+    AllocatedImage _default_texture;
 
-  // initialization
-  void create_instance();
-  void create_allocator();
-  void create_pipelines();
-  void create_default_data();
-  void create_desc_layouts();
-  void create_gui(Window& window);
-  void configure_debugger();
-  void configure_render_resources();
-  void load_scenes();
+    DeletionQueue _deletion_queue;
 
-  // state update
-  void update_scene();
-  void update_global_descriptors();
-  void update_ui();
-  void resize();
+    // initialization
+    void create_instance();
+    void create_allocator();
+    void create_pipelines();
+    void create_default_data();
+    void create_desc_layouts();
+    void create_gui(Window& window);
+    void configure_debugger();
+    void configure_render_resources();
+    void load_scenes();
 
-  // rendering
-  void render_geometry(VkCommandBuffer cmd_buf);
-  void render_ui(VkCommandBuffer cmd_buf);
+    // state update
+    void update_scene();
+    void update_global_descriptors();
+    void update_ui();
+    void resize();
 
-  // utils
-  inline Frame& get_current_frame() { return _frames[_frame_num % vk_opts::frame_count]; }
-  std::vector<const char*> get_instance_extensions();
-  void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
+    // rendering
+    void render_geometry(VkCommandBuffer cmd_buf);
+    void render_ui(VkCommandBuffer cmd_buf);
 
-  friend Scene load_scene(VkBackend& backend, std::filesystem::path path);
-  friend void destroy_scene(VkBackend& backend, Scene& scene);
-  friend AllocatedImage download_texture(VkBackend& backend, fastgltf::Asset& asset,
-                                         fastgltf::Texture& gltf_texture);
-  friend AllocatedImage upload_texture(VkBackend& backend, void* data, VkImageUsageFlags usage,
-                                       uint32_t height, uint32_t width);
-  friend MeshBuffers upload_mesh_buffers(VkBackend& backend, std::span<uint32_t> indices,
-                                         std::span<Vertex> vertices);
+    // utils
+    inline Frame& get_current_frame() { return _frames[_frame_num % vk_opts::frame_count]; }
+    std::vector<const char*> get_instance_extensions();
+    void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
+
+    friend Scene load_scene(VkBackend& backend, std::filesystem::path path);
+    friend void destroy_scene(VkBackend& backend, Scene& scene);
+    friend AllocatedImage download_texture(VkBackend& backend, fastgltf::Asset& asset,
+                                           fastgltf::Texture& gltf_texture);
+    friend AllocatedImage upload_texture(VkBackend& backend, void* data, VkImageUsageFlags usage,
+                                         uint32_t height, uint32_t width);
+    friend MeshBuffers upload_mesh_buffers(VkBackend& backend, std::span<uint32_t> indices,
+                                           std::span<Vertex> vertices);
 };

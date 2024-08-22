@@ -2227,6 +2227,8 @@ VMA_CALL_PRE VkResult VMA_CALL_POST vmaCopyMemoryToAllocation(
     VkDeviceSize dstAllocationLocalOffset,
     VkDeviceSize size);
 
+
+					      
 /** \brief Invalidates memory in the host caches if needed, maps the allocation temporarily if needed, and copies data from it to a specified host pointer.
 
 \param allocator

@@ -2,9 +2,9 @@
 #include <vk_backend/vk_types.h>
 
 struct AllocatedBuffer {
-  VkBuffer buffer;
-  VmaAllocation allocation;
-  VmaAllocationInfo info;
+    VkBuffer buffer;
+    VmaAllocation allocation;
+    VmaAllocationInfo info;
 };
 
 AllocatedBuffer create_buffer(VkDeviceSize byte_size, VmaAllocator allocator,
