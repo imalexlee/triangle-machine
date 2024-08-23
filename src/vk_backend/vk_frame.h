@@ -7,27 +7,57 @@
 #include <vk_backend/vk_types.h>
 #include <vulkan/vulkan_core.h>
 
-class Frame {
-  public:
+// contains per-frame shader information
+struct FrameData {
+    glm::mat4 view_proj{1.f};
+    glm::vec3 eye_pos;
+};
+
+struct Frame {
     CommandContext command_context;
     VkSemaphore render_semaphore;
     VkSemaphore present_semaphore;
     VkFence render_fence;
-    AllocatedBuffer scene_data_buffer;
-    VkDescriptorSet global_desc_set;
-
+    AllocatedBuffer frame_data_buf;
+    VkDescriptorSet desc_set;
     DescriptorAllocator desc_allocator;
-
-    void create(VkDevice device, VmaAllocator allocator, uint32_t graphics_family_index,
-                VkDescriptorSetLayout global_desc_layout);
-
-    VkDescriptorSet create_scene_desc_set(VkDevice device, VkDescriptorSetLayout set_layout);
-    void clear_scene_desc_set(VkDevice device);
-    void update_global_desc_set(VkDevice device, VmaAllocator allocator,
-                                GlobalSceneData scene_data);
-    void destroy(VkDevice device);
-    void reset_sync_structures(VkDevice device);
-
-  private:
-    DeletionQueue _deletion_queue;
 };
+
+/**
+ * @brief Initializes state like sync structures and buffers for a Frame
+ *
+ * @param frame			  The frame to init
+ * @param device		  The device to acquire resources from
+ * @param allocator		  The allocator used to acquire resources
+ * @param graphics_family_index	  Index of Vulkan queue which supports graphics operations
+ * @param set_layout		  Descriptor set layout for resources attached to this frame
+ */
+void init_frame(Frame* frame, VkDevice device, VmaAllocator allocator,
+                uint32_t graphics_family_index, VkDescriptorSetLayout set_layout);
+
+/**
+ * @brief Writes new scene data to device-local memory to be used during this frames presentation
+ *
+ * @param frame	      The frame to write this scene data to
+ * @param device      The device associated with the allocated memory
+ * @param allocator   The allocator used to allocate this memory initially
+ * @param scene_data  The scene data
+ */
+void set_frame_data(const Frame* frame, VkDevice device, VmaAllocator allocator,
+                    const FrameData* frame_data);
+
+/**
+ * @brief Resets Vulkan synchronization structures for this frame
+ *
+ * @param frame	  The frame to reset sync for
+ * @param device  The device to destroy, and recreate sync structures for
+ */
+void reset_frame_sync(Frame* frame, VkDevice device);
+
+/**
+ * @brief Destroys Vulkan sync structures, command pools, and descriptor pools for this Frame
+ *
+ * @param frame	  The frame to deinitialize
+ * @param device  The device associated with the memory to be destroyed
+ */
+void deinit_frame(Frame* frame, VkDevice device);

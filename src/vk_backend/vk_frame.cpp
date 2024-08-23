@@ -9,68 +9,54 @@
 #include <vk_backend/vk_scene.h>
 #include <vulkan/vulkan_core.h>
 
-void Frame::create(VkDevice device, VmaAllocator allocator, uint32_t graphics_family_index,
-                   VkDescriptorSetLayout set_layout) {
-    render_semaphore = create_semaphore(device);
-    present_semaphore = create_semaphore(device);
-    render_fence = create_fence(device, VK_FENCE_CREATE_SIGNALED_BIT);
+void init_frame(Frame* frame, VkDevice device, VmaAllocator allocator,
+                uint32_t graphics_family_index, VkDescriptorSetLayout set_layout) {
+    frame->render_semaphore = create_semaphore(device);
+    frame->present_semaphore = create_semaphore(device);
+    frame->render_fence = create_fence(device, VK_FENCE_CREATE_SIGNALED_BIT);
 
-    init_cmd_context(&command_context, device, graphics_family_index,
+    init_cmd_context(&frame->command_context, device, graphics_family_index,
                      VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 
-    scene_data_buffer = create_buffer(
-        sizeof(GlobalSceneData), allocator, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+    frame->frame_data_buf = create_buffer(
+        sizeof(FrameData), allocator, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
         VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
         VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT);
 
     std::array<PoolSizeRatio, 1> pool_sizes{{{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1}}};
 
-    desc_allocator.create(device, 1, pool_sizes);
+    init_desc_allocator(&frame->desc_allocator, device, 1, pool_sizes);
 
-    global_desc_set = desc_allocator.allocate(device, set_layout);
-
-    _deletion_queue.push_volatile([=, this]() {
-        vkDestroySemaphore(device, render_semaphore, nullptr);
-        vkDestroySemaphore(device, present_semaphore, nullptr);
-        vkDestroyFence(device, render_fence, nullptr);
-    });
-
-    _deletion_queue.push_persistant([=, this]() { desc_allocator.destroy_pools(device); });
+    frame->desc_set = allocate_desc_set(&frame->desc_allocator, device, set_layout);
 }
 
-VkDescriptorSet Frame::create_scene_desc_set(VkDevice device, VkDescriptorSetLayout set_layout) {
-    return desc_allocator.allocate(device, set_layout);
-}
+void set_frame_data(const Frame* frame, VkDevice device, VmaAllocator allocator,
+                    const FrameData* frame_data) {
+    vmaCopyMemoryToAllocation(allocator, frame_data, frame->frame_data_buf.allocation, 0,
+                              sizeof(FrameData));
 
-void Frame::clear_scene_desc_set(VkDevice device) { desc_allocator.clear_pools(device); }
-
-void Frame::update_global_desc_set(VkDevice device, VmaAllocator allocator,
-                                   GlobalSceneData scene_data) {
-    vmaCopyMemoryToAllocation(allocator, &scene_data, scene_data_buffer.allocation, 0,
-                              sizeof(GlobalSceneData));
-    DescriptorWriter writer;
-    writer.write_buffer(0, scene_data_buffer.buffer, sizeof(GlobalSceneData), 0,
-                        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-
-    writer.update_set(device, global_desc_set);
+    DescriptorWriter desc_writer;
+    write_buffer_desc(&desc_writer, 0, frame->frame_data_buf.buffer, sizeof(FrameData), 0,
+                      VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    update_desc_set(&desc_writer, device, frame->desc_set);
 };
 
-void Frame::reset_sync_structures(VkDevice device) {
-    _deletion_queue.flush_volatile();
+void reset_frame_sync(Frame* frame, VkDevice device) {
+    vkDestroySemaphore(device, frame->render_semaphore, nullptr);
+    vkDestroySemaphore(device, frame->present_semaphore, nullptr);
+    vkDestroyFence(device, frame->render_fence, nullptr);
 
-    render_semaphore = create_semaphore(device);
-    present_semaphore = create_semaphore(device);
-    render_fence = create_fence(device, VK_FENCE_CREATE_SIGNALED_BIT);
-
-    _deletion_queue.push_volatile([=, this]() {
-        vkDestroySemaphore(device, render_semaphore, nullptr);
-        vkDestroySemaphore(device, present_semaphore, nullptr);
-        vkDestroyFence(device, render_fence, nullptr);
-    });
+    frame->render_semaphore = create_semaphore(device);
+    frame->present_semaphore = create_semaphore(device);
+    frame->render_fence = create_fence(device, VK_FENCE_CREATE_SIGNALED_BIT);
 }
 
-void Frame::destroy(VkDevice device) {
+void deinit_frame(Frame* frame, VkDevice device) {
     DEBUG_PRINT("Destroying Frame");
-    deinit_cmd_context(&command_context, device);
-    _deletion_queue.flush();
+    deinit_cmd_context(&frame->command_context, device);
+    deinit_desc_allocator(&frame->desc_allocator, device);
+
+    vkDestroySemaphore(device, frame->render_semaphore, nullptr);
+    vkDestroySemaphore(device, frame->present_semaphore, nullptr);
+    vkDestroyFence(device, frame->render_fence, nullptr);
 }

@@ -17,6 +17,7 @@
 #include <string>
 #include <vk_backend/vk_command.h>
 #include <vk_backend/vk_device.h>
+#include <vk_backend/vk_frame.h>
 #include <vk_backend/vk_types.h>
 #include <vk_backend/vk_utils.h>
 #include <vk_mem_alloc.h>
@@ -45,8 +46,8 @@ void VkBackend::create(Window& window, Camera& camera) {
     create_desc_layouts();
 
     for (Frame& frame : _frames) {
-        frame.create(device_ctx.logical_device, _allocator, device_ctx.queues.graphics_family_index,
-                     _global_desc_set_layout);
+        init_frame(&frame, device_ctx.logical_device, _allocator,
+                   device_ctx.queues.graphics_family_index, _global_desc_set_layout);
     }
 
     _image_extent.width = window.width;
@@ -124,24 +125,27 @@ void VkBackend::configure_debugger() {
 void VkBackend::create_desc_layouts() {
 
     DescriptorLayoutBuilder layout_builder;
-    layout_builder.add_binding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    add_layout_binding(&layout_builder, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 
-    _global_desc_set_layout = layout_builder.build(
-        device_ctx.logical_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+    _global_desc_set_layout =
+        build_set_layout(&layout_builder, device_ctx.logical_device,
+                         VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 
-    layout_builder.clear();
-    layout_builder.add_binding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-    layout_builder.add_binding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-    layout_builder.add_binding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+    clear_layout_bindings(&layout_builder);
+    add_layout_binding(&layout_builder, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    add_layout_binding(&layout_builder, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+    add_layout_binding(&layout_builder, 2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
-    _mat_desc_set_layout = layout_builder.build(
-        device_ctx.logical_device, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
+    _mat_desc_set_layout =
+        build_set_layout(&layout_builder, device_ctx.logical_device,
+                         VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
 
-    layout_builder.clear();
-    layout_builder.add_binding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    clear_layout_bindings(&layout_builder);
+    add_layout_binding(&layout_builder, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 
-    _draw_obj_desc_set_layout = layout_builder.build(
-        device_ctx.logical_device, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
+    _draw_obj_desc_set_layout =
+        build_set_layout(&layout_builder, device_ctx.logical_device,
+                         VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
 }
 
 void VkBackend::configure_render_resources() {
@@ -250,18 +254,14 @@ void VkBackend::update_scene() {
 
     projection[1][1] *= -1;
 
-    _scene_data.view_proj = projection * _camera->view * model;
-    _scene_data.eye_pos = _camera->position;
+    _frame_data.view_proj = projection * _camera->view * model;
+    _frame_data.eye_pos = _camera->position;
 
     auto end_time = system_clock::now();
     auto dur = duration<float>(end_time - start_time);
     if (_frame_num % 60 == 0) {
         _stats.scene_update_time = duration_cast<nanoseconds>(dur).count() / 1000.f;
     }
-}
-
-void VkBackend::update_global_descriptors() {
-    get_current_frame().update_global_desc_set(device_ctx.logical_device, _allocator, _scene_data);
 }
 
 bool show_demo_window = true;
@@ -300,7 +300,6 @@ void VkBackend::update_ui() {
 }
 
 void VkBackend::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function) {
-
     VK_CHECK(vkResetFences(device_ctx.logical_device, 1, &_imm_fence));
 
     begin_primary_buffer(&imm_cmd_context, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
@@ -423,6 +422,8 @@ void VkBackend::draw() {
     vkWaitForFences(device_ctx.logical_device, 1, &current_frame.render_fence, VK_TRUE,
                     vk_opts::timeout_dur);
 
+    set_frame_data(&current_frame, device_ctx.logical_device, _allocator, &_frame_data);
+
     uint32_t swapchain_image_index;
     VkResult result = vkAcquireNextImageKHR(device_ctx.logical_device, _swapchain_context.swapchain,
                                             vk_opts::timeout_dur, current_frame.present_semaphore,
@@ -542,14 +543,12 @@ void VkBackend::resize() {
     configure_render_resources();
 
     for (Frame& frame : _frames) {
-        frame.reset_sync_structures(device_ctx.logical_device);
+        reset_frame_sync(&frame, device_ctx.logical_device);
     }
 }
 
 void VkBackend::render_geometry(VkCommandBuffer cmd_buf) {
     auto buffer_recording_start = system_clock::now();
-
-    update_global_descriptors();
 
     VkViewport viewport{};
     viewport.x = 0.0f;
@@ -593,7 +592,7 @@ void VkBackend::render_geometry(VkCommandBuffer cmd_buf) {
 
     vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
                             current_pipeline_info.pipeline_layout, 0, 1,
-                            &get_current_frame().global_desc_set, 0, nullptr);
+                            &get_current_frame().desc_set, 0, nullptr);
 
     for (const DrawObject& obj : _scene.opaque_objs) {
         record_obj(obj);
@@ -645,8 +644,8 @@ void VkBackend::destroy() {
     }
 
     for (Frame& frame : _frames) {
-        frame.destroy(device_ctx.logical_device);
-        destroy_buffer(_allocator, frame.scene_data_buffer);
+        deinit_frame(&frame, device_ctx.logical_device);
+        destroy_buffer(_allocator, frame.frame_data_buf);
     }
 
     destroy_scene(*this, _scene);

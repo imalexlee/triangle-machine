@@ -17,12 +17,6 @@ struct Vertex {
     glm::vec4 color;
 };
 
-// contains per-frame shader information
-struct GlobalSceneData {
-    glm::mat4 view_proj{1.f};
-    glm::vec3 eye_pos;
-};
-
 struct DrawObjUniformData {
     glm::mat4 local_transform{1.f};
     VkDeviceAddress vertex_buffer_address;

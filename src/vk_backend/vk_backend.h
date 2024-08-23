@@ -89,7 +89,7 @@ class VkBackend {
 
     uint64_t _frame_num{1};
     std::array<Frame, vk_opts::frame_count> _frames;
-    GlobalSceneData _scene_data;
+    FrameData _frame_data;
 
     // defaults
     VkSampler _default_linear_sampler;

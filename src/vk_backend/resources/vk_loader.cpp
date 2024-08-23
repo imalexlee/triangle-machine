@@ -242,8 +242,8 @@ Scene load_scene(VkBackend& backend, std::filesystem::path path) {
     std::vector<PoolSizeRatio> mat_pool_sizes = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1},
                                                  {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2}};
 
-    new_scene.mat_desc_allocator.create(backend.device_ctx.logical_device, asset.materials.size(),
-                                        mat_pool_sizes);
+    init_desc_allocator(&new_scene.mat_desc_allocator, backend.device_ctx.logical_device,
+                        asset.materials.size(), mat_pool_sizes);
 
     std::vector<GLTFMaterial> materials;
     materials.reserve(asset.materials.size());
@@ -315,8 +315,9 @@ Scene load_scene(VkBackend& backend, std::filesystem::path path) {
             metal_tex_sampler = backend._default_linear_sampler;
         }
 
-        new_bufs.mat_desc_set = new_scene.mat_desc_allocator.allocate(
-            backend.device_ctx.logical_device, backend._mat_desc_set_layout);
+        new_bufs.mat_desc_set =
+            allocate_desc_set(&new_scene.mat_desc_allocator, backend.device_ctx.logical_device,
+                              backend._mat_desc_set_layout);
 
         // 1. fill in the uniform material buffer
         new_bufs.mat_uniform_buffer =
@@ -334,19 +335,19 @@ Scene load_scene(VkBackend& backend, std::filesystem::path path) {
 
         DescriptorWriter desc_writer;
 
-        desc_writer.write_buffer(0, new_bufs.mat_uniform_buffer.buffer, sizeof(MaterialUniformData),
-                                 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+        write_buffer_desc(&desc_writer, 0, new_bufs.mat_uniform_buffer.buffer,
+                          sizeof(MaterialUniformData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 
         // 2. put the texture information into the descriptor set
-        desc_writer.write_image(1, new_bufs.color_tex.image_view, color_tex_sampler,
-                                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                                VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+        write_image_desc(&desc_writer, 1, new_bufs.color_tex.image_view, color_tex_sampler,
+                         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                         VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
-        desc_writer.write_image(2, new_bufs.metal_rough_tex.image_view, metal_tex_sampler,
-                                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                                VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+        write_image_desc(&desc_writer, 2, new_bufs.metal_rough_tex.image_view, metal_tex_sampler,
+                         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                         VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
-        desc_writer.update_set(backend.device_ctx.logical_device, new_bufs.mat_desc_set);
+        update_desc_set(&desc_writer, backend.device_ctx.logical_device, new_bufs.mat_desc_set);
 
         new_scene.material_buffers.push_back(new_bufs);
         materials.push_back(new_mat);
@@ -456,8 +457,8 @@ Scene load_scene(VkBackend& backend, std::filesystem::path path) {
     }
 
     std::vector<PoolSizeRatio> obj_pool_sizes = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1}};
-    new_scene.obj_desc_allocator.create(backend.device_ctx.logical_device, primitive_count,
-                                        obj_pool_sizes);
+    init_desc_allocator(&new_scene.obj_desc_allocator, backend.device_ctx.logical_device,
+                        primitive_count, obj_pool_sizes);
 
     new_scene.draw_obj_uniform_buffers.reserve(primitive_count);
     new_scene.mesh_buffers.reserve(meshes.size());
@@ -481,8 +482,11 @@ Scene load_scene(VkBackend& backend, std::filesystem::path path) {
 
             AllocatedBuffer obj_uniform_buf;
 
-            VkDescriptorSet draw_obj_desc_set = new_scene.obj_desc_allocator.allocate(
-                backend.device_ctx.logical_device, backend._draw_obj_desc_set_layout);
+            // VkDescriptorSet draw_obj_desc_set = new_scene.obj_desc_allocator.allocate(
+            //     backend.device_ctx.logical_device, backend._draw_obj_desc_set_layout);
+            VkDescriptorSet draw_obj_desc_set =
+                allocate_desc_set(&new_scene.obj_desc_allocator, backend.device_ctx.logical_device,
+                                  backend._draw_obj_desc_set_layout);
 
             obj_uniform_buf = create_buffer(sizeof(DrawObjUniformData), backend._allocator,
                                             VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
@@ -498,10 +502,10 @@ Scene load_scene(VkBackend& backend, std::filesystem::path path) {
 
             DescriptorWriter desc_writer;
 
-            desc_writer.write_buffer(0, obj_uniform_buf.buffer, sizeof(DrawObjUniformData), 0,
-                                     VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+            write_buffer_desc(&desc_writer, 0, obj_uniform_buf.buffer, sizeof(DrawObjUniformData),
+                              0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 
-            desc_writer.update_set(backend.device_ctx.logical_device, draw_obj_desc_set);
+            update_desc_set(&desc_writer, backend.device_ctx.logical_device, draw_obj_desc_set);
 
             new_scene.draw_obj_uniform_buffers.push_back(obj_uniform_buf);
 
@@ -561,8 +565,8 @@ void destroy_scene(VkBackend& backend, Scene& scene) {
     VkDevice device = backend.device_ctx.logical_device;
     VmaAllocator allocator = backend._allocator;
 
-    scene.mat_desc_allocator.destroy_pools(device);
-    scene.obj_desc_allocator.destroy_pools(device);
+    deinit_desc_allocator(&scene.mat_desc_allocator, device);
+    deinit_desc_allocator(&scene.obj_desc_allocator, device);
 
     for (auto& sampler : scene.samplers) {
         vkDestroySampler(device, sampler, nullptr);
