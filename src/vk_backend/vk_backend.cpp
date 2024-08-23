@@ -18,6 +18,7 @@
 #include <vk_backend/vk_command.h>
 #include <vk_backend/vk_device.h>
 #include <vk_backend/vk_frame.h>
+#include <vk_backend/vk_swapchain.h>
 #include <vk_backend/vk_types.h>
 #include <vk_backend/vk_utils.h>
 #include <vk_mem_alloc.h>
@@ -40,7 +41,7 @@ void VkBackend::create(Window& window, Camera& camera) {
     VkSurfaceKHR surface = window.get_vulkan_surface(_instance);
 
     init_device_context(&device_ctx, _instance, surface);
-    _swapchain_context.create(_instance, device_ctx, surface, vk_opts::desired_present_mode);
+    init_swapchain_context(&_swapchain_context, &device_ctx, surface);
 
     create_allocator();
     create_desc_layouts();
@@ -515,7 +516,7 @@ void VkBackend::resize_callback([[maybe_unused]] int new_width, [[maybe_unused]]
 void VkBackend::resize() {
     vkDeviceWaitIdle(device_ctx.logical_device);
 
-    _swapchain_context.reset_swapchain(device_ctx);
+    reset_swapchain_context(&_swapchain_context, &device_ctx);
 
     destroy_image(device_ctx.logical_device, _allocator, _depth_image);
     destroy_image(device_ctx.logical_device, _allocator, _color_image);
@@ -532,13 +533,12 @@ void VkBackend::resize() {
 
     _color_image =
         create_image(device_ctx.logical_device, _allocator,
-                     VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                     VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
                      _image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, device_ctx.raster_samples);
 
     _depth_image = create_image(device_ctx.logical_device, _allocator,
-                                VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
-                                    VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
-                                _image_extent, VK_FORMAT_D32_SFLOAT, device_ctx.raster_samples);
+                                VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, _image_extent,
+                                VK_FORMAT_D32_SFLOAT, device_ctx.raster_samples);
 
     configure_render_resources();
 
@@ -682,7 +682,8 @@ void VkBackend::destroy() {
     vmaDestroyAllocator(_allocator);
 
     deinit_cmd_context(&imm_cmd_context, device_ctx.logical_device);
-    _swapchain_context.destroy();
+    //_swapchain_context.destroy();
+    deinit_swapchain_context(&_swapchain_context, device_ctx.logical_device, _instance);
     deinit_device_context(&device_ctx);
 
     vkDestroyInstance(_instance, nullptr);

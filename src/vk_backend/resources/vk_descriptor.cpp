@@ -2,7 +2,6 @@
 #include <vector>
 #include <vulkan/vulkan_core.h>
 
-// forward decls
 VkDescriptorPool create_pool(VkDevice device, uint32_t max_sets,
                              std::span<PoolSizeRatio> pool_size_ratios);
 VkDescriptorPool get_pool(DescriptorAllocator* desc_allocator, VkDevice device);
