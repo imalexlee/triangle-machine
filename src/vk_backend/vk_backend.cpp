@@ -13,9 +13,9 @@
 #include <fmt/base.h>
 #include <fmt/format.h>
 #include <glm/ext/quaternion_transform.hpp>
-#include <span>
 #include <string>
 #include <vk_backend/vk_command.h>
+#include <vk_backend/vk_debug.h>
 #include <vk_backend/vk_device.h>
 #include <vk_backend/vk_frame.h>
 #include <vk_backend/vk_swapchain.h>
@@ -72,9 +72,6 @@ void VkBackend::create(Window& window, Camera& camera) {
     configure_render_resources();
 
     _imm_fence = create_fence(device_ctx.logical_device, VK_FENCE_CREATE_SIGNALED_BIT);
-    // _imm_cmd_context.create(device_ctx.logical_device,
-    //                         device_ctx.queues.graphics_family_index,
-    //                         VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
     init_cmd_context(&imm_cmd_context, device_ctx.logical_device,
                      device_ctx.queues.graphics_family_index,
                      VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
@@ -88,38 +85,37 @@ void VkBackend::create(Window& window, Camera& camera) {
     load_scenes();
 
     if constexpr (vk_opts::validation_enabled) {
-        _debugger.create(_instance, device_ctx.logical_device);
         configure_debugger();
     }
 }
 
 // adding names to these 64 bit handles helps a lot when reading validation errors
 void VkBackend::configure_debugger() {
-    _debugger.set_handle_name(_color_image.image, VK_OBJECT_TYPE_IMAGE, "color image");
-    _debugger.set_handle_name(_depth_image.image, VK_OBJECT_TYPE_IMAGE, "depth image");
+    init_debugger(&_debugger, _instance, device_ctx.logical_device);
+    set_handle_name(&_debugger, _color_image.image, VK_OBJECT_TYPE_IMAGE, "color image");
+    set_handle_name(&_debugger, _depth_image.image, VK_OBJECT_TYPE_IMAGE, "depth image");
 
-    _debugger.set_handle_name(_color_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW,
-                              "color image view");
-    _debugger.set_handle_name(_depth_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW,
-                              "depth image view");
+    set_handle_name(&_debugger, _color_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW,
+                    "color image view");
+    set_handle_name(&_debugger, _depth_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW,
+                    "depth image view");
 
-    _debugger.set_handle_name(_color_resolve_image.image, VK_OBJECT_TYPE_IMAGE,
-                              "color resolve image");
-    _debugger.set_handle_name(_color_resolve_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW,
-                              "color resolve image view");
+    set_handle_name(&_debugger, _color_resolve_image.image, VK_OBJECT_TYPE_IMAGE,
+                    "color resolve image");
+    set_handle_name(&_debugger, _color_resolve_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW,
+                    "color resolve image view");
 
     for (size_t i = 0; i < _frames.size(); i++) {
         Frame& frame = _frames[i];
-        _debugger.set_handle_name(frame.command_context.primary_buffer,
-                                  VK_OBJECT_TYPE_COMMAND_BUFFER,
-                                  "frame " + std::to_string(i) + " cmd buf");
+        set_handle_name(&_debugger, frame.command_context.primary_buffer,
+                        VK_OBJECT_TYPE_COMMAND_BUFFER, "frame " + std::to_string(i) + " cmd buf");
     }
 
     for (size_t i = 0; i < _swapchain_context.images.size(); i++) {
-        _debugger.set_handle_name(_swapchain_context.images[i], VK_OBJECT_TYPE_IMAGE,
-                                  "swapchain  image " + std::to_string(i));
-        _debugger.set_handle_name(_swapchain_context.image_views[i], VK_OBJECT_TYPE_IMAGE_VIEW,
-                                  "swapchain image view " + std::to_string(i));
+        set_handle_name(&_debugger, _swapchain_context.images[i], VK_OBJECT_TYPE_IMAGE,
+                        "swapchain  image " + std::to_string(i));
+        set_handle_name(&_debugger, _swapchain_context.image_views[i], VK_OBJECT_TYPE_IMAGE_VIEW,
+                        "swapchain image view " + std::to_string(i));
     }
 }
 
@@ -242,11 +238,6 @@ void VkBackend::update_scene() {
     _camera->update();
 
     glm::mat4 model = glm::mat4{1.f};
-    //* glm::rotate(glm::mat4{1.f},
-    // glm::radians(time_span.count()
-    // * 30),
-    // glm::vec3{0, 1,
-    // 0});
 
     glm::mat4 projection = glm::perspective(glm::radians(60.f),
                                             (float)_swapchain_context.extent.width /
@@ -330,8 +321,7 @@ void VkBackend::create_instance() {
     app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     app_info.pNext = nullptr;
     app_info.pApplicationName = "awesome app";
-    app_info.pEngineName = "awesome "
-                           "engine";
+    app_info.pEngineName = "awesome engine";
     app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
     app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
     app_info.apiVersion = VK_API_VERSION_1_3;
@@ -350,9 +340,9 @@ void VkBackend::create_instance() {
     std::array<const char*, 1> validation_layers;
 
     if constexpr (vk_opts::validation_enabled) {
-        debug_ci = _debugger.create_messenger_info();
-        validation_features = _debugger.create_validation_features();
-        validation_layers = _debugger.create_validation_layers();
+        debug_ci = create_messenger_info();
+        validation_features = create_validation_features();
+        validation_layers = create_validation_layers();
 
         validation_features.pNext = &debug_ci;
         instance_ci.pNext = &validation_features;
@@ -364,33 +354,29 @@ void VkBackend::create_instance() {
 }
 
 void VkBackend::create_pipelines() {
-    PipelineBuilder builder;
+    PipelineBuilder pb;
     VkShaderModule vert_shader = load_shader_module(
         device_ctx.logical_device, "../../shaders/vertex/indexed_triangle.vert.glsl.spv");
     VkShaderModule frag_shader = load_shader_module(
         device_ctx.logical_device, "../../shaders/fragment/simple_lighting.frag.glsl.spv");
 
-    builder.set_shader_stages(vert_shader, frag_shader);
-    builder.disable_blending();
-    builder.set_input_assembly(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-    builder.set_raster_culling(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
-    builder.set_raster_poly_mode(VK_POLYGON_MODE_FILL);
-    builder.set_multisample_state((VkSampleCountFlagBits)device_ctx.raster_samples);
-
-    builder.set_depth_stencil_state(true, true, VK_COMPARE_OP_GREATER_OR_EQUAL);
-    builder.set_render_info(_color_image.image_format, _depth_image.image_format);
-
     std::array<VkDescriptorSetLayout, 3> set_layouts{_global_desc_set_layout, _mat_desc_set_layout,
                                                      _draw_obj_desc_set_layout};
 
-    builder.set_layout(set_layouts, {}, 0);
+    set_pipeline_shaders(&pb, vert_shader, frag_shader);
+    set_pipeline_topology(&pb, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+    set_pipeline_raster_state(&pb, VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE,
+                              VK_POLYGON_MODE_FILL);
+    set_pipeline_multisampling(&pb, (VkSampleCountFlagBits)device_ctx.raster_samples);
+    set_pipeline_depth_state(&pb, true, true, VK_COMPARE_OP_GREATER_OR_EQUAL);
+    set_pipeline_render_state(&pb, _color_image.image_format, _depth_image.image_format);
+    set_pipeline_blending(&pb, BlendMode::none);
+    set_pipeline_layout(&pb, set_layouts, {}, 0);
+    _opaque_pipeline_info = build_pipeline(&pb, device_ctx.logical_device);
 
-    _opaque_pipeline_info = builder.build_pipeline(device_ctx.logical_device);
-
-    builder.enable_blending_alphablend();
-    builder.set_depth_stencil_state(true, false, VK_COMPARE_OP_GREATER_OR_EQUAL);
-
-    _transparent_pipeline_info = builder.build_pipeline(device_ctx.logical_device);
+    set_pipeline_blending(&pb, BlendMode::alpha);
+    set_pipeline_depth_state(&pb, true, false, VK_COMPARE_OP_GREATER_OR_EQUAL);
+    _transparent_pipeline_info = build_pipeline(&pb, device_ctx.logical_device);
 
     _deletion_queue.push_persistant([=, this]() {
         vkDestroyShaderModule(device_ctx.logical_device, vert_shader, nullptr);
@@ -640,7 +626,8 @@ void VkBackend::destroy() {
     _deletion_queue.flush();
 
     if constexpr (vk_opts::validation_enabled) {
-        _debugger.destroy();
+        //_debugger.destroy();
+        deinit_debugger(&_debugger, _instance);
     }
 
     for (Frame& frame : _frames) {
@@ -682,7 +669,6 @@ void VkBackend::destroy() {
     vmaDestroyAllocator(_allocator);
 
     deinit_cmd_context(&imm_cmd_context, device_ctx.logical_device);
-    //_swapchain_context.destroy();
     deinit_swapchain_context(&_swapchain_context, device_ctx.logical_device, _instance);
     deinit_device_context(&device_ctx);
 
