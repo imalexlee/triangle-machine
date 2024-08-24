@@ -3,6 +3,7 @@
 #include <GLFW/glfw3.h>
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
+#include <vk_backend/vk_backend.h>
 
 static Engine* active_engine = nullptr;
 
@@ -17,7 +18,8 @@ void Engine::create() {
 
     _camera.create(_window, init_cam_pos);
 
-    _backend.create(_window, _camera);
+    //_backend.create(_window, _camera);
+    init_backend(&_backend, &_window, &_camera);
 
     _window.register_key_callback(_camera.key_callback);
     _window.register_cursor_callback(_camera.cursor_callback);
@@ -26,11 +28,13 @@ void Engine::create() {
 void Engine::run() {
     while (!glfwWindowShouldClose(_window.glfw_window)) {
         glfwPollEvents();
-        _backend.draw();
+        //_backend.draw();
+        draw(&_backend);
     };
 }
 
 void Engine::destroy() {
-    _backend.destroy();
+    //_backend.destroy();
+    deinit_backend(&_backend);
     _window.destroy();
 };

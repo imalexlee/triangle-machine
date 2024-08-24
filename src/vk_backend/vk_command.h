@@ -7,14 +7,14 @@
 
 struct CommandPool {
     VkCommandPool vk_pool;
-    uint8_t thread_idx;
+    uint8_t       thread_idx;
 };
 
 struct CommandContext {
-    VkCommandBuffer primary_buffer;
-    VkCommandPool primary_pool;
+    VkCommandBuffer              primary_buffer;
+    VkCommandPool                primary_pool;
     std::vector<VkCommandBuffer> secondary_buffers;
-    std::vector<CommandPool> secondary_pools;
+    std::vector<CommandPool>     secondary_pools;
 };
 
 /**
@@ -25,7 +25,9 @@ struct CommandContext {
  * @param queue_index Index of which queue we will submit these buffers to
  * @param flags	      Command pool creation usage
  */
-void init_cmd_context(CommandContext* cmd_ctx, VkDevice device, uint32_t queue_index,
+void init_cmd_context(CommandContext*          cmd_ctx,
+                      VkDevice                 device,
+                      uint32_t                 queue_index,
                       VkCommandPoolCreateFlags flags);
 
 /**
@@ -45,9 +47,11 @@ void begin_primary_buffer(const CommandContext* cmd_ctx, VkCommandBufferUsageFla
  * @param signal_semaphore_info Semaphore to signal once buffer is done
  * @param fence
  */
-void submit_primary_buffer(const CommandContext* cmd_ctx, const VkQueue queue,
+void submit_primary_buffer(const CommandContext*        cmd_ctx,
+                           const VkQueue                queue,
                            const VkSemaphoreSubmitInfo* wait_semaphore_info,
-                           const VkSemaphoreSubmitInfo* signal_semaphore_info, const VkFence fence);
+                           const VkSemaphoreSubmitInfo* signal_semaphore_info,
+                           const VkFence                fence);
 
 /**
  * @brief Deinitializes and frees command pools for this CommandContext

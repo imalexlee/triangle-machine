@@ -14,12 +14,12 @@ struct FrameData {
 };
 
 struct Frame {
-    CommandContext command_context;
-    VkSemaphore render_semaphore;
-    VkSemaphore present_semaphore;
-    VkFence render_fence;
-    AllocatedBuffer frame_data_buf;
-    VkDescriptorSet desc_set;
+    CommandContext      command_context;
+    VkSemaphore         render_semaphore;
+    VkSemaphore         present_semaphore;
+    VkFence             render_fence;
+    AllocatedBuffer     frame_data_buf;
+    VkDescriptorSet     desc_set;
     DescriptorAllocator desc_allocator;
 };
 
@@ -32,8 +32,11 @@ struct Frame {
  * @param graphics_family_index	  Index of Vulkan queue which supports graphics operations
  * @param set_layout		  Descriptor set layout for resources attached to this frame
  */
-void init_frame(Frame* frame, VkDevice device, VmaAllocator allocator,
-                uint32_t graphics_family_index, VkDescriptorSetLayout set_layout);
+void init_frame(Frame*                frame,
+                VkDevice              device,
+                VmaAllocator          allocator,
+                uint32_t              graphics_family_index,
+                VkDescriptorSetLayout set_layout);
 
 /**
  * @brief Writes new scene data to device-local memory to be used during this frames presentation
@@ -43,7 +46,9 @@ void init_frame(Frame* frame, VkDevice device, VmaAllocator allocator,
  * @param allocator   The allocator used to allocate this memory initially
  * @param scene_data  The scene data
  */
-void set_frame_data(const Frame* frame, VkDevice device, VmaAllocator allocator,
+void set_frame_data(const Frame*     frame,
+                    VkDevice         device,
+                    VmaAllocator     allocator,
                     const FrameData* frame_data);
 
 /**

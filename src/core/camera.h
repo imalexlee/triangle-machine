@@ -21,8 +21,10 @@ class Camera {
     static inline double cursor_x;
     static inline double cursor_y;
 
-    void create(Window& window, glm::vec3 initial_pos, float init_pitch_theta = 0.f,
-                float init_yaw_theta = 0.f);
+    void create(Window&   window,
+                glm::vec3 initial_pos,
+                float     init_pitch_theta = 0.f,
+                float init_yaw_theta       = 0.f);
 
     static void key_callback(int key, int scancode, int action, int mods);
     static void cursor_callback(double x_pos, double y_pos);

@@ -26,8 +26,8 @@ class Window {
     const char* _title;
 
     static inline std::vector<std::function<void(int, int, int, int)>> _key_callbacks;
-    static inline std::vector<std::function<void(double, double)>> _cursor_callbacks;
-    static inline std::vector<std::function<void(int, int)>> _resize_callbacks;
+    static inline std::vector<std::function<void(double, double)>>     _cursor_callbacks;
+    static inline std::vector<std::function<void(int, int)>>           _resize_callbacks;
 
     static void cursor_callback(GLFWwindow* window, double x_pos, double y_pos);
     static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);

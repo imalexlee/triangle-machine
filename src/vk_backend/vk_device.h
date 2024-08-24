@@ -5,17 +5,17 @@
 #include <vulkan/vulkan_core.h>
 
 struct DeviceQueues {
-    VkQueue graphics;
-    VkQueue present;
+    VkQueue  graphics;
+    VkQueue  present;
     uint32_t graphics_family_index;
     uint32_t present_family_index;
 };
 
 struct DeviceContext {
-    DeviceQueues queues;
-    VkDevice logical_device;
+    DeviceQueues     queues;
+    VkDevice         logical_device;
     VkPhysicalDevice physical_device;
-    uint32_t raster_samples;
+    uint32_t         raster_samples;
 };
 
 /**

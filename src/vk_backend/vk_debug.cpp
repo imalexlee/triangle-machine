@@ -10,15 +10,15 @@ static constexpr std::array<VkValidationFeatureEnableEXT, 3> enabled_validation_
     VkValidationFeatureEnableEXT::VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
 };
 
-static VkBool32 debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-                               VkDebugUtilsMessageTypeFlagsEXT messageTypes,
+static VkBool32 debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT      messageSeverity,
+                               VkDebugUtilsMessageTypeFlagsEXT             messageTypes,
                                const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
-                               void* pUserData);
+                               void*                                       pUserData);
 
-VkBool32 debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+VkBool32 debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT           messageSeverity,
                         [[maybe_unused]] VkDebugUtilsMessageTypeFlagsEXT messageTypes,
                         [[maybe_unused]] const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
-                        [[maybe_unused]] void* pUserData) {
+                        [[maybe_unused]] void*                                       pUserData) {
 
     // only print info, warnings, and errors
     if (messageSeverity > VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) {
@@ -50,7 +50,7 @@ VkResult init_debugger(Debugger* db, VkInstance instance, VkDevice device) {
 
 VkDebugUtilsMessengerCreateInfoEXT create_messenger_info() {
     VkDebugUtilsMessengerCreateInfoEXT messenger_ci = {};
-    messenger_ci.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+    messenger_ci.sType           = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
     messenger_ci.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
                                    VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
                                    VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
@@ -67,8 +67,8 @@ VkDebugUtilsMessengerCreateInfoEXT create_messenger_info() {
 
 VkValidationFeaturesEXT create_validation_features() {
     VkValidationFeaturesEXT validation_features{};
-    validation_features.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
-    validation_features.pEnabledValidationFeatures = enabled_validation_features.data();
+    validation_features.sType                         = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
+    validation_features.pEnabledValidationFeatures    = enabled_validation_features.data();
     validation_features.enabledValidationFeatureCount = enabled_validation_features.size();
     return validation_features;
 }

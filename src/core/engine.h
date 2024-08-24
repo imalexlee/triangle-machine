@@ -13,8 +13,8 @@ class Engine {
     static Engine& get();
 
   private:
-    void destroy();
+    void      destroy();
     VkBackend _backend;
-    Window _window;
-    Camera _camera;
+    Window    _window;
+    Camera    _camera;
 };

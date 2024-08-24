@@ -18,9 +18,9 @@ void Window::create(uint32_t width, uint32_t height, const char* title) {
         exit(EXIT_FAILURE);
     }
 
-    this->width = width;
+    this->width  = width;
     this->height = height;
-    _title = title;
+    _title       = title;
 
     glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -64,7 +64,10 @@ void Window::register_cursor_callback(std::function<void(double, double)> fn_ptr
     _cursor_callbacks.push_back(fn_ptr);
 }
 
-void Window::key_callback(GLFWwindow* window, int key, [[maybe_unused]] int scancode, int action,
+void Window::key_callback(GLFWwindow*          window,
+                          int                  key,
+                          [[maybe_unused]] int scancode,
+                          int                  action,
                           [[maybe_unused]] int mods) {
 
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {

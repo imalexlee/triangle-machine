@@ -5,10 +5,10 @@
 #include <vk_backend/vk_types.h>
 
 struct Debugger {
-    VkDebugUtilsMessengerEXT messenger;
+    VkDebugUtilsMessengerEXT         messenger;
     PFN_vkSetDebugUtilsObjectNameEXT obj_name_pfn;
-    DeletionQueue _deletion_queue;
-    VkDevice logical_device;
+    DeletionQueue                    _deletion_queue;
+    VkDevice                         logical_device;
 };
 
 /**
@@ -63,10 +63,10 @@ consteval std::array<const char*, 1> create_validation_layers() {
  * @param name	      The name to give the object
  */
 template <typename T>
-void set_handle_name(Debugger* db, T handle, VkObjectType object_type, std::string name) {
+void set_handle_name(const Debugger* db, T handle, VkObjectType object_type, std::string name) {
     VkDebugUtilsObjectNameInfoEXT name_info = {VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
-    name_info.objectType = object_type;
-    name_info.objectHandle = (uint64_t)handle;
-    name_info.pObjectName = name.data();
+    name_info.objectType                    = object_type;
+    name_info.objectHandle                  = (uint64_t)handle;
+    name_info.pObjectName                   = name.data();
     db->obj_name_pfn(db->logical_device, &name_info);
 };
