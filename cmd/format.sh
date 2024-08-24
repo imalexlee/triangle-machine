@@ -26,8 +26,9 @@ FMT=""
 # that the version number be part of the command. We prefer clang-format if
 # that's present, otherwise we work backwards from highest version to lowest
 # version.
-for clangfmt in clang-format{,-{4,3}.{9,8,7,6,5,4,3,2,1,0}}; do
+for clangfmt in clang-format{,-{17,18}.{9,8,7,6,5,4,3,2,1,0}}; do
     if which "$clangfmt" &>/dev/null; then
+	    echo "Using clang
         FMT="$clangfmt"
         break
     fi
