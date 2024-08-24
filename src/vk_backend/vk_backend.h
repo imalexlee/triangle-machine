@@ -24,7 +24,8 @@ constexpr uint32_t IMAGE_WIDTH = 1;
 // generate white image at compile time to later act as the default color texture
 static constexpr std::array<uint32_t, IMAGE_WIDTH * IMAGE_WIDTH> white_image = []() {
     std::array<uint32_t, IMAGE_WIDTH * IMAGE_WIDTH> result{};
-    uint32_t                                        white = 0xFFFFFFFF;
+
+    uint32_t white = 0xFFFFFFFF;
     for (uint32_t& el : result) {
         el = white;
     }

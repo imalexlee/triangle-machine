@@ -18,17 +18,13 @@ void init_frame(Frame*                frame,
     frame->present_semaphore = create_semaphore(device);
     frame->render_fence      = create_fence(device, VK_FENCE_CREATE_SIGNALED_BIT);
 
-    init_cmd_context(&frame->command_context,
-                     device,
-                     graphics_family_index,
+    init_cmd_context(&frame->command_context, device, graphics_family_index,
                      VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 
-    frame->frame_data_buf = create_buffer(sizeof(FrameData),
-                                          allocator,
-                                          VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                                          VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
-                                          VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                                              VMA_ALLOCATION_CREATE_MAPPED_BIT);
+    frame->frame_data_buf = create_buffer(
+        sizeof(FrameData), allocator, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT);
 
     std::array<PoolSizeRatio, 1> pool_sizes{{{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1}}};
 
@@ -41,15 +37,11 @@ void set_frame_data(const Frame*     frame,
                     VkDevice         device,
                     VmaAllocator     allocator,
                     const FrameData* frame_data) {
-    vmaCopyMemoryToAllocation(
-        allocator, frame_data, frame->frame_data_buf.allocation, 0, sizeof(FrameData));
+    vmaCopyMemoryToAllocation(allocator, frame_data, frame->frame_data_buf.allocation, 0,
+                              sizeof(FrameData));
 
     DescriptorWriter desc_writer;
-    write_buffer_desc(&desc_writer,
-                      0,
-                      frame->frame_data_buf.buffer,
-                      sizeof(FrameData),
-                      0,
+    write_buffer_desc(&desc_writer, 0, frame->frame_data_buf.buffer, sizeof(FrameData), 0,
                       VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
     update_desc_set(&desc_writer, device, frame->desc_set);
 };

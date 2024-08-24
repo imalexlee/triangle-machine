@@ -88,11 +88,6 @@ struct DrawUniformData {
     VkDeviceAddress vertex_buffer_address;
 };
 
-struct MeshBuffers {
-    AllocatedBuffer indices;
-    AllocatedBuffer vertices;
-};
-
 struct DrawObject {
     VkDescriptorSet mat_desc_set;
     VkDescriptorSet obj_desc_set;

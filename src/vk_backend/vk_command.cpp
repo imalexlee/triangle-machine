@@ -25,8 +25,8 @@ void init_cmd_context(CommandContext*          cmd_ctx,
     assert(thread_count < 256 && "Thread count should currently stay under 256");
     for (uint8_t i = 0; i < thread_count; i++) {
         cmd_ctx->secondary_pools[i].thread_idx = i;
-        VK_CHECK(vkCreateCommandPool(
-            device, &command_pool_ci, nullptr, &cmd_ctx->secondary_pools[i].vk_pool));
+        VK_CHECK(vkCreateCommandPool(device, &command_pool_ci, nullptr,
+                                     &cmd_ctx->secondary_pools[i].vk_pool));
     }
 
     VkCommandBufferAllocateInfo primary_buffer_ai{};

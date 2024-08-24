@@ -12,5 +12,5 @@ AlignConsecutiveDeclarations:
   AcrossComments: true
   AlignFunctionPointers: true
 AlignConsecutiveAssignments: true
-BinPackArguments: false
+BinPackArguments: true
 BinPackParameters: false

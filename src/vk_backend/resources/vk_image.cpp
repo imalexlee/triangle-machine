@@ -1,6 +1,7 @@
-#include "vk_image.h"
-#include <vulkan/vk_enum_string_helper.h>
-#include <vulkan/vulkan_core.h>
+#include "vk_backend/vk_backend.h"
+#include <vk_backend/vk_sync.h>
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 
 // creates a 2D image along with its image_view
 AllocatedImage create_image(VkDevice          device,
@@ -36,12 +37,8 @@ AllocatedImage create_image(VkDevice          device,
     allocation_ci.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
     // creates an image handle and allocates the memory for it
-    VK_CHECK(vmaCreateImage(allocator,
-                            &image_ci,
-                            &allocation_ci,
-                            &allocated_image.image,
-                            &allocated_image.allocation,
-                            nullptr));
+    VK_CHECK(vmaCreateImage(allocator, &image_ci, &allocation_ci, &allocated_image.image,
+                            &allocated_image.allocation, nullptr));
 
     // handle the case where we create a depth image
     VkImageAspectFlags aspect_flag = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -129,3 +126,107 @@ VkImageSubresourceRange create_image_subresource_range(VkImageAspectFlags aspect
     subresource_range.layerCount     = 1;
     return subresource_range;
 }
+
+AllocatedImage upload_texture(const VkBackend*  backend,
+                              void*             data,
+                              VkImageUsageFlags usage,
+                              uint32_t          height,
+                              uint32_t          width) {
+    VkExtent2D extent{.width = width, .height = height};
+
+    uint32_t data_size = width * height * sizeof(uint32_t);
+
+    AllocatedBuffer staging_buf = create_buffer(
+        data_size, backend->allocator, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VMA_MEMORY_USAGE_AUTO_PREFER_HOST, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
+
+    vmaCopyMemoryToAllocation(backend->allocator, data, staging_buf.allocation, 0, data_size);
+
+    AllocatedImage new_texture;
+    new_texture =
+        create_image(backend->device_ctx.logical_device, backend->allocator,
+                     usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT, extent, VK_FORMAT_R8G8B8A8_UNORM);
+
+    VkBufferImageCopy copy_region;
+    copy_region.bufferOffset      = 0;
+    copy_region.bufferRowLength   = 0;
+    copy_region.bufferImageHeight = 0;
+
+    copy_region.imageOffset = {.x = 0, .y = 0, .z = 0};
+    copy_region.imageExtent = {.width = extent.width, .height = extent.height, .depth = 1};
+
+    copy_region.imageSubresource.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+    copy_region.imageSubresource.mipLevel       = 0;
+    copy_region.imageSubresource.baseArrayLayer = 0;
+    copy_region.imageSubresource.layerCount     = 1;
+
+    immediate_submit(backend, [&](VkCommandBuffer cmd) {
+        insert_image_memory_barrier(cmd, new_texture.image, VK_IMAGE_LAYOUT_UNDEFINED,
+                                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+        vkCmdCopyBufferToImage(cmd, staging_buf.buffer, new_texture.image,
+                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy_region);
+
+        insert_image_memory_barrier(cmd, new_texture.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    });
+
+    destroy_buffer(backend->allocator, &staging_buf);
+
+    return new_texture;
+}
+
+AllocatedImage download_texture(const VkBackend*   backend,
+                                fastgltf::Asset*   asset,
+                                fastgltf::Texture* gltf_texture) {
+    auto&          image = asset->images[gltf_texture->imageIndex.value()];
+    int            width, height, nr_channels;
+    AllocatedImage new_texture;
+
+    std::visit(fastgltf::visitor{
+                   []([[maybe_unused]] auto& arg) {
+
+                   },
+                   [&](fastgltf::sources::URI& file_path) {
+                       assert(file_path.fileByteOffset == 0);
+                       assert(file_path.uri.isLocalPath());
+
+                       const std::string path(file_path.uri.path().begin(),
+                                              file_path.uri.path().end()); // thanks C++.
+                       uint8_t* data = stbi_load(path.c_str(), &width, &height, &nr_channels, 4);
+                       new_texture =
+                           upload_texture(backend, data, VK_IMAGE_USAGE_SAMPLED_BIT, height, width);
+                       stbi_image_free(data);
+                   },
+                   [&](fastgltf::sources::Array& vector) {
+                       uint8_t* data = stbi_load_from_memory(vector.bytes.data(),
+                                                             static_cast<int>(vector.bytes.size()),
+                                                             &width, &height, &nr_channels, 4);
+                       new_texture =
+                           upload_texture(backend, data, VK_IMAGE_USAGE_SAMPLED_BIT, height, width);
+                       stbi_image_free(data);
+                   },
+                   [&](fastgltf::sources::BufferView& view) {
+                       auto& buffer_view = asset->bufferViews[view.bufferViewIndex];
+                       auto& buffer      = asset->buffers[buffer_view.bufferIndex];
+
+                       std::visit(fastgltf::visitor{
+                                      []([[maybe_unused]] auto& arg) {},
+                                      [&](fastgltf::sources::Array& vector) {
+                                          uint8_t* data = stbi_load_from_memory(
+                                              vector.bytes.data() + buffer_view.byteOffset,
+
+                                              static_cast<int>(buffer_view.byteLength), &width,
+                                              &height, &nr_channels, 4);
+                                          new_texture = upload_texture(backend, data,
+                                                                       VK_IMAGE_USAGE_SAMPLED_BIT,
+                                                                       height, width);
+                                          stbi_image_free(data);
+                                      }},
+                                  buffer.data);
+                   },
+               },
+               image.data);
+
+    return new_texture;
+};

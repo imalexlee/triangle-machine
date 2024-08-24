@@ -1,6 +1,9 @@
 #pragma once
 
+#include <fastgltf/core.hpp>
 #include <vk_backend/vk_types.h>
+
+struct VkBackend;
 
 struct AllocatedImage {
     VkImage       image;
@@ -40,3 +43,11 @@ VkRenderingAttachmentInfo create_color_attachment_info(VkImageView         view,
 VkRenderingAttachmentInfo create_depth_attachment_info(VkImageView         view,
                                                        VkAttachmentLoadOp  load_op,
                                                        VkAttachmentStoreOp store_op);
+
+// uploads texture to gpu memory
+AllocatedImage upload_texture(
+    const VkBackend* backend, void* data, VkImageUsageFlags usage, uint32_t height, uint32_t width);
+
+//  downloads texture from external image data (png or jpg) to then load onto the gpu
+AllocatedImage
+download_texture(const VkBackend* backend, fastgltf::Asset* asset, fastgltf::Texture* gltf_texture);

@@ -67,16 +67,14 @@ void init_backend(VkBackend* backend, Window* window, const Camera* camera) {
     VkSurfaceKHR surface = window->get_vulkan_surface(backend->instance);
 
     init_device_context(&backend->device_ctx, backend->instance, surface);
-    init_swapchain_context(
-        &backend->swapchain_context, &backend->device_ctx, surface, vk_opts::desired_present_mode);
+    init_swapchain_context(&backend->swapchain_context, &backend->device_ctx, surface,
+                           vk_opts::desired_present_mode);
 
     create_allocator(backend);
     create_desc_layouts(backend);
 
     for (Frame& frame : backend->frames) {
-        init_frame(&frame,
-                   backend->device_ctx.logical_device,
-                   backend->allocator,
+        init_frame(&frame, backend->device_ctx.logical_device, backend->allocator,
                    backend->device_ctx.queues.graphics_family_index,
                    backend->global_desc_set_layout);
     }
@@ -85,27 +83,19 @@ void init_backend(VkBackend* backend, Window* window, const Camera* camera) {
     backend->image_extent.height = window->height;
 
     backend->color_resolve_image =
-        create_image(backend->device_ctx.logical_device,
-                     backend->allocator,
+        create_image(backend->device_ctx.logical_device, backend->allocator,
                      VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                     backend->image_extent,
-                     VK_FORMAT_R16G16B16A16_SFLOAT,
-                     1);
+                     backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
 
-    backend->color_image =
-        create_image(backend->device_ctx.logical_device,
-                     backend->allocator,
-                     VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
-                     backend->image_extent,
-                     VK_FORMAT_R16G16B16A16_SFLOAT,
-                     backend->device_ctx.raster_samples);
+    backend->color_image = create_image(
+        backend->device_ctx.logical_device, backend->allocator,
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
+        backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, backend->device_ctx.raster_samples);
 
-    backend->depth_image = create_image(backend->device_ctx.logical_device,
-                                        backend->allocator,
-                                        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                                        backend->image_extent,
-                                        VK_FORMAT_D32_SFLOAT,
-                                        backend->device_ctx.raster_samples);
+    backend->depth_image =
+        create_image(backend->device_ctx.logical_device, backend->allocator,
+                     VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, backend->image_extent,
+                     VK_FORMAT_D32_SFLOAT, backend->device_ctx.raster_samples);
 
     // create color attachments and  rendering information from our
     // allocated images
@@ -114,8 +104,7 @@ void init_backend(VkBackend* backend, Window* window, const Camera* camera) {
     backend->imm_fence =
         create_fence(backend->device_ctx.logical_device, VK_FENCE_CREATE_SIGNALED_BIT);
 
-    init_cmd_context(&backend->imm_cmd_context,
-                     backend->device_ctx.logical_device,
+    init_cmd_context(&backend->imm_cmd_context, backend->device_ctx.logical_device,
                      backend->device_ctx.queues.graphics_family_index,
                      VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 
@@ -136,46 +125,32 @@ void init_backend(VkBackend* backend, Window* window, const Camera* camera) {
 // validation errors
 void configure_debugger(VkBackend* backend) {
     init_debugger(&backend->debugger, backend->instance, backend->device_ctx.logical_device);
-    set_handle_name(
-        &backend->debugger, backend->color_image.image, VK_OBJECT_TYPE_IMAGE, "color image");
-    set_handle_name(
-        &backend->debugger, backend->depth_image.image, VK_OBJECT_TYPE_IMAGE, "depth image");
+    set_handle_name(&backend->debugger, backend->color_image.image, VK_OBJECT_TYPE_IMAGE,
+                    "color image");
+    set_handle_name(&backend->debugger, backend->depth_image.image, VK_OBJECT_TYPE_IMAGE,
+                    "depth image");
 
-    set_handle_name(&backend->debugger,
-                    backend->color_image.image_view,
-                    VK_OBJECT_TYPE_IMAGE_VIEW,
+    set_handle_name(&backend->debugger, backend->color_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW,
                     "color image view");
-    set_handle_name(&backend->debugger,
-                    backend->depth_image.image_view,
-                    VK_OBJECT_TYPE_IMAGE_VIEW,
+    set_handle_name(&backend->debugger, backend->depth_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW,
                     "depth image view");
 
-    set_handle_name(&backend->debugger,
-                    backend->color_resolve_image.image,
-                    VK_OBJECT_TYPE_IMAGE,
+    set_handle_name(&backend->debugger, backend->color_resolve_image.image, VK_OBJECT_TYPE_IMAGE,
                     "color resolve image");
-    set_handle_name(&backend->debugger,
-                    backend->color_resolve_image.image_view,
-                    VK_OBJECT_TYPE_IMAGE_VIEW,
-                    "color resolve image view");
+    set_handle_name(&backend->debugger, backend->color_resolve_image.image_view,
+                    VK_OBJECT_TYPE_IMAGE_VIEW, "color resolve image view");
 
     for (size_t i = 0; i < backend->frames.size(); i++) {
         Frame& frame = backend->frames[i];
-        set_handle_name(&backend->debugger,
-                        frame.command_context.primary_buffer,
-                        VK_OBJECT_TYPE_COMMAND_BUFFER,
-                        "frame " + std::to_string(i) + " cmd buf");
+        set_handle_name(&backend->debugger, frame.command_context.primary_buffer,
+                        VK_OBJECT_TYPE_COMMAND_BUFFER, "frame " + std::to_string(i) + " cmd buf");
     }
 
     for (size_t i = 0; i < backend->swapchain_context.images.size(); i++) {
-        set_handle_name(&backend->debugger,
-                        backend->swapchain_context.images[i],
-                        VK_OBJECT_TYPE_IMAGE,
-                        "swapchain  image " + std::to_string(i));
-        set_handle_name(&backend->debugger,
-                        backend->swapchain_context.image_views[i],
-                        VK_OBJECT_TYPE_IMAGE_VIEW,
-                        "swapchain image view " + std::to_string(i));
+        set_handle_name(&backend->debugger, backend->swapchain_context.images[i],
+                        VK_OBJECT_TYPE_IMAGE, "swapchain  image " + std::to_string(i));
+        set_handle_name(&backend->debugger, backend->swapchain_context.image_views[i],
+                        VK_OBJECT_TYPE_IMAGE_VIEW, "swapchain image view " + std::to_string(i));
     }
 }
 
@@ -185,8 +160,7 @@ void create_desc_layouts(VkBackend* backend) {
     add_layout_binding(&layout_builder, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 
     backend->global_desc_set_layout =
-        build_set_layout(&layout_builder,
-                         backend->device_ctx.logical_device,
+        build_set_layout(&layout_builder, backend->device_ctx.logical_device,
                          VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 
     clear_layout_bindings(&layout_builder);
@@ -195,16 +169,14 @@ void create_desc_layouts(VkBackend* backend) {
     add_layout_binding(&layout_builder, 2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
     backend->mat_desc_set_layout =
-        build_set_layout(&layout_builder,
-                         backend->device_ctx.logical_device,
+        build_set_layout(&layout_builder, backend->device_ctx.logical_device,
                          VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
 
     clear_layout_bindings(&layout_builder);
     add_layout_binding(&layout_builder, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 
     backend->draw_obj_desc_set_layout =
-        build_set_layout(&layout_builder,
-                         backend->device_ctx.logical_device,
+        build_set_layout(&layout_builder, backend->device_ctx.logical_device,
                          VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
 }
 
@@ -212,16 +184,12 @@ void configure_render_resources(VkBackend* backend) {
 
     backend->scene_clear_value = {.color = {{1.f, 1.f, 1.f, 1.f}}};
 
-    backend->scene_color_attachment =
-        create_color_attachment_info(backend->color_image.image_view,
-                                     &backend->scene_clear_value,
-                                     VK_ATTACHMENT_LOAD_OP_CLEAR,
-                                     VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                                     backend->color_resolve_image.image_view);
+    backend->scene_color_attachment = create_color_attachment_info(
+        backend->color_image.image_view, &backend->scene_clear_value, VK_ATTACHMENT_LOAD_OP_CLEAR,
+        VK_ATTACHMENT_STORE_OP_DONT_CARE, backend->color_resolve_image.image_view);
 
     backend->scene_depth_attachment =
-        create_depth_attachment_info(backend->depth_image.image_view,
-                                     VK_ATTACHMENT_LOAD_OP_CLEAR,
+        create_depth_attachment_info(backend->depth_image.image_view, VK_ATTACHMENT_LOAD_OP_CLEAR,
                                      VK_ATTACHMENT_STORE_OP_DONT_CARE);
 
     backend->scene_rendering_info = create_rendering_info(
@@ -242,20 +210,16 @@ void create_default_data(VkBackend* backend) {
     sampler_ci.sType     = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
     sampler_ci.magFilter = VK_FILTER_LINEAR;
     sampler_ci.minFilter = VK_FILTER_LINEAR;
-    VK_CHECK(vkCreateSampler(backend->device_ctx.logical_device,
-                             &sampler_ci,
-                             nullptr,
+    VK_CHECK(vkCreateSampler(backend->device_ctx.logical_device, &sampler_ci, nullptr,
                              &backend->default_linear_sampler));
 
     sampler_ci.magFilter = VK_FILTER_NEAREST;
     sampler_ci.minFilter = VK_FILTER_NEAREST;
-    VK_CHECK(vkCreateSampler(backend->device_ctx.logical_device,
-                             &sampler_ci,
-                             nullptr,
+    VK_CHECK(vkCreateSampler(backend->device_ctx.logical_device, &sampler_ci, nullptr,
                              &backend->default_nearest_sampler));
 
-    backend->default_texture = upload_texture(
-        backend, (void*)white_image.data(), VK_IMAGE_USAGE_SAMPLED_BIT, IMAGE_WIDTH, IMAGE_WIDTH);
+    backend->default_texture = upload_texture(backend, (void*)white_image.data(),
+                                              VK_IMAGE_USAGE_SAMPLED_BIT, IMAGE_WIDTH, IMAGE_WIDTH);
 }
 
 void create_gui(VkBackend* backend, const Window* window) {
@@ -282,8 +246,8 @@ void create_gui(VkBackend* backend, const Window* window) {
     pool_ci.poolSizeCount = pool_sizes.size();
     pool_ci.flags         = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
 
-    VK_CHECK(vkCreateDescriptorPool(
-        backend->device_ctx.logical_device, &pool_ci, nullptr, &backend->imm_descriptor_pool));
+    VK_CHECK(vkCreateDescriptorPool(backend->device_ctx.logical_device, &pool_ci, nullptr,
+                                    &backend->imm_descriptor_pool));
 
     VkPipelineRenderingCreateInfoKHR pipeline_info{};
     pipeline_info.sType                   = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
@@ -316,8 +280,7 @@ void update_scene(VkBackend* backend) {
     glm::mat4 projection = glm::perspective(glm::radians(60.f),
                                             (float)backend->swapchain_context.extent.width /
                                                 (float)backend->swapchain_context.extent.height,
-                                            10000.0f,
-                                            0.1f);
+                                            10000.0f, 0.1f);
 
     projection[1][1] *= -1;
 
@@ -346,8 +309,7 @@ void update_ui(VkBackend* backend) {
     ImGui::Begin("Stats", &show_window, window_flags);
 
     ImGui::Text("Host buffer recording: %.3f us", backend->stats.draw_time);
-    ImGui::Text("Frame time: %.3f ms (%.1f FPS)",
-                backend->stats.frame_time,
+    ImGui::Text("Frame time: %.3f ms (%.1f FPS)", backend->stats.frame_time,
                 1000.f / backend->stats.frame_time);
     ImGui::Text("Scene update time: %.3f us", backend->stats.scene_update_time);
 
@@ -364,14 +326,11 @@ void immediate_submit(const VkBackend*                           backend,
 
     function(backend->imm_cmd_context.primary_buffer);
 
-    submit_primary_buffer(&backend->imm_cmd_context,
-                          backend->device_ctx.queues.graphics,
-                          nullptr,
-                          nullptr,
-                          backend->imm_fence);
+    submit_primary_buffer(&backend->imm_cmd_context, backend->device_ctx.queues.graphics, nullptr,
+                          nullptr, backend->imm_fence);
 
-    VK_CHECK(vkWaitForFences(
-        backend->device_ctx.logical_device, 1, &backend->imm_fence, VK_TRUE, vk_opts::timeout_dur));
+    VK_CHECK(vkWaitForFences(backend->device_ctx.logical_device, 1, &backend->imm_fence, VK_TRUE,
+                             vk_opts::timeout_dur));
 }
 
 void create_allocator(VkBackend* backend) {
@@ -435,12 +394,12 @@ void create_pipelines(VkBackend* backend) {
 
     set_pipeline_shaders(&pb, vert_shader, frag_shader);
     set_pipeline_topology(&pb, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-    set_pipeline_raster_state(
-        &pb, VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE, VK_POLYGON_MODE_FILL);
+    set_pipeline_raster_state(&pb, VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE,
+                              VK_POLYGON_MODE_FILL);
     set_pipeline_multisampling(&pb, (VkSampleCountFlagBits)backend->device_ctx.raster_samples);
     set_pipeline_depth_state(&pb, true, true, VK_COMPARE_OP_GREATER_OR_EQUAL);
-    set_pipeline_render_state(
-        &pb, backend->color_image.image_format, backend->depth_image.image_format);
+    set_pipeline_render_state(&pb, backend->color_image.image_format,
+                              backend->depth_image.image_format);
     set_pipeline_blending(&pb, BlendMode::none);
     set_pipeline_layout(&pb, set_layouts, {}, 0);
     backend->opaque_pipeline_info = build_pipeline(&pb, backend->device_ctx.logical_device);
@@ -477,24 +436,16 @@ void draw(VkBackend* backend) {
     Frame*          current_frame = get_current_frame(backend);
     VkCommandBuffer cmd_buffer    = current_frame->command_context.primary_buffer;
 
-    vkWaitForFences(backend->device_ctx.logical_device,
-                    1,
-                    &current_frame->render_fence,
-                    VK_TRUE,
+    vkWaitForFences(backend->device_ctx.logical_device, 1, &current_frame->render_fence, VK_TRUE,
                     vk_opts::timeout_dur);
 
-    set_frame_data(current_frame,
-                   backend->device_ctx.logical_device,
-                   backend->allocator,
+    set_frame_data(current_frame, backend->device_ctx.logical_device, backend->allocator,
                    &backend->frame_data);
 
     uint32_t swapchain_image_index;
-    VkResult result = vkAcquireNextImageKHR(backend->device_ctx.logical_device,
-                                            backend->swapchain_context.swapchain,
-                                            vk_opts::timeout_dur,
-                                            current_frame->present_semaphore,
-                                            nullptr,
-                                            &swapchain_image_index);
+    VkResult result = vkAcquireNextImageKHR(
+        backend->device_ctx.logical_device, backend->swapchain_context.swapchain,
+        vk_opts::timeout_dur, current_frame->present_semaphore, nullptr, &swapchain_image_index);
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
         resize(backend);
@@ -508,19 +459,14 @@ void draw(VkBackend* backend) {
     begin_primary_buffer(&current_frame->command_context,
                          VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
-    insert_image_memory_barrier(cmd_buffer,
-                                backend->color_image.image,
+    insert_image_memory_barrier(cmd_buffer, backend->color_image.image, VK_IMAGE_LAYOUT_UNDEFINED,
+                                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+    insert_image_memory_barrier(cmd_buffer, backend->color_resolve_image.image,
                                 VK_IMAGE_LAYOUT_UNDEFINED,
                                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-    insert_image_memory_barrier(cmd_buffer,
-                                backend->color_resolve_image.image,
-                                VK_IMAGE_LAYOUT_UNDEFINED,
-                                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-
-    insert_image_memory_barrier(cmd_buffer,
-                                backend->depth_image.image,
-                                VK_IMAGE_LAYOUT_UNDEFINED,
+    insert_image_memory_barrier(cmd_buffer, backend->depth_image.image, VK_IMAGE_LAYOUT_UNDEFINED,
                                 VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
     vkCmdBeginRendering(cmd_buffer, &backend->scene_rendering_info);
@@ -531,25 +477,17 @@ void draw(VkBackend* backend) {
 
     vkCmdEndRendering(cmd_buffer);
 
-    insert_image_memory_barrier(cmd_buffer,
-                                backend->color_resolve_image.image,
+    insert_image_memory_barrier(cmd_buffer, backend->color_resolve_image.image,
                                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
-    insert_image_memory_barrier(cmd_buffer,
-                                swapchain_image,
-                                VK_IMAGE_LAYOUT_UNDEFINED,
+    insert_image_memory_barrier(cmd_buffer, swapchain_image, VK_IMAGE_LAYOUT_UNDEFINED,
                                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-    blit_image(cmd_buffer,
-               backend->color_resolve_image.image,
-               swapchain_image,
-               backend->swapchain_context.extent,
-               backend->image_extent);
+    blit_image(cmd_buffer, backend->color_resolve_image.image, swapchain_image,
+               backend->swapchain_context.extent, backend->image_extent);
 
-    insert_image_memory_barrier(cmd_buffer,
-                                swapchain_image,
-                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+    insert_image_memory_barrier(cmd_buffer, swapchain_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                 VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
     VkSemaphoreSubmitInfo wait_semaphore_si = create_semaphore_submit_info(
@@ -558,11 +496,8 @@ void draw(VkBackend* backend) {
     VkSemaphoreSubmitInfo signal_semaphore_si = create_semaphore_submit_info(
         current_frame->render_semaphore, VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT);
 
-    submit_primary_buffer(&current_frame->command_context,
-                          backend->device_ctx.queues.graphics,
-                          &wait_semaphore_si,
-                          &signal_semaphore_si,
-                          current_frame->render_fence);
+    submit_primary_buffer(&current_frame->command_context, backend->device_ctx.queues.graphics,
+                          &wait_semaphore_si, &signal_semaphore_si, current_frame->render_fence);
 
     VkPresentInfoKHR present_info{};
     present_info.sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -602,30 +537,22 @@ void resize(VkBackend* backend) {
     backend->image_extent.width  = backend->swapchain_context.extent.width;
     backend->image_extent.height = backend->swapchain_context.extent.height;
 
-    destroy_image(
-        backend->device_ctx.logical_device, backend->allocator, backend->color_resolve_image);
+    destroy_image(backend->device_ctx.logical_device, backend->allocator,
+                  backend->color_resolve_image);
     backend->color_resolve_image =
-        create_image(backend->device_ctx.logical_device,
-                     backend->allocator,
+        create_image(backend->device_ctx.logical_device, backend->allocator,
                      VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                     backend->image_extent,
-                     VK_FORMAT_R16G16B16A16_SFLOAT,
-                     1);
+                     backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
 
-    backend->color_image =
-        create_image(backend->device_ctx.logical_device,
-                     backend->allocator,
-                     VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
-                     backend->image_extent,
-                     VK_FORMAT_R16G16B16A16_SFLOAT,
-                     backend->device_ctx.raster_samples);
+    backend->color_image = create_image(
+        backend->device_ctx.logical_device, backend->allocator,
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
+        backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, backend->device_ctx.raster_samples);
 
-    backend->depth_image = create_image(backend->device_ctx.logical_device,
-                                        backend->allocator,
-                                        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                                        backend->image_extent,
-                                        VK_FORMAT_D32_SFLOAT,
-                                        backend->device_ctx.raster_samples);
+    backend->depth_image =
+        create_image(backend->device_ctx.logical_device, backend->allocator,
+                     VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, backend->image_extent,
+                     VK_FORMAT_D32_SFLOAT, backend->device_ctx.raster_samples);
 
     configure_render_resources(backend);
 
@@ -655,23 +582,13 @@ void render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf) {
     const auto record_obj = [&](const DrawObject& obj) {
         if (obj.mat_desc_set != current_mat_desc) {
             current_mat_desc = obj.mat_desc_set;
-            vkCmdBindDescriptorSets(cmd_buf,
-                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                    current_pipeline_info.pipeline_layout,
-                                    1,
-                                    1,
-                                    &obj.mat_desc_set,
-                                    0,
-                                    nullptr);
+            vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    current_pipeline_info.pipeline_layout, 1, 1, &obj.mat_desc_set,
+                                    0, nullptr);
         }
 
-        vkCmdBindDescriptorSets(cmd_buf,
-                                VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                current_pipeline_info.pipeline_layout,
-                                2,
-                                1,
-                                &obj.obj_desc_set,
-                                0,
+        vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                current_pipeline_info.pipeline_layout, 2, 1, &obj.obj_desc_set, 0,
                                 nullptr);
 
         vkCmdBindIndexBuffer(cmd_buf, obj.index_buffer, 0, VK_INDEX_TYPE_UINT32);
@@ -687,14 +604,9 @@ void render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf) {
 
     vkCmdSetScissor(cmd_buf, 0, 1, &scissor);
 
-    vkCmdBindDescriptorSets(cmd_buf,
-                            VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            current_pipeline_info.pipeline_layout,
-                            0,
-                            1,
-                            &get_current_frame(backend)->desc_set,
-                            0,
-                            nullptr);
+    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            current_pipeline_info.pipeline_layout, 0, 1,
+                            &get_current_frame(backend)->desc_set, 0, nullptr);
 
     for (const DrawObject& obj : backend->scene.opaque_objs) {
         record_obj(obj);
@@ -749,43 +661,42 @@ void deinit_backend(VkBackend* backend) {
 
     ImGui::DestroyContext();
 
-    vkDestroyDescriptorPool(
-        backend->device_ctx.logical_device, backend->imm_descriptor_pool, nullptr);
+    vkDestroyDescriptorPool(backend->device_ctx.logical_device, backend->imm_descriptor_pool,
+                            nullptr);
 
     destroy_image(backend->device_ctx.logical_device, backend->allocator, backend->color_image);
     destroy_image(backend->device_ctx.logical_device, backend->allocator, backend->depth_image);
     destroy_image(backend->device_ctx.logical_device, backend->allocator, backend->default_texture);
-    destroy_image(
-        backend->device_ctx.logical_device, backend->allocator, backend->color_resolve_image);
+    destroy_image(backend->device_ctx.logical_device, backend->allocator,
+                  backend->color_resolve_image);
 
     vkDestroySampler(backend->device_ctx.logical_device, backend->default_nearest_sampler, nullptr);
     vkDestroySampler(backend->device_ctx.logical_device, backend->default_linear_sampler, nullptr);
 
-    vkDestroyPipelineLayout(
-        backend->device_ctx.logical_device, backend->opaque_pipeline_info.pipeline_layout, nullptr);
     vkDestroyPipelineLayout(backend->device_ctx.logical_device,
-                            backend->transparent_pipeline_info.pipeline_layout,
-                            nullptr);
+                            backend->opaque_pipeline_info.pipeline_layout, nullptr);
+    vkDestroyPipelineLayout(backend->device_ctx.logical_device,
+                            backend->transparent_pipeline_info.pipeline_layout, nullptr);
 
-    vkDestroyDescriptorSetLayout(
-        backend->device_ctx.logical_device, backend->global_desc_set_layout, nullptr);
-    vkDestroyDescriptorSetLayout(
-        backend->device_ctx.logical_device, backend->mat_desc_set_layout, nullptr);
-    vkDestroyDescriptorSetLayout(
-        backend->device_ctx.logical_device, backend->draw_obj_desc_set_layout, nullptr);
+    vkDestroyDescriptorSetLayout(backend->device_ctx.logical_device,
+                                 backend->global_desc_set_layout, nullptr);
+    vkDestroyDescriptorSetLayout(backend->device_ctx.logical_device, backend->mat_desc_set_layout,
+                                 nullptr);
+    vkDestroyDescriptorSetLayout(backend->device_ctx.logical_device,
+                                 backend->draw_obj_desc_set_layout, nullptr);
 
-    vkDestroyPipeline(
-        backend->device_ctx.logical_device, backend->opaque_pipeline_info.pipeline, nullptr);
-    vkDestroyPipeline(
-        backend->device_ctx.logical_device, backend->transparent_pipeline_info.pipeline, nullptr);
+    vkDestroyPipeline(backend->device_ctx.logical_device, backend->opaque_pipeline_info.pipeline,
+                      nullptr);
+    vkDestroyPipeline(backend->device_ctx.logical_device,
+                      backend->transparent_pipeline_info.pipeline, nullptr);
 
     vkDestroyFence(backend->device_ctx.logical_device, backend->imm_fence, nullptr);
 
     vmaDestroyAllocator(backend->allocator);
 
     deinit_cmd_context(&backend->imm_cmd_context, backend->device_ctx.logical_device);
-    deinit_swapchain_context(
-        &backend->swapchain_context, backend->device_ctx.logical_device, backend->instance);
+    deinit_swapchain_context(&backend->swapchain_context, backend->device_ctx.logical_device,
+                             backend->instance);
     deinit_device_context(&backend->device_ctx);
 
     vkDestroyInstance(backend->instance, nullptr);
