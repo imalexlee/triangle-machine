@@ -60,11 +60,8 @@ struct VkBackend {
 
 VkInstance create_vk_instance(const char* app_name, const char* engine_name);
 
-void init_backend(VkBackend*   backend,
-                  VkInstance   instance,
-                  VkSurfaceKHR surface,
-                  int          width,
-                  int          height);
+void init_backend(
+    VkBackend* backend, VkInstance instance, VkSurfaceKHR surface, int width, int height);
 
 void finish_pending_vk_work(VkBackend* backend);
 

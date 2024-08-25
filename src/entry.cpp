@@ -2,7 +2,9 @@
 
 int main() {
     Engine engine;
-    engine.create();
+    init_engine(&engine);
 
-    engine.run();
+    run_engine(&engine);
+
+    deinit_engine(&engine);
 }

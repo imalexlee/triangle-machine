@@ -6,31 +6,23 @@
 #include <vector>
 #include <vulkan/vulkan_core.h>
 
-class Window {
-  public:
+struct Window {
     GLFWwindow* glfw_window{};
+    const char* title;
+    uint32_t    width;
+    uint32_t    height;
 
-    void create(uint32_t width, uint32_t height, const char* title);
-    void destroy();
-
-    VkSurfaceKHR get_vulkan_surface(const VkInstance instance);
-
-    void register_key_callback(std::function<void(int, int, int, int)> fn_ptr);
-    void register_cursor_callback(std::function<void(double, double)> fn_ptr);
-    void register_resize_callback(std::function<void(int, int)> fn_ptr);
-
-    static inline uint32_t width;
-    static inline uint32_t height;
-
-  private:
-    const char* _title;
-
-    static inline std::vector<std::function<void(int, int, int, int)>> _key_callbacks;
-    static inline std::vector<std::function<void(double, double)>>     _cursor_callbacks;
-    static inline std::vector<std::function<void(int, int)>>           _resize_callbacks;
-
-    static void cursor_callback(GLFWwindow* window, double x_pos, double y_pos);
-    static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
-    static void resize_callback(GLFWwindow* window, int new_width, int new_height);
-    static void error_callback(int error, const char* description);
+    static inline std::vector<std::function<void(int, int, int, int)>> key_callbacks;
+    static inline std::vector<std::function<void(double, double)>>     cursor_callbacks;
+    static inline std::vector<std::function<void(int, int)>>           resize_callbacks;
 };
+
+void init_window(Window* window, uint32_t width, uint32_t height, const char* title);
+
+void deinit_window(Window* window);
+
+[[nodiscard]] VkSurfaceKHR get_vulkan_surface(Window* window, const VkInstance instance);
+
+void register_key_callback(Window* window, std::function<void(int, int, int, int)>&& fn_ptr);
+
+void register_cursor_callback(Window* window, std::function<void(double, double)>&& fn_ptr);

@@ -19,11 +19,8 @@ AllocatedImage create_image(VkDevice          device,
                             VkFormat          format,
                             uint32_t          samples = 1);
 
-void blit_image(VkCommandBuffer cmd,
-                VkImage         src,
-                VkImage         dest,
-                VkExtent2D      src_extent,
-                VkExtent2D      dst_extent);
+void blit_image(
+    VkCommandBuffer cmd, VkImage src, VkImage dest, VkExtent2D src_extent, VkExtent2D dst_extent);
 
 void destroy_image(VkDevice device, VmaAllocator allocator, AllocatedImage& allocated_image);
 
@@ -47,8 +44,5 @@ VkRenderingAttachmentInfo create_depth_attachment_info(VkImageView         view,
                                                        VkAttachmentStoreOp store_op);
 
 // uploads texture to gpu memory
-AllocatedImage upload_texture(const VkBackend*  backend,
-                              void*             data,
-                              VkImageUsageFlags usage,
-                              uint32_t          height,
-                              uint32_t          width);
+AllocatedImage upload_texture(
+    const VkBackend* backend, void* data, VkImageUsageFlags usage, uint32_t height, uint32_t width);

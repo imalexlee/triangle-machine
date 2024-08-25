@@ -77,11 +77,8 @@ VkImageView create_image_view(VkDevice           device,
     return image_view;
 }
 
-void blit_image(VkCommandBuffer cmd,
-                VkImage         src,
-                VkImage         dest,
-                VkExtent2D      src_extent,
-                VkExtent2D      dst_extent) {
+void blit_image(
+    VkCommandBuffer cmd, VkImage src, VkImage dest, VkExtent2D src_extent, VkExtent2D dst_extent) {
     VkImageBlit2 blit_region{.sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2, .pNext = nullptr};
     blit_region.srcOffsets[1].x = src_extent.width;
     blit_region.srcOffsets[1].y = src_extent.height;

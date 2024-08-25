@@ -54,11 +54,8 @@ using namespace std::chrono;
 
 static VkBackend* active_backend = nullptr;
 
-void init_backend(VkBackend*   backend,
-                  VkInstance   instance,
-                  VkSurfaceKHR surface,
-                  int          width,
-                  int          height) {
+void init_backend(
+    VkBackend* backend, VkInstance instance, VkSurfaceKHR surface, int width, int height) {
 
     assert(active_backend == nullptr);
     active_backend = backend;
