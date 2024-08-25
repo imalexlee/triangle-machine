@@ -1,3 +1,6 @@
+
+#define GLFW_INCLUDE_VULKAN
+#define GLFW_INCLUDE_NONE
 #include "global_utils.h"
 #include "imgui.h"
 #include "vk_backend/resources/vk_buffer.h"
@@ -5,13 +8,14 @@
 #include "vk_backend/vk_pipeline.h"
 #include "vk_backend/vk_scene.h"
 #include "vk_init.h"
+#include <GLFW/glfw3.h>
 #include <cassert>
 #include <chrono>
-#include <core/camera.h>
 #include <cstring>
 #include <fastgltf/types.hpp>
 #include <fmt/base.h>
 #include <fmt/format.h>
+#include <fstream>
 #include <glm/ext/quaternion_transform.hpp>
 #include <string>
 #include <vk_backend/vk_command.h>
@@ -24,32 +28,24 @@
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan_core.h>
 
-#include "vk_backend/resources/vk_loader.h"
 #include "vk_backend/vk_backend.h"
 #include "vk_backend/vk_sync.h"
 
 // initialization
-static void create_instance(VkBackend* backend);
-static void create_allocator(VkBackend* backend);
-static void create_pipelines(VkBackend* backend);
-static void create_default_data(VkBackend* backend);
-static void create_desc_layouts(VkBackend* backend);
-static void create_gui(VkBackend* backend, const Window* window);
-static void configure_debugger(VkBackend* backend);
-static void configure_render_resources(VkBackend* backend);
-static void load_scenes(VkBackend* backend);
-
+static void    create_allocator(VkBackend* backend);
+static void    create_pipelines(VkBackend* backend);
+static void    create_default_data(VkBackend* backend);
+static void    create_desc_layouts(VkBackend* backend);
+static void    configure_debugger(VkBackend* backend);
+static void    configure_render_resources(VkBackend* backend);
+VkShaderModule load_shader_module(VkBackend* backend, const char* file_path);
 // state update
-static void update_scene(VkBackend* backend);
-static void update_ui(VkBackend* backend);
-static void resize(VkBackend* backend);
-
+static void    resize(VkBackend* backend);
 // rendering
-static void render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf);
-static void render_ui(VkCommandBuffer cmd_buf);
-
+void           render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf, const Entity* entity);
+static void    render_ui(VkCommandBuffer cmd_buf);
 // utils
-static Frame* get_current_frame(VkBackend* backend) {
+static Frame*  get_current_frame(VkBackend* backend) {
     return &backend->frames[backend->frame_num % backend->frames.size()];
 }
 static std::vector<const char*> get_instance_extensions();
@@ -58,54 +54,46 @@ using namespace std::chrono;
 
 static VkBackend* active_backend = nullptr;
 
-void init_backend(VkBackend* backend, Window* window, const Camera* camera) {
+void init_backend(
+    VkBackend* backend, VkInstance instance, VkSurfaceKHR surface, int width, int height) {
+
     assert(active_backend == nullptr);
     active_backend = backend;
 
-    create_instance(backend);
+    backend->instance = instance;
 
-    VkSurfaceKHR surface = window->get_vulkan_surface(backend->instance);
-
+    // VkSurfaceKHR surface;
+    // VK_CHECK(glfwCreateWindowSurface(backend->instance, window, nullptr, &surface));
     init_device_context(&backend->device_ctx, backend->instance, surface);
-    init_swapchain_context(
-        &backend->swapchain_context, &backend->device_ctx, surface, vk_opts::desired_present_mode);
+    init_swapchain_context(&backend->swapchain_context, &backend->device_ctx, surface,
+                           vk_opts::desired_present_mode);
 
     create_allocator(backend);
     create_desc_layouts(backend);
 
     for (Frame& frame : backend->frames) {
-        init_frame(&frame,
-                   backend->device_ctx.logical_device,
-                   backend->allocator,
+        init_frame(&frame, backend->device_ctx.logical_device, backend->allocator,
                    backend->device_ctx.queues.graphics_family_index,
                    backend->global_desc_set_layout);
     }
 
-    backend->image_extent.width  = window->width;
-    backend->image_extent.height = window->height;
+    backend->image_extent.width  = width;
+    backend->image_extent.height = height;
 
     backend->color_resolve_image =
-        create_image(backend->device_ctx.logical_device,
-                     backend->allocator,
+        create_image(backend->device_ctx.logical_device, backend->allocator,
                      VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                     backend->image_extent,
-                     VK_FORMAT_R16G16B16A16_SFLOAT,
-                     1);
+                     backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
 
-    backend->color_image =
-        create_image(backend->device_ctx.logical_device,
-                     backend->allocator,
-                     VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
-                     backend->image_extent,
-                     VK_FORMAT_R16G16B16A16_SFLOAT,
-                     backend->device_ctx.raster_samples);
+    backend->color_image = create_image(
+        backend->device_ctx.logical_device, backend->allocator,
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
+        backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, backend->device_ctx.raster_samples);
 
-    backend->depth_image = create_image(backend->device_ctx.logical_device,
-                                        backend->allocator,
-                                        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                                        backend->image_extent,
-                                        VK_FORMAT_D32_SFLOAT,
-                                        backend->device_ctx.raster_samples);
+    backend->depth_image =
+        create_image(backend->device_ctx.logical_device, backend->allocator,
+                     VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, backend->image_extent,
+                     VK_FORMAT_D32_SFLOAT, backend->device_ctx.raster_samples);
 
     // create color attachments and  rendering information from our
     // allocated images
@@ -114,18 +102,12 @@ void init_backend(VkBackend* backend, Window* window, const Camera* camera) {
     backend->imm_fence =
         create_fence(backend->device_ctx.logical_device, VK_FENCE_CREATE_SIGNALED_BIT);
 
-    init_cmd_context(&backend->imm_cmd_context,
-                     backend->device_ctx.logical_device,
+    init_cmd_context(&backend->imm_cmd_context, backend->device_ctx.logical_device,
                      backend->device_ctx.queues.graphics_family_index,
                      VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 
-    backend->camera = camera;
-
     create_default_data(backend);
     create_pipelines(backend);
-    create_gui(backend, window);
-
-    load_scenes(backend);
 
     if constexpr (vk_opts::validation_enabled) {
         configure_debugger(backend);
@@ -136,46 +118,35 @@ void init_backend(VkBackend* backend, Window* window, const Camera* camera) {
 // validation errors
 void configure_debugger(VkBackend* backend) {
     init_debugger(&backend->debugger, backend->instance, backend->device_ctx.logical_device);
-    set_handle_name(
-        &backend->debugger, backend->color_image.image, VK_OBJECT_TYPE_IMAGE, "color image");
-    set_handle_name(
-        &backend->debugger, backend->depth_image.image, VK_OBJECT_TYPE_IMAGE, "depth image");
+    set_handle_name(&backend->debugger, backend->color_image.image, VK_OBJECT_TYPE_IMAGE,
+                    "color image");
+    set_handle_name(&backend->debugger, backend->depth_image.image, VK_OBJECT_TYPE_IMAGE,
+                    "depth image");
 
-    set_handle_name(&backend->debugger,
-                    backend->color_image.image_view,
-                    VK_OBJECT_TYPE_IMAGE_VIEW,
+    set_handle_name(&backend->debugger, backend->color_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW,
                     "color image view");
-    set_handle_name(&backend->debugger,
-                    backend->depth_image.image_view,
-                    VK_OBJECT_TYPE_IMAGE_VIEW,
+    set_handle_name(&backend->debugger, backend->depth_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW,
                     "depth image view");
 
-    set_handle_name(&backend->debugger,
-                    backend->color_resolve_image.image,
-                    VK_OBJECT_TYPE_IMAGE,
+    set_handle_name(&backend->debugger, backend->color_resolve_image.image, VK_OBJECT_TYPE_IMAGE,
                     "color resolve image");
-    set_handle_name(&backend->debugger,
-                    backend->color_resolve_image.image_view,
-                    VK_OBJECT_TYPE_IMAGE_VIEW,
-                    "color resolve image view");
+    set_handle_name(&backend->debugger, backend->color_resolve_image.image_view,
+                    VK_OBJECT_TYPE_IMAGE_VIEW, "color resolve image view");
+
+    set_handle_name(&backend->debugger, backend->imm_cmd_context.primary_buffer,
+                    VK_OBJECT_TYPE_COMMAND_BUFFER, "imm cmd buf");
 
     for (size_t i = 0; i < backend->frames.size(); i++) {
         Frame& frame = backend->frames[i];
-        set_handle_name(&backend->debugger,
-                        frame.command_context.primary_buffer,
-                        VK_OBJECT_TYPE_COMMAND_BUFFER,
-                        "frame " + std::to_string(i) + " cmd buf");
+        set_handle_name(&backend->debugger, frame.command_context.primary_buffer,
+                        VK_OBJECT_TYPE_COMMAND_BUFFER, "frame " + std::to_string(i) + " cmd buf");
     }
 
     for (size_t i = 0; i < backend->swapchain_context.images.size(); i++) {
-        set_handle_name(&backend->debugger,
-                        backend->swapchain_context.images[i],
-                        VK_OBJECT_TYPE_IMAGE,
-                        "swapchain  image " + std::to_string(i));
-        set_handle_name(&backend->debugger,
-                        backend->swapchain_context.image_views[i],
-                        VK_OBJECT_TYPE_IMAGE_VIEW,
-                        "swapchain image view " + std::to_string(i));
+        set_handle_name(&backend->debugger, backend->swapchain_context.images[i],
+                        VK_OBJECT_TYPE_IMAGE, "swapchain image " + std::to_string(i));
+        set_handle_name(&backend->debugger, backend->swapchain_context.image_views[i],
+                        VK_OBJECT_TYPE_IMAGE_VIEW, "swapchain image view " + std::to_string(i));
     }
 }
 
@@ -185,8 +156,7 @@ void create_desc_layouts(VkBackend* backend) {
     add_layout_binding(&layout_builder, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 
     backend->global_desc_set_layout =
-        build_set_layout(&layout_builder,
-                         backend->device_ctx.logical_device,
+        build_set_layout(&layout_builder, backend->device_ctx.logical_device,
                          VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 
     clear_layout_bindings(&layout_builder);
@@ -195,16 +165,14 @@ void create_desc_layouts(VkBackend* backend) {
     add_layout_binding(&layout_builder, 2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
     backend->mat_desc_set_layout =
-        build_set_layout(&layout_builder,
-                         backend->device_ctx.logical_device,
+        build_set_layout(&layout_builder, backend->device_ctx.logical_device,
                          VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
 
     clear_layout_bindings(&layout_builder);
     add_layout_binding(&layout_builder, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 
     backend->draw_obj_desc_set_layout =
-        build_set_layout(&layout_builder,
-                         backend->device_ctx.logical_device,
+        build_set_layout(&layout_builder, backend->device_ctx.logical_device,
                          VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
 }
 
@@ -212,24 +180,16 @@ void configure_render_resources(VkBackend* backend) {
 
     backend->scene_clear_value = {.color = {{1.f, 1.f, 1.f, 1.f}}};
 
-    backend->scene_color_attachment =
-        create_color_attachment_info(backend->color_image.image_view,
-                                     &backend->scene_clear_value,
-                                     VK_ATTACHMENT_LOAD_OP_CLEAR,
-                                     VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                                     backend->color_resolve_image.image_view);
+    backend->scene_color_attachment = create_color_attachment_info(
+        backend->color_image.image_view, &backend->scene_clear_value, VK_ATTACHMENT_LOAD_OP_CLEAR,
+        VK_ATTACHMENT_STORE_OP_DONT_CARE, backend->color_resolve_image.image_view);
 
     backend->scene_depth_attachment =
-        create_depth_attachment_info(backend->depth_image.image_view,
-                                     VK_ATTACHMENT_LOAD_OP_CLEAR,
+        create_depth_attachment_info(backend->depth_image.image_view, VK_ATTACHMENT_LOAD_OP_CLEAR,
                                      VK_ATTACHMENT_STORE_OP_DONT_CARE);
 
     backend->scene_rendering_info = create_rendering_info(
         backend->scene_color_attachment, backend->scene_depth_attachment, backend->image_extent);
-}
-
-void load_scenes(VkBackend* backend) {
-    backend->scene = load_scene(backend, "../../assets/glb/structure.glb");
 }
 
 void create_default_data(VkBackend* backend) {
@@ -242,34 +202,20 @@ void create_default_data(VkBackend* backend) {
     sampler_ci.sType     = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
     sampler_ci.magFilter = VK_FILTER_LINEAR;
     sampler_ci.minFilter = VK_FILTER_LINEAR;
-    VK_CHECK(vkCreateSampler(backend->device_ctx.logical_device,
-                             &sampler_ci,
-                             nullptr,
+    VK_CHECK(vkCreateSampler(backend->device_ctx.logical_device, &sampler_ci, nullptr,
                              &backend->default_linear_sampler));
 
     sampler_ci.magFilter = VK_FILTER_NEAREST;
     sampler_ci.minFilter = VK_FILTER_NEAREST;
-    VK_CHECK(vkCreateSampler(backend->device_ctx.logical_device,
-                             &sampler_ci,
-                             nullptr,
+    VK_CHECK(vkCreateSampler(backend->device_ctx.logical_device, &sampler_ci, nullptr,
                              &backend->default_nearest_sampler));
 
-    backend->default_texture = upload_texture(
-        backend, (void*)white_image.data(), VK_IMAGE_USAGE_SAMPLED_BIT, IMAGE_WIDTH, IMAGE_WIDTH);
+    uint32_t white = 0xFFFFFFFF;
+    backend->default_texture =
+        upload_texture(backend, (void*)&white, VK_IMAGE_USAGE_SAMPLED_BIT, 1, 1);
 }
 
-void create_gui(VkBackend* backend, const Window* window) {
-
-    ImGui::CreateContext();
-
-    ImGuiIO& io = ImGui::GetIO();
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
-
-    ImGui_ImplGlfw_InitForVulkan(window->glfw_window, true);
-
-    ImGui::StyleColorsDark();
+void create_imgui_vk_resources(VkBackend* backend) {
 
     std::array<VkDescriptorPoolSize, 1> pool_sizes = {
         {{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1}},
@@ -282,8 +228,8 @@ void create_gui(VkBackend* backend, const Window* window) {
     pool_ci.poolSizeCount = pool_sizes.size();
     pool_ci.flags         = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
 
-    VK_CHECK(vkCreateDescriptorPool(
-        backend->device_ctx.logical_device, &pool_ci, nullptr, &backend->imm_descriptor_pool));
+    VK_CHECK(vkCreateDescriptorPool(backend->device_ctx.logical_device, &pool_ci, nullptr,
+                                    &backend->imm_descriptor_pool));
 
     VkPipelineRenderingCreateInfoKHR pipeline_info{};
     pipeline_info.sType                   = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
@@ -306,56 +252,6 @@ void create_gui(VkBackend* backend, const Window* window) {
     ImGui_ImplVulkan_Init(&init_info);
 }
 
-auto time1 = std::chrono::high_resolution_clock::now();
-void update_scene(VkBackend* backend) {
-    auto start_time = system_clock::now();
-    backend->camera->update();
-
-    glm::mat4 model = glm::mat4{1.f};
-
-    glm::mat4 projection = glm::perspective(glm::radians(60.f),
-                                            (float)backend->swapchain_context.extent.width /
-                                                (float)backend->swapchain_context.extent.height,
-                                            10000.0f,
-                                            0.1f);
-
-    projection[1][1] *= -1;
-
-    backend->frame_data.view_proj = projection * backend->camera->view * model;
-    backend->frame_data.eye_pos   = backend->camera->position;
-
-    auto end_time = system_clock::now();
-    auto dur      = duration<float>(end_time - start_time);
-    if (backend->frame_num % 60 == 0) {
-        backend->stats.scene_update_time = duration_cast<nanoseconds>(dur).count() / 1000.f;
-    }
-}
-
-void update_ui(VkBackend* backend) {
-    ImGui_ImplVulkan_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-
-    ImGui::NewFrame();
-
-    bool show_window = true;
-
-    ImGuiWindowFlags window_flags = 0;
-    window_flags |= ImGuiWindowFlags_NoBackground;
-    window_flags |= ImGuiWindowFlags_NoTitleBar;
-
-    ImGui::Begin("Stats", &show_window, window_flags);
-
-    ImGui::Text("Host buffer recording: %.3f us", backend->stats.draw_time);
-    ImGui::Text("Frame time: %.3f ms (%.1f FPS)",
-                backend->stats.frame_time,
-                1000.f / backend->stats.frame_time);
-    ImGui::Text("Scene update time: %.3f us", backend->stats.scene_update_time);
-
-    ImGui::End();
-
-    ImGui::Render();
-}
-
 void immediate_submit(const VkBackend*                           backend,
                       std::function<void(VkCommandBuffer cmd)>&& function) {
     VK_CHECK(vkResetFences(backend->device_ctx.logical_device, 1, &backend->imm_fence));
@@ -364,14 +260,11 @@ void immediate_submit(const VkBackend*                           backend,
 
     function(backend->imm_cmd_context.primary_buffer);
 
-    submit_primary_buffer(&backend->imm_cmd_context,
-                          backend->device_ctx.queues.graphics,
-                          nullptr,
-                          nullptr,
-                          backend->imm_fence);
+    submit_primary_buffer(&backend->imm_cmd_context, backend->device_ctx.queues.graphics, nullptr,
+                          nullptr, backend->imm_fence);
 
-    VK_CHECK(vkWaitForFences(
-        backend->device_ctx.logical_device, 1, &backend->imm_fence, VK_TRUE, vk_opts::timeout_dur));
+    VK_CHECK(vkWaitForFences(backend->device_ctx.logical_device, 1, &backend->imm_fence, VK_TRUE,
+                             vk_opts::timeout_dur));
 }
 
 void create_allocator(VkBackend* backend) {
@@ -384,13 +277,13 @@ void create_allocator(VkBackend* backend) {
     VK_CHECK(vmaCreateAllocator(&allocator_info, &backend->allocator));
 }
 
-void create_instance(VkBackend* backend) {
+VkInstance create_vk_instance(const char* app_name, const char* engine_name) {
 
     VkApplicationInfo app_info{};
     app_info.sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     app_info.pNext              = nullptr;
-    app_info.pApplicationName   = "awesome app";
-    app_info.pEngineName        = "awesome engine";
+    app_info.pApplicationName   = app_name;
+    app_info.pEngineName        = engine_name;
     app_info.engineVersion      = VK_MAKE_VERSION(1, 0, 0);
     app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
     app_info.apiVersion         = VK_API_VERSION_1_3;
@@ -419,15 +312,17 @@ void create_instance(VkBackend* backend) {
         instance_ci.ppEnabledLayerNames = validation_layers.data();
     }
 
-    VK_CHECK(vkCreateInstance(&instance_ci, nullptr, &backend->instance));
+    VkInstance instance;
+    VK_CHECK(vkCreateInstance(&instance_ci, nullptr, &instance));
+    return instance;
 }
 
 void create_pipelines(VkBackend* backend) {
     PipelineBuilder pb;
-    VkShaderModule  vert_shader = load_shader_module(
-        backend->device_ctx.logical_device, "../../shaders/vertex/indexed_triangle.vert.glsl.spv");
-    VkShaderModule frag_shader = load_shader_module(
-        backend->device_ctx.logical_device, "../../shaders/fragment/simple_lighting.frag.glsl.spv");
+    VkShaderModule  vert_shader =
+        load_shader_module(backend, "../../shaders/vertex/indexed_triangle.vert.glsl.spv");
+    VkShaderModule frag_shader =
+        load_shader_module(backend, "../../shaders/fragment/simple_lighting.frag.glsl.spv");
 
     std::array<VkDescriptorSetLayout, 3> set_layouts{backend->global_desc_set_layout,
                                                      backend->mat_desc_set_layout,
@@ -435,12 +330,12 @@ void create_pipelines(VkBackend* backend) {
 
     set_pipeline_shaders(&pb, vert_shader, frag_shader);
     set_pipeline_topology(&pb, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-    set_pipeline_raster_state(
-        &pb, VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE, VK_POLYGON_MODE_FILL);
+    set_pipeline_raster_state(&pb, VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE,
+                              VK_POLYGON_MODE_FILL);
     set_pipeline_multisampling(&pb, (VkSampleCountFlagBits)backend->device_ctx.raster_samples);
     set_pipeline_depth_state(&pb, true, true, VK_COMPARE_OP_GREATER_OR_EQUAL);
-    set_pipeline_render_state(
-        &pb, backend->color_image.image_format, backend->depth_image.image_format);
+    set_pipeline_render_state(&pb, backend->color_image.image_format,
+                              backend->depth_image.image_format);
     set_pipeline_blending(&pb, BlendMode::none);
     set_pipeline_layout(&pb, set_layouts, {}, 0);
     backend->opaque_pipeline_info = build_pipeline(&pb, backend->device_ctx.logical_device);
@@ -468,33 +363,22 @@ std::vector<const char*> get_instance_extensions() {
     return extensions;
 }
 
-void draw(VkBackend* backend) {
+void draw(VkBackend* backend, const Entity* entity, const SceneData* scene_data) {
     auto start_frame_time = system_clock::now();
-
-    update_scene(backend);
-    update_ui(backend);
 
     Frame*          current_frame = get_current_frame(backend);
     VkCommandBuffer cmd_buffer    = current_frame->command_context.primary_buffer;
 
-    vkWaitForFences(backend->device_ctx.logical_device,
-                    1,
-                    &current_frame->render_fence,
-                    VK_TRUE,
+    vkWaitForFences(backend->device_ctx.logical_device, 1, &current_frame->render_fence, VK_TRUE,
                     vk_opts::timeout_dur);
 
-    set_frame_data(current_frame,
-                   backend->device_ctx.logical_device,
-                   backend->allocator,
-                   &backend->frame_data);
+    set_scene_data(current_frame, backend->device_ctx.logical_device, backend->allocator,
+                   scene_data);
 
     uint32_t swapchain_image_index;
-    VkResult result = vkAcquireNextImageKHR(backend->device_ctx.logical_device,
-                                            backend->swapchain_context.swapchain,
-                                            vk_opts::timeout_dur,
-                                            current_frame->present_semaphore,
-                                            nullptr,
-                                            &swapchain_image_index);
+    VkResult result = vkAcquireNextImageKHR(
+        backend->device_ctx.logical_device, backend->swapchain_context.swapchain,
+        vk_opts::timeout_dur, current_frame->present_semaphore, nullptr, &swapchain_image_index);
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
         resize(backend);
@@ -508,48 +392,35 @@ void draw(VkBackend* backend) {
     begin_primary_buffer(&current_frame->command_context,
                          VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
-    insert_image_memory_barrier(cmd_buffer,
-                                backend->color_image.image,
+    insert_image_memory_barrier(cmd_buffer, backend->color_image.image, VK_IMAGE_LAYOUT_UNDEFINED,
+                                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+    insert_image_memory_barrier(cmd_buffer, backend->color_resolve_image.image,
                                 VK_IMAGE_LAYOUT_UNDEFINED,
                                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-    insert_image_memory_barrier(cmd_buffer,
-                                backend->color_resolve_image.image,
-                                VK_IMAGE_LAYOUT_UNDEFINED,
-                                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-
-    insert_image_memory_barrier(cmd_buffer,
-                                backend->depth_image.image,
-                                VK_IMAGE_LAYOUT_UNDEFINED,
+    insert_image_memory_barrier(cmd_buffer, backend->depth_image.image, VK_IMAGE_LAYOUT_UNDEFINED,
                                 VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
     vkCmdBeginRendering(cmd_buffer, &backend->scene_rendering_info);
 
-    render_geometry(backend, cmd_buffer);
+    render_geometry(backend, cmd_buffer, entity);
 
     render_ui(cmd_buffer);
 
     vkCmdEndRendering(cmd_buffer);
 
-    insert_image_memory_barrier(cmd_buffer,
-                                backend->color_resolve_image.image,
+    insert_image_memory_barrier(cmd_buffer, backend->color_resolve_image.image,
                                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
-    insert_image_memory_barrier(cmd_buffer,
-                                swapchain_image,
-                                VK_IMAGE_LAYOUT_UNDEFINED,
+    insert_image_memory_barrier(cmd_buffer, swapchain_image, VK_IMAGE_LAYOUT_UNDEFINED,
                                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-    blit_image(cmd_buffer,
-               backend->color_resolve_image.image,
-               swapchain_image,
-               backend->swapchain_context.extent,
-               backend->image_extent);
+    blit_image(cmd_buffer, backend->color_resolve_image.image, swapchain_image,
+               backend->swapchain_context.extent, backend->image_extent);
 
-    insert_image_memory_barrier(cmd_buffer,
-                                swapchain_image,
-                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+    insert_image_memory_barrier(cmd_buffer, swapchain_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                 VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
     VkSemaphoreSubmitInfo wait_semaphore_si = create_semaphore_submit_info(
@@ -558,11 +429,8 @@ void draw(VkBackend* backend) {
     VkSemaphoreSubmitInfo signal_semaphore_si = create_semaphore_submit_info(
         current_frame->render_semaphore, VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT);
 
-    submit_primary_buffer(&current_frame->command_context,
-                          backend->device_ctx.queues.graphics,
-                          &wait_semaphore_si,
-                          &signal_semaphore_si,
-                          current_frame->render_fence);
+    submit_primary_buffer(&current_frame->command_context, backend->device_ctx.queues.graphics,
+                          &wait_semaphore_si, &signal_semaphore_si, current_frame->render_fence);
 
     VkPresentInfoKHR present_info{};
     present_info.sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -602,30 +470,22 @@ void resize(VkBackend* backend) {
     backend->image_extent.width  = backend->swapchain_context.extent.width;
     backend->image_extent.height = backend->swapchain_context.extent.height;
 
-    destroy_image(
-        backend->device_ctx.logical_device, backend->allocator, backend->color_resolve_image);
+    destroy_image(backend->device_ctx.logical_device, backend->allocator,
+                  backend->color_resolve_image);
     backend->color_resolve_image =
-        create_image(backend->device_ctx.logical_device,
-                     backend->allocator,
+        create_image(backend->device_ctx.logical_device, backend->allocator,
                      VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                     backend->image_extent,
-                     VK_FORMAT_R16G16B16A16_SFLOAT,
-                     1);
+                     backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
 
-    backend->color_image =
-        create_image(backend->device_ctx.logical_device,
-                     backend->allocator,
-                     VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
-                     backend->image_extent,
-                     VK_FORMAT_R16G16B16A16_SFLOAT,
-                     backend->device_ctx.raster_samples);
+    backend->color_image = create_image(
+        backend->device_ctx.logical_device, backend->allocator,
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
+        backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, backend->device_ctx.raster_samples);
 
-    backend->depth_image = create_image(backend->device_ctx.logical_device,
-                                        backend->allocator,
-                                        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                                        backend->image_extent,
-                                        VK_FORMAT_D32_SFLOAT,
-                                        backend->device_ctx.raster_samples);
+    backend->depth_image =
+        create_image(backend->device_ctx.logical_device, backend->allocator,
+                     VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, backend->image_extent,
+                     VK_FORMAT_D32_SFLOAT, backend->device_ctx.raster_samples);
 
     configure_render_resources(backend);
 
@@ -634,7 +494,7 @@ void resize(VkBackend* backend) {
     }
 }
 
-void render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf) {
+void render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf, const Entity* entity) {
     auto buffer_recording_start = system_clock::now();
 
     VkViewport viewport{};
@@ -652,31 +512,21 @@ void render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf) {
     PipelineInfo    current_pipeline_info;
     VkDescriptorSet current_mat_desc = VK_NULL_HANDLE;
 
-    const auto record_obj = [&](const DrawObject& obj) {
-        if (obj.mat_desc_set != current_mat_desc) {
-            current_mat_desc = obj.mat_desc_set;
-            vkCmdBindDescriptorSets(cmd_buf,
-                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                    current_pipeline_info.pipeline_layout,
-                                    1,
-                                    1,
-                                    &obj.mat_desc_set,
-                                    0,
-                                    nullptr);
+    const auto record_obj = [&](const DrawObject* obj) {
+        if (obj->mat_desc_set != current_mat_desc) {
+            current_mat_desc = obj->mat_desc_set;
+            vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    current_pipeline_info.pipeline_layout, 1, 1, &obj->mat_desc_set,
+                                    0, nullptr);
         }
 
-        vkCmdBindDescriptorSets(cmd_buf,
-                                VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                current_pipeline_info.pipeline_layout,
-                                2,
-                                1,
-                                &obj.obj_desc_set,
-                                0,
+        vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                current_pipeline_info.pipeline_layout, 2, 1, &obj->obj_desc_set, 0,
                                 nullptr);
 
-        vkCmdBindIndexBuffer(cmd_buf, obj.index_buffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdBindIndexBuffer(cmd_buf, obj->index_buffer, 0, VK_INDEX_TYPE_UINT32);
 
-        vkCmdDrawIndexed(cmd_buf, obj.indices_count, 1, obj.indices_start, 0, 0);
+        vkCmdDrawIndexed(cmd_buf, obj->indices_count, 1, obj->indices_start, 0, 0);
     };
 
     current_pipeline_info = backend->opaque_pipeline_info;
@@ -687,25 +537,20 @@ void render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf) {
 
     vkCmdSetScissor(cmd_buf, 0, 1, &scissor);
 
-    vkCmdBindDescriptorSets(cmd_buf,
-                            VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            current_pipeline_info.pipeline_layout,
-                            0,
-                            1,
-                            &get_current_frame(backend)->desc_set,
-                            0,
-                            nullptr);
+    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            current_pipeline_info.pipeline_layout, 0, 1,
+                            &get_current_frame(backend)->desc_set, 0, nullptr);
 
-    for (const DrawObject& obj : backend->scene.opaque_objs) {
-        record_obj(obj);
+    for (const DrawObject& obj : entity->opaque_objs) {
+        record_obj(&obj);
     }
 
     current_pipeline_info = backend->transparent_pipeline_info;
 
     vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline_info.pipeline);
 
-    for (const DrawObject& obj : backend->scene.transparent_objs) {
-        record_obj(obj);
+    for (const DrawObject& obj : entity->transparent_objs) {
+        record_obj(&obj);
     }
 
     auto end_time = system_clock::now();
@@ -720,8 +565,33 @@ void render_ui(VkCommandBuffer cmd_buf) {
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd_buf);
 }
 
-void deinit_backend(VkBackend* backend) {
+VkShaderModule load_shader_module(VkBackend* backend, const char* file_path) {
+
+    std::ifstream         file(file_path, std::ios::ate | std::ios::binary);
+    size_t                file_size = (size_t)file.tellg();
+    std::vector<uint32_t> buffer(file_size / sizeof(uint32_t));
+
+    file.seekg(0);
+    file.read((char*)buffer.data(), file_size);
+    file.close();
+
+    VkShaderModule           shader_module;
+    VkShaderModuleCreateInfo shader_module_ci{};
+    shader_module_ci.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    shader_module_ci.codeSize = file_size;
+    shader_module_ci.pCode    = buffer.data();
+
+    VK_CHECK(vkCreateShaderModule(backend->device_ctx.logical_device, &shader_module_ci, nullptr,
+                                  &shader_module));
+
+    return shader_module;
+}
+
+void finish_pending_vk_work(VkBackend* backend) {
     vkDeviceWaitIdle(backend->device_ctx.logical_device);
+}
+
+void deinit_backend(VkBackend* backend) {
     DEBUG_PRINT("destroying Vulkan Backend");
 
     fmt::println("average draw time: {:.3f} us",
@@ -742,50 +612,46 @@ void deinit_backend(VkBackend* backend) {
         destroy_buffer(backend->allocator, &frame.frame_data_buf);
     }
 
-    destroy_scene(backend);
-
-    ImGui_ImplGlfw_Shutdown();
-    ImGui_ImplVulkan_Shutdown();
-
-    ImGui::DestroyContext();
-
-    vkDestroyDescriptorPool(
-        backend->device_ctx.logical_device, backend->imm_descriptor_pool, nullptr);
+    vkDestroyDescriptorPool(backend->device_ctx.logical_device, backend->imm_descriptor_pool,
+                            nullptr);
 
     destroy_image(backend->device_ctx.logical_device, backend->allocator, backend->color_image);
     destroy_image(backend->device_ctx.logical_device, backend->allocator, backend->depth_image);
     destroy_image(backend->device_ctx.logical_device, backend->allocator, backend->default_texture);
-    destroy_image(
-        backend->device_ctx.logical_device, backend->allocator, backend->color_resolve_image);
+    destroy_image(backend->device_ctx.logical_device, backend->allocator,
+                  backend->color_resolve_image);
+
+    deinit_desc_allocator(&backend->mat_desc_allocator, backend->device_ctx.logical_device);
+    deinit_desc_allocator(&backend->obj_desc_allocator, backend->device_ctx.logical_device);
 
     vkDestroySampler(backend->device_ctx.logical_device, backend->default_nearest_sampler, nullptr);
     vkDestroySampler(backend->device_ctx.logical_device, backend->default_linear_sampler, nullptr);
 
-    vkDestroyPipelineLayout(
-        backend->device_ctx.logical_device, backend->opaque_pipeline_info.pipeline_layout, nullptr);
     vkDestroyPipelineLayout(backend->device_ctx.logical_device,
-                            backend->transparent_pipeline_info.pipeline_layout,
-                            nullptr);
+                            backend->opaque_pipeline_info.pipeline_layout, nullptr);
+    vkDestroyPipelineLayout(backend->device_ctx.logical_device,
+                            backend->transparent_pipeline_info.pipeline_layout, nullptr);
 
-    vkDestroyDescriptorSetLayout(
-        backend->device_ctx.logical_device, backend->global_desc_set_layout, nullptr);
-    vkDestroyDescriptorSetLayout(
-        backend->device_ctx.logical_device, backend->mat_desc_set_layout, nullptr);
-    vkDestroyDescriptorSetLayout(
-        backend->device_ctx.logical_device, backend->draw_obj_desc_set_layout, nullptr);
+    vkDestroyDescriptorSetLayout(backend->device_ctx.logical_device,
+                                 backend->global_desc_set_layout, nullptr);
+    vkDestroyDescriptorSetLayout(backend->device_ctx.logical_device, backend->mat_desc_set_layout,
+                                 nullptr);
+    vkDestroyDescriptorSetLayout(backend->device_ctx.logical_device,
+                                 backend->draw_obj_desc_set_layout, nullptr);
 
-    vkDestroyPipeline(
-        backend->device_ctx.logical_device, backend->opaque_pipeline_info.pipeline, nullptr);
-    vkDestroyPipeline(
-        backend->device_ctx.logical_device, backend->transparent_pipeline_info.pipeline, nullptr);
+    vkDestroyPipeline(backend->device_ctx.logical_device, backend->opaque_pipeline_info.pipeline,
+                      nullptr);
+    vkDestroyPipeline(backend->device_ctx.logical_device,
+                      backend->transparent_pipeline_info.pipeline, nullptr);
 
     vkDestroyFence(backend->device_ctx.logical_device, backend->imm_fence, nullptr);
 
     vmaDestroyAllocator(backend->allocator);
 
     deinit_cmd_context(&backend->imm_cmd_context, backend->device_ctx.logical_device);
-    deinit_swapchain_context(
-        &backend->swapchain_context, backend->device_ctx.logical_device, backend->instance);
+    deinit_swapchain_context(&backend->swapchain_context, backend->device_ctx.logical_device,
+                             backend->instance);
+
     deinit_device_context(&backend->device_ctx);
 
     vkDestroyInstance(backend->instance, nullptr);

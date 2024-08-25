@@ -61,19 +61,19 @@ void get_queue_family_indices(DeviceContext* device_ctx, VkSurfaceKHR surface) {
     std::vector<VkQueueFamilyProperties> queue_family_properties;
     uint32_t                             family_property_count;
 
-    vkGetPhysicalDeviceQueueFamilyProperties(
-        device_ctx->physical_device, &family_property_count, nullptr);
+    vkGetPhysicalDeviceQueueFamilyProperties(device_ctx->physical_device, &family_property_count,
+                                             nullptr);
     queue_family_properties.resize(family_property_count);
-    vkGetPhysicalDeviceQueueFamilyProperties(
-        device_ctx->physical_device, &family_property_count, queue_family_properties.data());
+    vkGetPhysicalDeviceQueueFamilyProperties(device_ctx->physical_device, &family_property_count,
+                                             queue_family_properties.data());
 
     std::optional<uint32_t> graphics_index;
     std::optional<uint32_t> present_index;
 
     for (uint32_t i = 0; i < queue_family_properties.size(); i++) {
         VkBool32 present_supported = VK_FALSE;
-        vkGetPhysicalDeviceSurfaceSupportKHR(
-            device_ctx->physical_device, i, surface, &present_supported);
+        vkGetPhysicalDeviceSurfaceSupportKHR(device_ctx->physical_device, i, surface,
+                                             &present_supported);
         // iterate through all queues and hope to find one queue family that supports both.
         // Otherwise, pick out queues that either present or graphics can use.
         bool graphics_supported = queue_family_properties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT;
@@ -142,15 +142,11 @@ void create_logical_device(DeviceContext* device_ctx) {
     device_ci.enabledExtensionCount   = device_extensions.size();
     device_ci.pNext                   = &features_1_2;
 
-    VK_CHECK(vkCreateDevice(
-        device_ctx->physical_device, &device_ci, nullptr, &device_ctx->logical_device));
+    VK_CHECK(vkCreateDevice(device_ctx->physical_device, &device_ci, nullptr,
+                            &device_ctx->logical_device));
 
-    vkGetDeviceQueue(device_ctx->logical_device,
-                     device_ctx->queues.graphics_family_index,
-                     0,
+    vkGetDeviceQueue(device_ctx->logical_device, device_ctx->queues.graphics_family_index, 0,
                      &device_ctx->queues.graphics);
-    vkGetDeviceQueue(device_ctx->logical_device,
-                     device_ctx->queues.present_family_index,
-                     0,
+    vkGetDeviceQueue(device_ctx->logical_device, device_ctx->queues.present_family_index, 0,
                      &device_ctx->queues.present);
 }

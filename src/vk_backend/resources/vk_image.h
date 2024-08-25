@@ -2,6 +2,8 @@
 
 #include <vk_backend/vk_types.h>
 
+struct VkBackend;
+
 struct AllocatedImage {
     VkImage       image;
     VkImageView   image_view;
@@ -40,3 +42,7 @@ VkRenderingAttachmentInfo create_color_attachment_info(VkImageView         view,
 VkRenderingAttachmentInfo create_depth_attachment_info(VkImageView         view,
                                                        VkAttachmentLoadOp  load_op,
                                                        VkAttachmentStoreOp store_op);
+
+// uploads texture to gpu memory
+AllocatedImage upload_texture(
+    const VkBackend* backend, void* data, VkImageUsageFlags usage, uint32_t height, uint32_t width);

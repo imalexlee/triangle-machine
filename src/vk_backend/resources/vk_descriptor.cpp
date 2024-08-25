@@ -94,8 +94,8 @@ void update_desc_set(DescriptorWriter* desc_writer, VkDevice device, VkDescripto
         write.dstSet = set;
     }
 
-    vkUpdateDescriptorSets(
-        device, desc_writer->writes.size(), desc_writer->writes.data(), 0, nullptr);
+    vkUpdateDescriptorSets(device, desc_writer->writes.size(), desc_writer->writes.data(), 0,
+                           nullptr);
 }
 
 void init_desc_allocator(DescriptorAllocator*     desc_allocator,
