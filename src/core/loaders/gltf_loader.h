@@ -14,8 +14,6 @@
 
 [[nodiscard]] Entity load_scene(VkBackend* backend, std::filesystem::path path);
 
-// void destroy_scene(VkBackend* backend);
-
 //  downloads texture from external image data (png or jpg) to then load onto the gpu
 [[nodiscard]] AllocatedImage
 download_texture(const VkBackend* backend, fastgltf::Asset* asset, fastgltf::Texture* gltf_texture);

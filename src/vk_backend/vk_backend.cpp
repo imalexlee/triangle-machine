@@ -1,3 +1,6 @@
+
+#define GLFW_INCLUDE_VULKAN
+#define GLFW_INCLUDE_NONE
 #include "global_utils.h"
 #include "imgui.h"
 #include "vk_backend/resources/vk_buffer.h"
@@ -5,9 +8,9 @@
 #include "vk_backend/vk_pipeline.h"
 #include "vk_backend/vk_scene.h"
 #include "vk_init.h"
+#include <GLFW/glfw3.h>
 #include <cassert>
 #include <chrono>
-#include <core/camera.h>
 #include <cstring>
 #include <fastgltf/types.hpp>
 #include <fmt/base.h>
@@ -29,18 +32,14 @@
 #include "vk_backend/vk_sync.h"
 
 // initialization
-static void    create_instance(VkBackend* backend);
 static void    create_allocator(VkBackend* backend);
 static void    create_pipelines(VkBackend* backend);
 static void    create_default_data(VkBackend* backend);
 static void    create_desc_layouts(VkBackend* backend);
-static void    create_gui(VkBackend* backend, const Window* window);
 static void    configure_debugger(VkBackend* backend);
 static void    configure_render_resources(VkBackend* backend);
 VkShaderModule load_shader_module(VkBackend* backend, const char* file_path);
 // state update
-static void    update_scene(VkBackend* backend);
-static void    update_ui(VkBackend* backend);
 static void    resize(VkBackend* backend);
 // rendering
 void           render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf, const Entity* entity);
@@ -55,15 +54,19 @@ using namespace std::chrono;
 
 static VkBackend* active_backend = nullptr;
 
-void init_backend(VkBackend* backend, Window* window, const Camera* camera) {
+void init_backend(VkBackend*   backend,
+                  VkInstance   instance,
+                  VkSurfaceKHR surface,
+                  int          width,
+                  int          height) {
+
     assert(active_backend == nullptr);
     active_backend = backend;
 
-    create_instance(backend);
-    backend->camera = camera;
+    backend->instance = instance;
 
-    VkSurfaceKHR surface = window->get_vulkan_surface(backend->instance);
-
+    // VkSurfaceKHR surface;
+    // VK_CHECK(glfwCreateWindowSurface(backend->instance, window, nullptr, &surface));
     init_device_context(&backend->device_ctx, backend->instance, surface);
     init_swapchain_context(&backend->swapchain_context, &backend->device_ctx, surface,
                            vk_opts::desired_present_mode);
@@ -77,8 +80,8 @@ void init_backend(VkBackend* backend, Window* window, const Camera* camera) {
                    backend->global_desc_set_layout);
     }
 
-    backend->image_extent.width  = window->width;
-    backend->image_extent.height = window->height;
+    backend->image_extent.width  = width;
+    backend->image_extent.height = height;
 
     backend->color_resolve_image =
         create_image(backend->device_ctx.logical_device, backend->allocator,
@@ -108,7 +111,6 @@ void init_backend(VkBackend* backend, Window* window, const Camera* camera) {
 
     create_default_data(backend);
     create_pipelines(backend);
-    create_gui(backend, window);
 
     if constexpr (vk_opts::validation_enabled) {
         configure_debugger(backend);
@@ -134,6 +136,9 @@ void configure_debugger(VkBackend* backend) {
     set_handle_name(&backend->debugger, backend->color_resolve_image.image_view,
                     VK_OBJECT_TYPE_IMAGE_VIEW, "color resolve image view");
 
+    set_handle_name(&backend->debugger, backend->imm_cmd_context.primary_buffer,
+                    VK_OBJECT_TYPE_COMMAND_BUFFER, "imm cmd buf");
+
     for (size_t i = 0; i < backend->frames.size(); i++) {
         Frame& frame = backend->frames[i];
         set_handle_name(&backend->debugger, frame.command_context.primary_buffer,
@@ -142,7 +147,7 @@ void configure_debugger(VkBackend* backend) {
 
     for (size_t i = 0; i < backend->swapchain_context.images.size(); i++) {
         set_handle_name(&backend->debugger, backend->swapchain_context.images[i],
-                        VK_OBJECT_TYPE_IMAGE, "swapchain  image " + std::to_string(i));
+                        VK_OBJECT_TYPE_IMAGE, "swapchain image " + std::to_string(i));
         set_handle_name(&backend->debugger, backend->swapchain_context.image_views[i],
                         VK_OBJECT_TYPE_IMAGE_VIEW, "swapchain image view " + std::to_string(i));
     }
@@ -213,18 +218,7 @@ void create_default_data(VkBackend* backend) {
         upload_texture(backend, (void*)&white, VK_IMAGE_USAGE_SAMPLED_BIT, 1, 1);
 }
 
-void create_gui(VkBackend* backend, const Window* window) {
-
-    ImGui::CreateContext();
-
-    ImGuiIO& io = ImGui::GetIO();
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
-
-    ImGui_ImplGlfw_InitForVulkan(window->glfw_window, true);
-
-    ImGui::StyleColorsDark();
+void create_imgui_vk_resources(VkBackend* backend) {
 
     std::array<VkDescriptorPoolSize, 1> pool_sizes = {
         {{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1}},
@@ -261,30 +255,6 @@ void create_gui(VkBackend* backend, const Window* window) {
     ImGui_ImplVulkan_Init(&init_info);
 }
 
-void update_ui(VkBackend* backend) {
-    ImGui_ImplVulkan_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-
-    ImGui::NewFrame();
-
-    bool show_window = true;
-
-    ImGuiWindowFlags window_flags = 0;
-    window_flags |= ImGuiWindowFlags_NoBackground;
-    window_flags |= ImGuiWindowFlags_NoTitleBar;
-
-    ImGui::Begin("Stats", &show_window, window_flags);
-
-    ImGui::Text("Host buffer recording: %.3f us", backend->stats.draw_time);
-    ImGui::Text("Frame time: %.3f ms (%.1f FPS)", backend->stats.frame_time,
-                1000.f / backend->stats.frame_time);
-    ImGui::Text("Scene update time: %.3f us", backend->stats.scene_update_time);
-
-    ImGui::End();
-
-    ImGui::Render();
-}
-
 void immediate_submit(const VkBackend*                           backend,
                       std::function<void(VkCommandBuffer cmd)>&& function) {
     VK_CHECK(vkResetFences(backend->device_ctx.logical_device, 1, &backend->imm_fence));
@@ -310,13 +280,13 @@ void create_allocator(VkBackend* backend) {
     VK_CHECK(vmaCreateAllocator(&allocator_info, &backend->allocator));
 }
 
-void create_instance(VkBackend* backend) {
+VkInstance create_vk_instance(const char* app_name, const char* engine_name) {
 
     VkApplicationInfo app_info{};
     app_info.sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     app_info.pNext              = nullptr;
-    app_info.pApplicationName   = "awesome app";
-    app_info.pEngineName        = "awesome engine";
+    app_info.pApplicationName   = app_name;
+    app_info.pEngineName        = engine_name;
     app_info.engineVersion      = VK_MAKE_VERSION(1, 0, 0);
     app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
     app_info.apiVersion         = VK_API_VERSION_1_3;
@@ -345,7 +315,9 @@ void create_instance(VkBackend* backend) {
         instance_ci.ppEnabledLayerNames = validation_layers.data();
     }
 
-    VK_CHECK(vkCreateInstance(&instance_ci, nullptr, &backend->instance));
+    VkInstance instance;
+    VK_CHECK(vkCreateInstance(&instance_ci, nullptr, &instance));
+    return instance;
 }
 
 void create_pipelines(VkBackend* backend) {
@@ -394,11 +366,8 @@ std::vector<const char*> get_instance_extensions() {
     return extensions;
 }
 
-void draw(VkBackend* backend, const Entity* entity) {
+void draw(VkBackend* backend, const Entity* entity, const SceneData* scene_data) {
     auto start_frame_time = system_clock::now();
-
-    update_scene(backend);
-    update_ui(backend);
 
     Frame*          current_frame = get_current_frame(backend);
     VkCommandBuffer cmd_buffer    = current_frame->command_context.primary_buffer;
@@ -406,8 +375,8 @@ void draw(VkBackend* backend, const Entity* entity) {
     vkWaitForFences(backend->device_ctx.logical_device, 1, &current_frame->render_fence, VK_TRUE,
                     vk_opts::timeout_dur);
 
-    set_frame_data(current_frame, backend->device_ctx.logical_device, backend->allocator,
-                   &backend->frame_data);
+    set_scene_data(current_frame, backend->device_ctx.logical_device, backend->allocator,
+                   scene_data);
 
     uint32_t swapchain_image_index;
     VkResult result = vkAcquireNextImageKHR(
@@ -528,29 +497,6 @@ void resize(VkBackend* backend) {
     }
 }
 
-void update_scene(VkBackend* backend) {
-    auto start_time = system_clock::now();
-    backend->camera->update();
-
-    glm::mat4 model = glm::mat4{1.f};
-
-    glm::mat4 projection = glm::perspective(glm::radians(60.f),
-                                            (float)backend->swapchain_context.extent.width /
-                                                (float)backend->swapchain_context.extent.height,
-                                            10000.0f, 0.1f);
-
-    projection[1][1] *= -1;
-
-    backend->frame_data.view_proj = projection * backend->camera->view * model;
-    backend->frame_data.eye_pos   = backend->camera->position;
-
-    auto end_time = system_clock::now();
-    auto dur      = duration<float>(end_time - start_time);
-    if (backend->frame_num % 60 == 0) {
-        backend->stats.scene_update_time = duration_cast<nanoseconds>(dur).count() / 1000.f;
-    }
-}
-
 void render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf, const Entity* entity) {
     auto buffer_recording_start = system_clock::now();
 
@@ -644,8 +590,11 @@ VkShaderModule load_shader_module(VkBackend* backend, const char* file_path) {
     return shader_module;
 }
 
-void deinit_backend(VkBackend* backend) {
+void finish_pending_vk_work(VkBackend* backend) {
     vkDeviceWaitIdle(backend->device_ctx.logical_device);
+}
+
+void deinit_backend(VkBackend* backend) {
     DEBUG_PRINT("destroying Vulkan Backend");
 
     fmt::println("average draw time: {:.3f} us",
@@ -665,11 +614,6 @@ void deinit_backend(VkBackend* backend) {
         deinit_frame(&frame, backend->device_ctx.logical_device);
         destroy_buffer(backend->allocator, &frame.frame_data_buf);
     }
-
-    ImGui_ImplGlfw_Shutdown();
-    ImGui_ImplVulkan_Shutdown();
-
-    ImGui::DestroyContext();
 
     vkDestroyDescriptorPool(backend->device_ctx.logical_device, backend->imm_descriptor_pool,
                             nullptr);
@@ -710,6 +654,7 @@ void deinit_backend(VkBackend* backend) {
     deinit_cmd_context(&backend->imm_cmd_context, backend->device_ctx.logical_device);
     deinit_swapchain_context(&backend->swapchain_context, backend->device_ctx.logical_device,
                              backend->instance);
+
     deinit_device_context(&backend->device_ctx);
 
     vkDestroyInstance(backend->instance, nullptr);

@@ -1,7 +1,9 @@
 #pragma once
 
+#include "camera.h"
 #include "core/window.h"
 #include "vk_backend/vk_backend.h"
+#include <core/ui.h>
 
 class Engine {
   public:
@@ -17,4 +19,5 @@ class Engine {
     VkBackend _backend;
     Window    _window;
     Camera    _camera;
+    UI        ui;
 };

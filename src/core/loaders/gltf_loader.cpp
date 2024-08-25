@@ -26,6 +26,8 @@ struct DrawObjUniformData {
     VkDeviceAddress vertex_buffer_address;
 };
 
+// These are primarily temporary structures just for help
+// with organizing loading GLTF files
 struct GLTFTexture {
     AllocatedImage tex;
     VkSampler      sampler;
@@ -628,33 +630,3 @@ Entity load_scene(VkBackend* backend, std::filesystem::path path) {
 
     return entity;
 }
-
-// void destroy_scene(VkBackend* backend) {
-//
-//     DEBUG_PRINT("Destroying Scene");
-//
-//     VkDevice     device    = backend->device_ctx.logical_device;
-//     VmaAllocator allocator = backend->allocator;
-//
-//     for (auto& sampler : backend->scene.samplers) {
-//         vkDestroySampler(device, sampler, nullptr);
-//     }
-//     for (auto& mesh : backend->scene.mesh_buffers) {
-//         destroy_buffer(allocator, &mesh.indices);
-//         destroy_buffer(allocator, &mesh.vertices);
-//     }
-//     for (auto& material : backend->scene.material_buffers) {
-//
-//         if (material.color_tex.image != backend->default_texture.image) {
-//             destroy_image(device, allocator, material.color_tex);
-//         }
-//         if (material.metal_rough_tex.image != backend->default_texture.image) {
-//             destroy_image(device, allocator, material.metal_rough_tex);
-//         }
-//         destroy_buffer(allocator, &material.mat_uniform_buffer);
-//     }
-//
-//     for (auto& draw_obj_uniform : backend->scene.draw_obj_uniform_buffers) {
-//         destroy_buffer(allocator, &draw_obj_uniform);
-//     }
-// }

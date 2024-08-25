@@ -1,16 +1,11 @@
 #pragma once
 
-#include "core/window.h"
 #include "vk_backend/resources/vk_image.h"
 #include "vk_backend/vk_command.h"
 #include "vk_backend/vk_debug.h"
 #include "vk_backend/vk_device.h"
 #include "vk_backend/vk_frame.h"
 #include "vk_backend/vk_utils.h"
-#include <core/camera.h>
-#include <cstdint>
-#include <imgui.h>
-#include <imgui_impl_glfw.h>
 #include <imgui_impl_vulkan.h>
 #include <vk_backend/vk_options.h>
 #include <vk_backend/vk_pipeline.h>
@@ -39,7 +34,6 @@ struct VkBackend {
     PipelineInfo              transparent_pipeline_info;
     VkDescriptorSetLayout     global_desc_set_layout;
     VkDescriptorSetLayout     mat_desc_set_layout;
-    const Camera*             camera;
     VkDescriptorSetLayout     draw_obj_desc_set_layout;
     Stats                     stats;
     CommandContext            imm_cmd_context;
@@ -55,7 +49,7 @@ struct VkBackend {
     AllocatedImage            depth_image;
     uint64_t                  frame_num{1};
     std::array<Frame, 3>      frames;
-    FrameData                 frame_data;
+    SceneData                 scene_data;
     VkSampler                 default_linear_sampler;
     VkSampler                 default_nearest_sampler;
     AllocatedImage            default_texture;
@@ -64,11 +58,21 @@ struct VkBackend {
     DeletionQueue             deletion_queue;
 };
 
-void init_backend(VkBackend* backend, Window* window, const Camera* camera);
+VkInstance create_vk_instance(const char* app_name, const char* engine_name);
+
+void init_backend(VkBackend*   backend,
+                  VkInstance   instance,
+                  VkSurfaceKHR surface,
+                  int          width,
+                  int          height);
+
+void finish_pending_vk_work(VkBackend* backend);
 
 void deinit_backend(VkBackend* backend);
 
-void draw(VkBackend* backend, const Entity* entity);
+void draw(VkBackend* backend, const Entity* entity, const SceneData* scene_data);
 
 void immediate_submit(const VkBackend*                           backend,
                       std::function<void(VkCommandBuffer cmd)>&& function);
+
+void create_imgui_vk_resources(VkBackend* backend);

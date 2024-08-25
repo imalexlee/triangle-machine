@@ -1,5 +1,6 @@
 #pragma once
 
+#include <vk_backend/vk_frame.h>
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #define GLM_ENABLE_EXPERIMENTAL
 
@@ -29,5 +30,5 @@ class Camera {
     static void key_callback(int key, int scancode, int action, int mods);
     static void cursor_callback(double x_pos, double y_pos);
 
-    static void update();
+    SceneData update(int window_width, int window_height);
 };

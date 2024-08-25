@@ -22,7 +22,7 @@ void init_frame(Frame*                frame,
                      VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 
     frame->frame_data_buf = create_buffer(
-        sizeof(FrameData), allocator, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        sizeof(SceneData), allocator, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
         VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
         VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT);
 
@@ -33,15 +33,15 @@ void init_frame(Frame*                frame,
     frame->desc_set = allocate_desc_set(&frame->desc_allocator, device, set_layout);
 }
 
-void set_frame_data(const Frame*     frame,
+void set_scene_data(const Frame*     frame,
                     VkDevice         device,
                     VmaAllocator     allocator,
-                    const FrameData* frame_data) {
-    vmaCopyMemoryToAllocation(allocator, frame_data, frame->frame_data_buf.allocation, 0,
-                              sizeof(FrameData));
+                    const SceneData* scene_data) {
+    vmaCopyMemoryToAllocation(allocator, scene_data, frame->frame_data_buf.allocation, 0,
+                              sizeof(SceneData));
 
     DescriptorWriter desc_writer;
-    write_buffer_desc(&desc_writer, 0, frame->frame_data_buf.buffer, sizeof(FrameData), 0,
+    write_buffer_desc(&desc_writer, 0, frame->frame_data_buf.buffer, sizeof(SceneData), 0,
                       VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
     update_desc_set(&desc_writer, device, frame->desc_set);
 };

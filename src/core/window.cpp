@@ -46,7 +46,7 @@ void Window::create(uint32_t width, uint32_t height, const char* title) {
     glfwSetWindowSizeCallback(glfw_window, resize_callback);
 }
 
-VkSurfaceKHR Window::get_vulkan_surface(const VkInstance instance) {
+VkSurfaceKHR Window::get_vulkan_surface(VkInstance instance) {
     VkSurfaceKHR surface;
     VK_CHECK(glfwCreateWindowSurface(instance, glfw_window, nullptr, &surface));
     return surface;

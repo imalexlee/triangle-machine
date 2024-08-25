@@ -8,7 +8,7 @@
 #include <vulkan/vulkan_core.h>
 
 // contains per-frame shader information
-struct FrameData {
+struct SceneData {
     glm::mat4 view_proj{1.f};
     glm::vec3 eye_pos;
 };
@@ -46,10 +46,10 @@ void init_frame(Frame*                frame,
  * @param allocator   The allocator used to allocate this memory initially
  * @param scene_data  The scene data
  */
-void set_frame_data(const Frame*     frame,
+void set_scene_data(const Frame*     frame,
                     VkDevice         device,
                     VmaAllocator     allocator,
-                    const FrameData* frame_data);
+                    const SceneData* scene_data);
 
 /**
  * @brief Resets Vulkan synchronization structures for this frame

@@ -7,12 +7,7 @@
     do {                                                                                           \
         VkResult err = x;                                                                          \
         if (err) {                                                                                 \
-            fmt::println("Detect"                                                                  \
-                         "ed "                                                                     \
-                         "Vulkan"                                                                  \
-                         " error"                                                                  \
-                         ": {}",                                                                   \
-                         string_VkResult(err));                                                    \
+            fmt::println("Detected Vulkan error: {}", string_VkResult(err));                       \
             abort();                                                                               \
         }                                                                                          \
     } while (0)

@@ -3,6 +3,7 @@
 #include <chrono>
 #include <fmt/base.h>
 #include <glm/matrix.hpp>
+#include <vk_backend/vk_frame.h>
 
 void Camera::create(Window&   window,
                     glm::vec3 initial_pos,
@@ -13,7 +14,7 @@ void Camera::create(Window&   window,
     yaw_theta   = init_yaw_theta;
     cursor_x    = window.width / 2.0;
     cursor_y    = window.height / 2.0;
-    update();
+    update(window.width, window.height);
 }
 
 void Camera::key_callback(int                  key,
@@ -63,9 +64,10 @@ void Camera::cursor_callback(double x_pos, double y_pos) {
 
 using namespace std::chrono;
 static auto start_time = high_resolution_clock::now();
-void        Camera::update() {
+
+SceneData Camera::update(int window_width, int window_height) {
     auto  time_duration = duration_cast<duration<float>>(high_resolution_clock::now() - start_time);
-    float time_elapsed = time_duration.count();
+    float time_elapsed  = time_duration.count();
 
     glm::quat yaw_quat = glm::angleAxis(glm::radians(yaw_theta), glm::vec3{0, -1, 0});
     glm::mat4 yaw_mat  = glm::toMat4(yaw_quat);
@@ -79,5 +81,21 @@ void        Camera::update() {
     position += glm::vec3(glm::vec4(velocity * time_elapsed, 0.f) * cam_rotation);
     view = cam_rotation * cam_translation;
 
+    glm::mat4 projection = glm::perspective(
+        glm::radians(60.f), (float)window_width / (float)window_height, 10000.0f, 0.1f);
+
+    projection[1][1] *= -1;
+
+    SceneData scene_data;
+    scene_data.view_proj = projection * view;
+    scene_data.eye_pos   = position;
+
+    // auto end_time = system_clock::now();
+    // auto dur      = duration<float>(end_time - start_time);
+    // if (backend->frame_num % 60 == 0) {
+    //     backend->stats.scene_update_time = duration_cast<nanoseconds>(dur).count() / 1000.f;
+    // }
+
     start_time = high_resolution_clock::now();
+    return scene_data;
 }
