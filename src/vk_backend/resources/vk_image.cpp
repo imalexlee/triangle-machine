@@ -77,8 +77,11 @@ VkImageView create_image_view(VkDevice           device,
     return image_view;
 }
 
-void blit_image(
-    VkCommandBuffer cmd, VkImage src, VkImage dest, VkExtent2D src_extent, VkExtent2D dst_extent) {
+void blit_image(VkCommandBuffer cmd,
+                VkImage         src,
+                VkImage         dest,
+                VkExtent2D      src_extent,
+                VkExtent2D      dst_extent) {
     VkImageBlit2 blit_region{.sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2, .pNext = nullptr};
     blit_region.srcOffsets[1].x = src_extent.width;
     blit_region.srcOffsets[1].y = src_extent.height;
@@ -175,58 +178,3 @@ AllocatedImage upload_texture(const VkBackend*  backend,
 
     return new_texture;
 }
-
-AllocatedImage download_texture(const VkBackend*   backend,
-                                fastgltf::Asset*   asset,
-                                fastgltf::Texture* gltf_texture) {
-    auto&          image = asset->images[gltf_texture->imageIndex.value()];
-    int            width, height, nr_channels;
-    AllocatedImage new_texture;
-
-    std::visit(fastgltf::visitor{
-                   []([[maybe_unused]] auto& arg) {
-
-                   },
-                   [&](fastgltf::sources::URI& file_path) {
-                       assert(file_path.fileByteOffset == 0);
-                       assert(file_path.uri.isLocalPath());
-
-                       const std::string path(file_path.uri.path().begin(),
-                                              file_path.uri.path().end()); // thanks C++.
-                       uint8_t* data = stbi_load(path.c_str(), &width, &height, &nr_channels, 4);
-                       new_texture =
-                           upload_texture(backend, data, VK_IMAGE_USAGE_SAMPLED_BIT, height, width);
-                       stbi_image_free(data);
-                   },
-                   [&](fastgltf::sources::Array& vector) {
-                       uint8_t* data = stbi_load_from_memory(vector.bytes.data(),
-                                                             static_cast<int>(vector.bytes.size()),
-                                                             &width, &height, &nr_channels, 4);
-                       new_texture =
-                           upload_texture(backend, data, VK_IMAGE_USAGE_SAMPLED_BIT, height, width);
-                       stbi_image_free(data);
-                   },
-                   [&](fastgltf::sources::BufferView& view) {
-                       auto& buffer_view = asset->bufferViews[view.bufferViewIndex];
-                       auto& buffer      = asset->buffers[buffer_view.bufferIndex];
-
-                       std::visit(fastgltf::visitor{
-                                      []([[maybe_unused]] auto& arg) {},
-                                      [&](fastgltf::sources::Array& vector) {
-                                          uint8_t* data = stbi_load_from_memory(
-                                              vector.bytes.data() + buffer_view.byteOffset,
-
-                                              static_cast<int>(buffer_view.byteLength), &width,
-                                              &height, &nr_channels, 4);
-                                          new_texture = upload_texture(backend, data,
-                                                                       VK_IMAGE_USAGE_SAMPLED_BIT,
-                                                                       height, width);
-                                          stbi_image_free(data);
-                                      }},
-                                  buffer.data);
-                   },
-               },
-               image.data);
-
-    return new_texture;
-};

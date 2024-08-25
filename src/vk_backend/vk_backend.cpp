@@ -12,6 +12,7 @@
 #include <fastgltf/types.hpp>
 #include <fmt/base.h>
 #include <fmt/format.h>
+#include <fstream>
 #include <glm/ext/quaternion_transform.hpp>
 #include <string>
 #include <vk_backend/vk_command.h>
@@ -24,32 +25,28 @@
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan_core.h>
 
-#include "vk_backend/resources/vk_loader.h"
 #include "vk_backend/vk_backend.h"
 #include "vk_backend/vk_sync.h"
 
 // initialization
-static void create_instance(VkBackend* backend);
-static void create_allocator(VkBackend* backend);
-static void create_pipelines(VkBackend* backend);
-static void create_default_data(VkBackend* backend);
-static void create_desc_layouts(VkBackend* backend);
-static void create_gui(VkBackend* backend, const Window* window);
-static void configure_debugger(VkBackend* backend);
-static void configure_render_resources(VkBackend* backend);
-static void load_scenes(VkBackend* backend);
-
+static void    create_instance(VkBackend* backend);
+static void    create_allocator(VkBackend* backend);
+static void    create_pipelines(VkBackend* backend);
+static void    create_default_data(VkBackend* backend);
+static void    create_desc_layouts(VkBackend* backend);
+static void    create_gui(VkBackend* backend, const Window* window);
+static void    configure_debugger(VkBackend* backend);
+static void    configure_render_resources(VkBackend* backend);
+VkShaderModule load_shader_module(VkBackend* backend, const char* file_path);
 // state update
-static void update_scene(VkBackend* backend);
-static void update_ui(VkBackend* backend);
-static void resize(VkBackend* backend);
-
+static void    update_scene(VkBackend* backend);
+static void    update_ui(VkBackend* backend);
+static void    resize(VkBackend* backend);
 // rendering
-static void render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf);
-static void render_ui(VkCommandBuffer cmd_buf);
-
+void           render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf, const Entity* entity);
+static void    render_ui(VkCommandBuffer cmd_buf);
 // utils
-static Frame* get_current_frame(VkBackend* backend) {
+static Frame*  get_current_frame(VkBackend* backend) {
     return &backend->frames[backend->frame_num % backend->frames.size()];
 }
 static std::vector<const char*> get_instance_extensions();
@@ -63,6 +60,7 @@ void init_backend(VkBackend* backend, Window* window, const Camera* camera) {
     active_backend = backend;
 
     create_instance(backend);
+    backend->camera = camera;
 
     VkSurfaceKHR surface = window->get_vulkan_surface(backend->instance);
 
@@ -108,13 +106,9 @@ void init_backend(VkBackend* backend, Window* window, const Camera* camera) {
                      backend->device_ctx.queues.graphics_family_index,
                      VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 
-    backend->camera = camera;
-
     create_default_data(backend);
     create_pipelines(backend);
     create_gui(backend, window);
-
-    load_scenes(backend);
 
     if constexpr (vk_opts::validation_enabled) {
         configure_debugger(backend);
@@ -196,10 +190,6 @@ void configure_render_resources(VkBackend* backend) {
         backend->scene_color_attachment, backend->scene_depth_attachment, backend->image_extent);
 }
 
-void load_scenes(VkBackend* backend) {
-    backend->scene = load_scene(backend, "../../assets/glb/structure.glb");
-}
-
 void create_default_data(VkBackend* backend) {
 
     backend->stats.total_fps        = 0;
@@ -218,8 +208,9 @@ void create_default_data(VkBackend* backend) {
     VK_CHECK(vkCreateSampler(backend->device_ctx.logical_device, &sampler_ci, nullptr,
                              &backend->default_nearest_sampler));
 
-    backend->default_texture = upload_texture(backend, (void*)white_image.data(),
-                                              VK_IMAGE_USAGE_SAMPLED_BIT, IMAGE_WIDTH, IMAGE_WIDTH);
+    uint32_t white = 0xFFFFFFFF;
+    backend->default_texture =
+        upload_texture(backend, (void*)&white, VK_IMAGE_USAGE_SAMPLED_BIT, 1, 1);
 }
 
 void create_gui(VkBackend* backend, const Window* window) {
@@ -268,30 +259,6 @@ void create_gui(VkBackend* backend, const Window* window) {
     init_info.MSAASamples = (VkSampleCountFlagBits)backend->device_ctx.raster_samples;
 
     ImGui_ImplVulkan_Init(&init_info);
-}
-
-auto time1 = std::chrono::high_resolution_clock::now();
-void update_scene(VkBackend* backend) {
-    auto start_time = system_clock::now();
-    backend->camera->update();
-
-    glm::mat4 model = glm::mat4{1.f};
-
-    glm::mat4 projection = glm::perspective(glm::radians(60.f),
-                                            (float)backend->swapchain_context.extent.width /
-                                                (float)backend->swapchain_context.extent.height,
-                                            10000.0f, 0.1f);
-
-    projection[1][1] *= -1;
-
-    backend->frame_data.view_proj = projection * backend->camera->view * model;
-    backend->frame_data.eye_pos   = backend->camera->position;
-
-    auto end_time = system_clock::now();
-    auto dur      = duration<float>(end_time - start_time);
-    if (backend->frame_num % 60 == 0) {
-        backend->stats.scene_update_time = duration_cast<nanoseconds>(dur).count() / 1000.f;
-    }
 }
 
 void update_ui(VkBackend* backend) {
@@ -383,10 +350,10 @@ void create_instance(VkBackend* backend) {
 
 void create_pipelines(VkBackend* backend) {
     PipelineBuilder pb;
-    VkShaderModule  vert_shader = load_shader_module(
-        backend->device_ctx.logical_device, "../../shaders/vertex/indexed_triangle.vert.glsl.spv");
-    VkShaderModule frag_shader = load_shader_module(
-        backend->device_ctx.logical_device, "../../shaders/fragment/simple_lighting.frag.glsl.spv");
+    VkShaderModule  vert_shader =
+        load_shader_module(backend, "../../shaders/vertex/indexed_triangle.vert.glsl.spv");
+    VkShaderModule frag_shader =
+        load_shader_module(backend, "../../shaders/fragment/simple_lighting.frag.glsl.spv");
 
     std::array<VkDescriptorSetLayout, 3> set_layouts{backend->global_desc_set_layout,
                                                      backend->mat_desc_set_layout,
@@ -427,7 +394,7 @@ std::vector<const char*> get_instance_extensions() {
     return extensions;
 }
 
-void draw(VkBackend* backend) {
+void draw(VkBackend* backend, const Entity* entity) {
     auto start_frame_time = system_clock::now();
 
     update_scene(backend);
@@ -471,7 +438,7 @@ void draw(VkBackend* backend) {
 
     vkCmdBeginRendering(cmd_buffer, &backend->scene_rendering_info);
 
-    render_geometry(backend, cmd_buffer);
+    render_geometry(backend, cmd_buffer, entity);
 
     render_ui(cmd_buffer);
 
@@ -561,7 +528,30 @@ void resize(VkBackend* backend) {
     }
 }
 
-void render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf) {
+void update_scene(VkBackend* backend) {
+    auto start_time = system_clock::now();
+    backend->camera->update();
+
+    glm::mat4 model = glm::mat4{1.f};
+
+    glm::mat4 projection = glm::perspective(glm::radians(60.f),
+                                            (float)backend->swapchain_context.extent.width /
+                                                (float)backend->swapchain_context.extent.height,
+                                            10000.0f, 0.1f);
+
+    projection[1][1] *= -1;
+
+    backend->frame_data.view_proj = projection * backend->camera->view * model;
+    backend->frame_data.eye_pos   = backend->camera->position;
+
+    auto end_time = system_clock::now();
+    auto dur      = duration<float>(end_time - start_time);
+    if (backend->frame_num % 60 == 0) {
+        backend->stats.scene_update_time = duration_cast<nanoseconds>(dur).count() / 1000.f;
+    }
+}
+
+void render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf, const Entity* entity) {
     auto buffer_recording_start = system_clock::now();
 
     VkViewport viewport{};
@@ -579,21 +569,21 @@ void render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf) {
     PipelineInfo    current_pipeline_info;
     VkDescriptorSet current_mat_desc = VK_NULL_HANDLE;
 
-    const auto record_obj = [&](const DrawObject& obj) {
-        if (obj.mat_desc_set != current_mat_desc) {
-            current_mat_desc = obj.mat_desc_set;
+    const auto record_obj = [&](const DrawObject* obj) {
+        if (obj->mat_desc_set != current_mat_desc) {
+            current_mat_desc = obj->mat_desc_set;
             vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                    current_pipeline_info.pipeline_layout, 1, 1, &obj.mat_desc_set,
+                                    current_pipeline_info.pipeline_layout, 1, 1, &obj->mat_desc_set,
                                     0, nullptr);
         }
 
         vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                current_pipeline_info.pipeline_layout, 2, 1, &obj.obj_desc_set, 0,
+                                current_pipeline_info.pipeline_layout, 2, 1, &obj->obj_desc_set, 0,
                                 nullptr);
 
-        vkCmdBindIndexBuffer(cmd_buf, obj.index_buffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdBindIndexBuffer(cmd_buf, obj->index_buffer, 0, VK_INDEX_TYPE_UINT32);
 
-        vkCmdDrawIndexed(cmd_buf, obj.indices_count, 1, obj.indices_start, 0, 0);
+        vkCmdDrawIndexed(cmd_buf, obj->indices_count, 1, obj->indices_start, 0, 0);
     };
 
     current_pipeline_info = backend->opaque_pipeline_info;
@@ -608,16 +598,16 @@ void render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf) {
                             current_pipeline_info.pipeline_layout, 0, 1,
                             &get_current_frame(backend)->desc_set, 0, nullptr);
 
-    for (const DrawObject& obj : backend->scene.opaque_objs) {
-        record_obj(obj);
+    for (const DrawObject& obj : entity->opaque_objs) {
+        record_obj(&obj);
     }
 
     current_pipeline_info = backend->transparent_pipeline_info;
 
     vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline_info.pipeline);
 
-    for (const DrawObject& obj : backend->scene.transparent_objs) {
-        record_obj(obj);
+    for (const DrawObject& obj : entity->transparent_objs) {
+        record_obj(&obj);
     }
 
     auto end_time = system_clock::now();
@@ -630,6 +620,28 @@ void render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf) {
 
 void render_ui(VkCommandBuffer cmd_buf) {
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd_buf);
+}
+
+VkShaderModule load_shader_module(VkBackend* backend, const char* file_path) {
+
+    std::ifstream         file(file_path, std::ios::ate | std::ios::binary);
+    size_t                file_size = (size_t)file.tellg();
+    std::vector<uint32_t> buffer(file_size / sizeof(uint32_t));
+
+    file.seekg(0);
+    file.read((char*)buffer.data(), file_size);
+    file.close();
+
+    VkShaderModule           shader_module;
+    VkShaderModuleCreateInfo shader_module_ci{};
+    shader_module_ci.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    shader_module_ci.codeSize = file_size;
+    shader_module_ci.pCode    = buffer.data();
+
+    VK_CHECK(vkCreateShaderModule(backend->device_ctx.logical_device, &shader_module_ci, nullptr,
+                                  &shader_module));
+
+    return shader_module;
 }
 
 void deinit_backend(VkBackend* backend) {
@@ -654,8 +666,6 @@ void deinit_backend(VkBackend* backend) {
         destroy_buffer(backend->allocator, &frame.frame_data_buf);
     }
 
-    destroy_scene(backend);
-
     ImGui_ImplGlfw_Shutdown();
     ImGui_ImplVulkan_Shutdown();
 
@@ -669,6 +679,9 @@ void deinit_backend(VkBackend* backend) {
     destroy_image(backend->device_ctx.logical_device, backend->allocator, backend->default_texture);
     destroy_image(backend->device_ctx.logical_device, backend->allocator,
                   backend->color_resolve_image);
+
+    deinit_desc_allocator(&backend->mat_desc_allocator, backend->device_ctx.logical_device);
+    deinit_desc_allocator(&backend->obj_desc_allocator, backend->device_ctx.logical_device);
 
     vkDestroySampler(backend->device_ctx.logical_device, backend->default_nearest_sampler, nullptr);
     vkDestroySampler(backend->device_ctx.logical_device, backend->default_linear_sampler, nullptr);

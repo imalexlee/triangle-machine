@@ -19,19 +19,6 @@
 #include <vk_backend/vk_types.h>
 #include <vulkan/vulkan_core.h>
 
-constexpr uint32_t IMAGE_WIDTH = 1;
-
-// generate white image at compile time to later act as the default color texture
-static constexpr std::array<uint32_t, IMAGE_WIDTH * IMAGE_WIDTH> white_image = []() {
-    std::array<uint32_t, IMAGE_WIDTH * IMAGE_WIDTH> result{};
-
-    uint32_t white = 0xFFFFFFFF;
-    for (uint32_t& el : result) {
-        el = white;
-    }
-    return result;
-}();
-
 struct Stats {
     uint64_t total_draw_time;
     uint64_t total_frame_time;
@@ -52,9 +39,8 @@ struct VkBackend {
     PipelineInfo              transparent_pipeline_info;
     VkDescriptorSetLayout     global_desc_set_layout;
     VkDescriptorSetLayout     mat_desc_set_layout;
-    VkDescriptorSetLayout     draw_obj_desc_set_layout;
-    Scene                     scene;
     const Camera*             camera;
+    VkDescriptorSetLayout     draw_obj_desc_set_layout;
     Stats                     stats;
     CommandContext            imm_cmd_context;
     VkDescriptorPool          imm_descriptor_pool;
@@ -73,6 +59,8 @@ struct VkBackend {
     VkSampler                 default_linear_sampler;
     VkSampler                 default_nearest_sampler;
     AllocatedImage            default_texture;
+    DescriptorAllocator       mat_desc_allocator; // draw object materials
+    DescriptorAllocator       obj_desc_allocator; // draw object attributes
     DeletionQueue             deletion_queue;
 };
 
@@ -80,7 +68,7 @@ void init_backend(VkBackend* backend, Window* window, const Camera* camera);
 
 void deinit_backend(VkBackend* backend);
 
-void draw(VkBackend* backend);
+void draw(VkBackend* backend, const Entity* entity);
 
 void immediate_submit(const VkBackend*                           backend,
                       std::function<void(VkCommandBuffer cmd)>&& function);

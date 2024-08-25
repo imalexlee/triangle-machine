@@ -14,3 +14,4 @@ AlignConsecutiveDeclarations:
 AlignConsecutiveAssignments: true
 BinPackArguments: true
 BinPackParameters: false
+AllowAllParametersOfDeclarationOnNextLine: false

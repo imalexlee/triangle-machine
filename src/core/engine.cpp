@@ -1,6 +1,7 @@
 #include "engine.h"
 #include "core_options.h"
 #include <GLFW/glfw3.h>
+#include <core/loaders/gltf_loader.h>
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 #include <vk_backend/vk_backend.h>
@@ -18,7 +19,6 @@ void Engine::create() {
 
     _camera.create(_window, init_cam_pos);
 
-    //_backend.create(_window, _camera);
     init_backend(&_backend, &_window, &_camera);
 
     _window.register_key_callback(_camera.key_callback);
@@ -26,15 +26,14 @@ void Engine::create() {
 }
 
 void Engine::run() {
+    Entity entity = load_scene(&_backend, "../../assets/glb/structure.glb");
     while (!glfwWindowShouldClose(_window.glfw_window)) {
         glfwPollEvents();
-        //_backend.draw();
-        draw(&_backend);
+        draw(&_backend, &entity);
     };
 }
 
 void Engine::destroy() {
-    //_backend.destroy();
     deinit_backend(&_backend);
     _window.destroy();
 };

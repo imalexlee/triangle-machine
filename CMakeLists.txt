@@ -22,6 +22,7 @@ add_executable(
   src/core/engine.cpp
   src/core/window.cpp
   src/core/camera.cpp
+  src/core/loaders/gltf_loader.cpp
   src/vk_backend/vk_backend.cpp
   src/vk_backend/vk_debug.cpp
   src/vk_backend/vk_device.cpp
@@ -33,7 +34,6 @@ add_executable(
   src/vk_backend/vk_init.cpp
   src/vk_backend/vk_vma_usage.cpp
   src/vk_backend/resources/vk_descriptor.cpp
-  src/vk_backend/resources/vk_loader.cpp
   src/vk_backend/resources/vk_buffer.cpp
   src/vk_backend/resources/vk_image.cpp)
 
