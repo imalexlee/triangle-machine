@@ -95,6 +95,16 @@ struct GLTFSceneResources {
     std::vector<VkSampler>       samplers;
 };
 
+//  downloads texture from external image data (png or jpg) to then load onto the gpu
+[[nodiscard]] static glm::mat4 get_transform_matrix(const fastgltf::Node& node, glm::mat4x4& base);
+[[nodiscard]] static AllocatedImage
+download_texture(const VkBackend* backend, fastgltf::Asset* asset, fastgltf::Texture* gltf_texture);
+static std::vector<VkSampler> get_samplers(VkDevice device, fastgltf::Asset& asset);
+static void                   generate_nodes(std::vector<GLTFNode>& out_node_buf,
+                                             fastgltf::Asset&       asset,
+                                             uint32_t               root_node_idx,
+                                             glm::mat4              parent_matrix = glm::mat4{1.f});
+
 glm::mat4 get_transform_matrix(const fastgltf::Node& node, glm::mat4x4& base) {
     if (const auto* pMatrix = std::get_if<fastgltf::Node::TransformMatrix>(&node.transform)) {
         return base * glm::mat4x4(glm::make_mat4x4(pMatrix->data()));
@@ -169,7 +179,7 @@ AllocatedImage download_texture(const VkBackend*   backend,
 void generate_nodes(std::vector<GLTFNode>& out_node_buf,
                     fastgltf::Asset&       asset,
                     uint32_t               root_node_idx,
-                    glm::mat4              parent_matrix = glm::mat4{1.f}) {
+                    glm::mat4              parent_matrix) {
 
     auto& root_gltf_node = asset.nodes[root_node_idx];
 
@@ -243,7 +253,7 @@ std::vector<VkSampler> get_samplers(VkDevice device, fastgltf::Asset& asset) {
     return samplers;
 }
 
-Entity load_scene(VkBackend* backend, std::filesystem::path path) {
+Entity load_entity(VkBackend* backend, std::filesystem::path path) {
 
     constexpr auto supported_extensions = fastgltf::Extensions::KHR_mesh_quantization |
                                           fastgltf::Extensions::KHR_texture_transform |

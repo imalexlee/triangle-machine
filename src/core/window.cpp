@@ -32,7 +32,7 @@ void init_window(Window* window, uint32_t width, uint32_t height, const char* ti
     }
 
     // infinite cursor movement. no visible cursor
-    //  glfwSetInputMode(glfw_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    glfwSetInputMode(window->glfw_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
     // try to enable unscaled and unaccelerated cursor capture
     if (glfwRawMouseMotionSupported()) {

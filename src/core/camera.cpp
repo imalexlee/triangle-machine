@@ -11,13 +11,11 @@ void init_camera(Camera*   cam,
                  float     init_pitch_theta,
                  float     init_yaw_theta) {
 
-    cam->position = initial_pos;
-
-    cam->pitch_theta    = init_pitch_theta;
-    cam->yaw_theta      = init_yaw_theta;
-    cam->cursor_x       = window->width / 2.0;
-    cam->cursor_y       = window->height / 2.0;
-    cam->movement_speed = 4.f;
+    cam->position    = initial_pos;
+    cam->pitch_theta = init_pitch_theta;
+    cam->yaw_theta   = init_yaw_theta;
+    cam->cursor_x    = window->width / 2.0;
+    cam->cursor_y    = window->height / 2.0;
     update_camera(cam, window->width, window->height);
 }
 

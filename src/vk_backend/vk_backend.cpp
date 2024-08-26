@@ -1,4 +1,6 @@
 
+#include <array>
+#include <iostream>
 #define GLFW_INCLUDE_VULKAN
 #define GLFW_INCLUDE_NONE
 #include "global_utils.h"
@@ -33,7 +35,6 @@
 
 // initialization
 static void    create_allocator(VkBackend* backend);
-static void    create_pipelines(VkBackend* backend);
 static void    create_default_data(VkBackend* backend);
 static void    create_desc_layouts(VkBackend* backend);
 static void    configure_debugger(VkBackend* backend);
@@ -42,10 +43,10 @@ VkShaderModule load_shader_module(VkBackend* backend, const char* file_path);
 // state update
 static void    resize(VkBackend* backend);
 // rendering
-void           render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf, const Entity* entity);
-static void    render_ui(VkCommandBuffer cmd_buf);
+void render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf, const std::span<Entity> entities);
+static void   render_ui(VkCommandBuffer cmd_buf);
 // utils
-static Frame*  get_current_frame(VkBackend* backend) {
+static Frame* get_current_frame(VkBackend* backend) {
     return &backend->frames[backend->frame_num % backend->frames.size()];
 }
 static std::vector<const char*> get_instance_extensions();
@@ -62,8 +63,6 @@ void init_backend(
 
     backend->instance = instance;
 
-    // VkSurfaceKHR surface;
-    // VK_CHECK(glfwCreateWindowSurface(backend->instance, window, nullptr, &surface));
     init_device_context(&backend->device_ctx, backend->instance, surface);
     init_swapchain_context(&backend->swapchain_context, &backend->device_ctx, surface,
                            vk_opts::desired_present_mode);
@@ -95,8 +94,7 @@ void init_backend(
                      VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, backend->image_extent,
                      VK_FORMAT_D32_SFLOAT, backend->device_ctx.raster_samples);
 
-    // create color attachments and  rendering information from our
-    // allocated images
+    // create color attachments and  rendering information from our allocated images
     configure_render_resources(backend);
 
     backend->imm_fence =
@@ -107,15 +105,13 @@ void init_backend(
                      VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 
     create_default_data(backend);
-    create_pipelines(backend);
 
     if constexpr (vk_opts::validation_enabled) {
         configure_debugger(backend);
     }
 }
 
-// adding names to these 64 bit handles helps a lot when reading
-// validation errors
+// adding names to these 64 bit handles helps a lot when reading validation errors
 void configure_debugger(VkBackend* backend) {
     init_debugger(&backend->debugger, backend->instance, backend->device_ctx.logical_device);
     set_handle_name(&backend->debugger, backend->color_image.image, VK_OBJECT_TYPE_IMAGE,
@@ -317,16 +313,21 @@ VkInstance create_vk_instance(const char* app_name, const char* engine_name) {
     return instance;
 }
 
-void create_pipelines(VkBackend* backend) {
+void create_pipeline(VkBackend*  backend,
+                     const char* vert_shader_path,
+                     const char* frag_shader_path) {
     PipelineBuilder pb;
-    VkShaderModule  vert_shader =
-        load_shader_module(backend, "../../shaders/vertex/indexed_triangle.vert.glsl.spv");
-    VkShaderModule frag_shader =
-        load_shader_module(backend, "../../shaders/fragment/simple_lighting.frag.glsl.spv");
+    VkShaderModule  vert_shader = load_shader_module(backend, vert_shader_path);
+    VkShaderModule  frag_shader = load_shader_module(backend, frag_shader_path);
 
     std::array<VkDescriptorSetLayout, 3> set_layouts{backend->global_desc_set_layout,
                                                      backend->mat_desc_set_layout,
                                                      backend->draw_obj_desc_set_layout};
+    std::array<VkPushConstantRange, 1>   push_constant_ranges{{{
+          .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+          .offset     = 0,
+          .size       = sizeof(EntityPushConstants),
+    }}};
 
     set_pipeline_shaders(&pb, vert_shader, frag_shader);
     set_pipeline_topology(&pb, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
@@ -337,7 +338,8 @@ void create_pipelines(VkBackend* backend) {
     set_pipeline_render_state(&pb, backend->color_image.image_format,
                               backend->depth_image.image_format);
     set_pipeline_blending(&pb, BlendMode::none);
-    set_pipeline_layout(&pb, set_layouts, {}, 0);
+
+    set_pipeline_layout(&pb, set_layouts, push_constant_ranges, 0);
     backend->opaque_pipeline_info = build_pipeline(&pb, backend->device_ctx.logical_device);
 
     set_pipeline_blending(&pb, BlendMode::alpha);
@@ -363,7 +365,7 @@ std::vector<const char*> get_instance_extensions() {
     return extensions;
 }
 
-void draw(VkBackend* backend, const Entity* entity, const SceneData* scene_data) {
+void draw(VkBackend* backend, const std::span<Entity> entities, const SceneData* scene_data) {
     auto start_frame_time = system_clock::now();
 
     Frame*          current_frame = get_current_frame(backend);
@@ -404,7 +406,7 @@ void draw(VkBackend* backend, const Entity* entity, const SceneData* scene_data)
 
     vkCmdBeginRendering(cmd_buffer, &backend->scene_rendering_info);
 
-    render_geometry(backend, cmd_buffer, entity);
+    render_geometry(backend, cmd_buffer, entities);
 
     render_ui(cmd_buffer);
 
@@ -494,7 +496,9 @@ void resize(VkBackend* backend) {
     }
 }
 
-void render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf, const Entity* entity) {
+void render_geometry(VkBackend*              backend,
+                     VkCommandBuffer         cmd_buf,
+                     const std::span<Entity> entities) {
     auto buffer_recording_start = system_clock::now();
 
     VkViewport viewport{};
@@ -529,28 +533,41 @@ void render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf, const Entity* 
         vkCmdDrawIndexed(cmd_buf, obj->indices_count, 1, obj->indices_start, 0, 0);
     };
 
-    current_pipeline_info = backend->opaque_pipeline_info;
+    for (const auto& entity : entities) {
 
-    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline_info.pipeline);
+        current_pipeline_info = backend->opaque_pipeline_info;
 
-    vkCmdSetViewport(cmd_buf, 0, 1, &viewport);
+        vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline_info.pipeline);
 
-    vkCmdSetScissor(cmd_buf, 0, 1, &scissor);
+        vkCmdSetViewport(cmd_buf, 0, 1, &viewport);
 
-    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            current_pipeline_info.pipeline_layout, 0, 1,
-                            &get_current_frame(backend)->desc_set, 0, nullptr);
+        vkCmdSetScissor(cmd_buf, 0, 1, &scissor);
 
-    for (const DrawObject& obj : entity->opaque_objs) {
-        record_obj(&obj);
-    }
+        vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                current_pipeline_info.pipeline_layout, 0, 1,
+                                &get_current_frame(backend)->desc_set, 0, nullptr);
 
-    current_pipeline_info = backend->transparent_pipeline_info;
+        EntityPushConstants constants = {
+            .pos = entity.pos,
+        };
 
-    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline_info.pipeline);
+        //        std::cout << constants.pos.x << " " << constants.pos.y << " " << constants.pos.z
+        //        << "\n";
 
-    for (const DrawObject& obj : entity->transparent_objs) {
-        record_obj(&obj);
+        vkCmdPushConstants(cmd_buf, current_pipeline_info.pipeline_layout,
+                           VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(EntityPushConstants), &constants);
+
+        for (const DrawObject& obj : entity.opaque_objs) {
+            record_obj(&obj);
+        }
+
+        current_pipeline_info = backend->transparent_pipeline_info;
+
+        vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline_info.pipeline);
+
+        for (const DrawObject& obj : entity.transparent_objs) {
+            record_obj(&obj);
+        }
     }
 
     auto end_time = system_clock::now();
