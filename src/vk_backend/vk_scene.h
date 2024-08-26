@@ -23,5 +23,9 @@ struct DrawObject {
 struct Entity {
     std::vector<DrawObject> transparent_objs;
     std::vector<DrawObject> opaque_objs;
-    glm::vec3               pos;
+    glm::vec3               pos = {0, 0, 0};
+};
+
+struct EntityPushConstants {
+    glm::vec3 pos;
 };

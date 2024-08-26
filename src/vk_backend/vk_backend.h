@@ -67,9 +67,13 @@ void finish_pending_vk_work(VkBackend* backend);
 
 void deinit_backend(VkBackend* backend);
 
-void draw(VkBackend* backend, const Entity* entity, const SceneData* scene_data);
+void draw(VkBackend* backend, const std::span<Entity> entities, const SceneData* scene_data);
 
 void immediate_submit(const VkBackend*                           backend,
                       std::function<void(VkCommandBuffer cmd)>&& function);
 
 void create_imgui_vk_resources(VkBackend* backend);
+
+void create_pipeline(VkBackend*  backend,
+                     const char* vert_shader_path,
+                     const char* frag_shader_path);
