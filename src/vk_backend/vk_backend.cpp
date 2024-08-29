@@ -533,26 +533,24 @@ void render_geometry(VkBackend*              backend,
         vkCmdDrawIndexed(cmd_buf, obj->indices_count, 1, obj->indices_start, 0, 0);
     };
 
+    current_pipeline_info = backend->opaque_pipeline_info;
+
+    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline_info.pipeline);
+
+    vkCmdSetViewport(cmd_buf, 0, 1, &viewport);
+
+    vkCmdSetScissor(cmd_buf, 0, 1, &scissor);
+
+    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            current_pipeline_info.pipeline_layout, 0, 1,
+                            &get_current_frame(backend)->desc_set, 0, nullptr);
+
+    // opaque objects
     for (const auto& entity : entities) {
-
-        current_pipeline_info = backend->opaque_pipeline_info;
-
-        vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline_info.pipeline);
-
-        vkCmdSetViewport(cmd_buf, 0, 1, &viewport);
-
-        vkCmdSetScissor(cmd_buf, 0, 1, &scissor);
-
-        vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                current_pipeline_info.pipeline_layout, 0, 1,
-                                &get_current_frame(backend)->desc_set, 0, nullptr);
 
         EntityPushConstants constants = {
             .pos = entity.pos,
         };
-
-        //        std::cout << constants.pos.x << " " << constants.pos.y << " " << constants.pos.z
-        //        << "\n";
 
         vkCmdPushConstants(cmd_buf, current_pipeline_info.pipeline_layout,
                            VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(EntityPushConstants), &constants);
@@ -560,10 +558,20 @@ void render_geometry(VkBackend*              backend,
         for (const DrawObject& obj : entity.opaque_objs) {
             record_obj(&obj);
         }
+    }
 
-        current_pipeline_info = backend->transparent_pipeline_info;
+    current_pipeline_info = backend->transparent_pipeline_info;
 
-        vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline_info.pipeline);
+    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, current_pipeline_info.pipeline);
+
+    // transparent objects
+    for (const auto& entity : entities) {
+        EntityPushConstants constants = {
+            .pos = entity.pos,
+        };
+
+        vkCmdPushConstants(cmd_buf, current_pipeline_info.pipeline_layout,
+                           VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(EntityPushConstants), &constants);
 
         for (const DrawObject& obj : entity.transparent_objs) {
             record_obj(&obj);
