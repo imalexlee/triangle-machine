@@ -16,14 +16,29 @@ if(UNIX AND NOT APPLE)
   add_link_options("-lglfw;-lvulkan;-lXxf86vm;-lXrandr;-lXi")
 endif()
 
+function(add_wayland_protocol_target TARGET_NAME SPEC NAME)
+  add_custom_target(
+    wayland_${TARGET_NAME}_header
+    COMMAND wayland-scanner client-header /usr/share/wayland-protocols${SPEC}
+            ${PROJECT_SOURCE_DIR}/src/core/${NAME}.h)
+  add_dependencies(${PROJECT_NAME} wayland_${TARGET_NAME}_header)
+  add_custom_target(
+    wayland_${TARGET_NAME}_source
+    COMMAND wayland-scanner private-code /usr/share/wayland-protocols${SPEC}
+            ${PROJECT_SOURCE_DIR}/src/core/${NAME}.c)
+  add_dependencies(${PROJECT_NAME} wayland_${TARGET_NAME}_source)
+endfunction()
+
 add_executable(
   ${PROJECT_NAME}
   src/entry.cpp
   src/core/engine.cpp
   src/core/window.cpp
+  src/core/wl_window.cpp
   src/core/camera.cpp
   src/core/scene.cpp
   src/core/ui.cpp
+  src/core/xdg-shell.c
   src/core/loaders/gltf_loader.cpp
   src/vk_backend/vk_backend.cpp
   src/vk_backend/vk_debug.cpp
@@ -41,13 +56,13 @@ add_executable(
 
 target_compile_options(
   ${PROJECT_NAME}
-  PRIVATE "$<$<CONFIG:DEBUG>:-g;-Wall;-Wextra>;-Wno-missing-field-initializers")
+  PRIVATE "$<$<CONFIG:DEBUG>:-g;-Wall;-Wextra;-Wno-missing-field-initializers>")
 
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
 target_compile_options(
   ${PROJECT_NAME}
   PUBLIC
-    "$<$<CONFIG:RELEASE>:-Ofast;-fno-signed-zeros;-flto;-Wall;-Wextra>;-Wno-missing-field-initializers>"
+    "$<$<CONFIG:RELEASE>:-Ofast;-fno-signed-zeros;-flto;-Wall;-Wextra;-Wno-missing-field-initializers>"
 )
 
 if(APPLE)
@@ -57,6 +72,9 @@ endif()
 add_subdirectory(thirdparty/fmt)
 add_subdirectory(thirdparty/fastgltf)
 add_subdirectory(thirdparty)
+
+add_wayland_protocol_target(xdg_shell "/stable/xdg-shell/xdg-shell.xml"
+                            xdg-shell)
 
 target_include_directories(
   ${PROJECT_NAME} SYSTEM
@@ -77,6 +95,7 @@ target_link_libraries(
   PRIVATE fastgltf
   PRIVATE fmt
   PRIVATE imgui
+  PRIVATE wayland-client
   PRIVATE Vulkan::Vulkan)
 
 find_program(

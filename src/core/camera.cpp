@@ -1,12 +1,14 @@
 #include "camera.h"
 #include <GLFW/glfw3.h>
 #include <chrono>
+#include <cstdint>
 #include <fmt/base.h>
 #include <glm/matrix.hpp>
 #include <vk_backend/vk_frame.h>
 
 void init_camera(Camera*   cam,
-                 Window*   window,
+                 uint32_t  width,
+                 uint32_t  height,
                  glm::vec3 initial_pos,
                  float     init_pitch_theta,
                  float     init_yaw_theta) {
@@ -14,9 +16,9 @@ void init_camera(Camera*   cam,
     cam->position    = initial_pos;
     cam->pitch_theta = init_pitch_theta;
     cam->yaw_theta   = init_yaw_theta;
-    cam->cursor_x    = window->width / 2.0;
-    cam->cursor_y    = window->height / 2.0;
-    update_camera(cam, window->width, window->height);
+    cam->cursor_x    = width / 2.0;
+    cam->cursor_y    = height / 2.0;
+    update_camera(cam, width, height);
 }
 
 void camera_key_callback(
@@ -63,13 +65,18 @@ void camera_cursor_callback(Camera* cam, double x_pos, double y_pos) {
 }
 
 using namespace std::chrono;
-static auto start_time = high_resolution_clock::now();
+static auto start_time   = high_resolution_clock::now();
+static auto start_time_2 = high_resolution_clock::now();
 
 SceneData update_camera(Camera* cam, int window_width, int window_height) {
     auto  time_duration = duration_cast<duration<float>>(high_resolution_clock::now() - start_time);
     float time_elapsed  = time_duration.count();
 
-    glm::quat yaw_quat = glm::angleAxis(glm::radians(cam->yaw_theta), glm::vec3{0, -1, 0});
+    auto time_duration_2 =
+        duration_cast<duration<float>>(high_resolution_clock::now() - start_time_2);
+    float time_elapsed_2 = time_duration_2.count();
+
+    glm::quat yaw_quat = glm::angleAxis(glm::radians(30.f * time_elapsed_2), glm::vec3{0, -1, 0});
     glm::mat4 yaw_mat  = glm::toMat4(yaw_quat);
 
     glm::quat pitch_quat = glm::angleAxis(glm::radians(cam->pitch_theta), glm::vec3{1, 0, 0});

@@ -4,7 +4,6 @@
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #define GLM_ENABLE_EXPERIMENTAL
 
-#include <core/window.h>
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtx/transform.hpp>
 
@@ -22,7 +21,8 @@ struct Camera {
 };
 
 void init_camera(Camera*   cam,
-                 Window*   window,
+                 uint32_t  width,
+                 uint32_t  height,
                  glm::vec3 initial_pos,
                  float     init_pitch_theta = 0.f,
                  float init_yaw_theta       = 0.f);

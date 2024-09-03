@@ -46,7 +46,7 @@ void deinit_swapchain_context(SwapchainContext* swapchain_ctx,
 void create_swapchain(SwapchainContext* swapchain_ctx, const DeviceContext* device_ctx) {
     swapchain_ctx->support_details =
         query_support_details(swapchain_ctx, device_ctx->physical_device);
-    swapchain_ctx->extent = swapchain_ctx->support_details.capabilities.currentExtent;
+    // swapchain_ctx->extent = swapchain_ctx->support_details.capabilities.currentExtent;
 
     VkSurfaceFormatKHR surface_format = swapchain_ctx->support_details.formats[0];
     for (const auto& format : swapchain_ctx->support_details.formats) {
@@ -57,7 +57,7 @@ void create_swapchain(SwapchainContext* swapchain_ctx, const DeviceContext* devi
     }
     swapchain_ctx->format = surface_format.format;
 
-    uint32_t desired_image_count = 3;
+    uint32_t desired_image_count = vk_opts::image_count;
 
     // max image count of 0 means its unbounded.
     if (swapchain_ctx->support_details.capabilities.maxImageCount != 0) {
@@ -73,7 +73,7 @@ void create_swapchain(SwapchainContext* swapchain_ctx, const DeviceContext* devi
     swapchain_ci.imageColorSpace  = surface_format.colorSpace;
     swapchain_ci.surface          = swapchain_ctx->surface;
     swapchain_ci.presentMode      = swapchain_ctx->present_mode;
-    swapchain_ci.imageExtent      = swapchain_ctx->extent;
+    swapchain_ci.imageExtent      = {.width = 1600, .height = 900};
     swapchain_ci.imageArrayLayers = 1;
     swapchain_ci.compositeAlpha   = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
     swapchain_ci.preTransform     = swapchain_ctx->support_details.capabilities.currentTransform;
@@ -82,6 +82,7 @@ void create_swapchain(SwapchainContext* swapchain_ctx, const DeviceContext* devi
     // try this out later
     // swapchain_ci.oldSwapchain
     // = swapchain;
+    swapchain_ctx->extent = swapchain_ci.imageExtent;
 
     const std::set<uint32_t> unique_queue_families{device_ctx->queues.graphics_family_index,
                                                    device_ctx->queues.present_family_index};

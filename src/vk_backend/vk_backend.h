@@ -48,7 +48,6 @@ struct VkBackend {
     VkRenderingInfo           scene_rendering_info;
     AllocatedImage            depth_image;
     uint64_t                  frame_num{1};
-    std::array<Frame, 3>      frames;
     SceneData                 scene_data;
     VkSampler                 default_linear_sampler;
     VkSampler                 default_nearest_sampler;
@@ -56,6 +55,8 @@ struct VkBackend {
     DescriptorAllocator       mat_desc_allocator; // draw object materials
     DescriptorAllocator       obj_desc_allocator; // draw object attributes
     DeletionQueue             deletion_queue;
+
+    std::array<Frame, vk_opts::image_count> frames;
 };
 
 VkInstance create_vk_instance(const char* app_name, const char* engine_name);

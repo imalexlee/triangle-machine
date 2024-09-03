@@ -1,5 +1,6 @@
 
 #include <array>
+#include <filesystem>
 #include <iostream>
 #define GLFW_INCLUDE_VULKAN
 #define GLFW_INCLUDE_NONE
@@ -18,7 +19,6 @@
 #include <fmt/base.h>
 #include <fmt/format.h>
 #include <fstream>
-#include <glm/ext/quaternion_transform.hpp>
 #include <string>
 #include <vk_backend/vk_command.h>
 #include <vk_backend/vk_debug.h>
@@ -212,40 +212,41 @@ void create_default_data(VkBackend* backend) {
 }
 
 void create_imgui_vk_resources(VkBackend* backend) {
+    //
+    //    std::array<VkDescriptorPoolSize, 1> pool_sizes = {
+    //        {{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1}},
+    //    };
+    //
+    //    VkDescriptorPoolCreateInfo pool_ci{};
+    //    pool_ci.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    //    pool_ci.maxSets       = 1;
+    //    pool_ci.pPoolSizes    = pool_sizes.data();
+    //    pool_ci.poolSizeCount = pool_sizes.size();
+    //    pool_ci.flags         = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+    //
+    //    VK_CHECK(vkCreateDescriptorPool(backend->device_ctx.logical_device, &pool_ci, nullptr,
+    //                                    &backend->imm_descriptor_pool));
+    //
+    //    VkPipelineRenderingCreateInfoKHR pipeline_info{};
+    //    pipeline_info.sType                   =
+    //    VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
+    //    pipeline_info.pColorAttachmentFormats = &backend->color_image.image_format;
+    //    pipeline_info.colorAttachmentCount    = 1;
+    //    pipeline_info.depthAttachmentFormat   = backend->depth_image.image_format;
 
-    std::array<VkDescriptorPoolSize, 1> pool_sizes = {
-        {{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1}},
-    };
+    //    ImGui_ImplVulkan_InitInfo init_info   = {};
+    //    init_info.Instance                    = backend->instance;
+    //    init_info.PhysicalDevice              = backend->device_ctx.physical_device;
+    //    init_info.Device                      = backend->device_ctx.logical_device;
+    //    init_info.Queue                       = backend->device_ctx.queues.graphics;
+    //    init_info.DescriptorPool              = backend->imm_descriptor_pool;
+    //    init_info.MinImageCount               = vk_opts::image_count;
+    //    init_info.ImageCount                  = vk_opts::image_count;
+    //    init_info.UseDynamicRendering         = true;
+    //    init_info.PipelineRenderingCreateInfo = pipeline_info;
+    //    init_info.MSAASamples = (VkSampleCountFlagBits)backend->device_ctx.raster_samples;
 
-    VkDescriptorPoolCreateInfo pool_ci{};
-    pool_ci.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    pool_ci.maxSets       = 1;
-    pool_ci.pPoolSizes    = pool_sizes.data();
-    pool_ci.poolSizeCount = pool_sizes.size();
-    pool_ci.flags         = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-
-    VK_CHECK(vkCreateDescriptorPool(backend->device_ctx.logical_device, &pool_ci, nullptr,
-                                    &backend->imm_descriptor_pool));
-
-    VkPipelineRenderingCreateInfoKHR pipeline_info{};
-    pipeline_info.sType                   = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
-    pipeline_info.pColorAttachmentFormats = &backend->color_image.image_format;
-    pipeline_info.colorAttachmentCount    = 1;
-    pipeline_info.depthAttachmentFormat   = backend->depth_image.image_format;
-
-    ImGui_ImplVulkan_InitInfo init_info   = {};
-    init_info.Instance                    = backend->instance;
-    init_info.PhysicalDevice              = backend->device_ctx.physical_device;
-    init_info.Device                      = backend->device_ctx.logical_device;
-    init_info.Queue                       = backend->device_ctx.queues.graphics;
-    init_info.DescriptorPool              = backend->imm_descriptor_pool;
-    init_info.MinImageCount               = 3;
-    init_info.ImageCount                  = 3;
-    init_info.UseDynamicRendering         = true;
-    init_info.PipelineRenderingCreateInfo = pipeline_info;
-    init_info.MSAASamples = (VkSampleCountFlagBits)backend->device_ctx.raster_samples;
-
-    ImGui_ImplVulkan_Init(&init_info);
+    //    ImGui_ImplVulkan_Init(&init_info);
 }
 
 void immediate_submit(const VkBackend*                           backend,
@@ -342,7 +343,7 @@ void create_pipeline(VkBackend*  backend,
     set_pipeline_layout(&pb, set_layouts, push_constant_ranges, 0);
     backend->opaque_pipeline_info = build_pipeline(&pb, backend->device_ctx.logical_device);
 
-    set_pipeline_blending(&pb, BlendMode::alpha);
+    set_pipeline_blending(&pb, BlendMode::additive);
     set_pipeline_depth_state(&pb, true, false, VK_COMPARE_OP_GREATER_OR_EQUAL);
     backend->transparent_pipeline_info = build_pipeline(&pb, backend->device_ctx.logical_device);
 
@@ -362,6 +363,8 @@ std::vector<const char*> get_instance_extensions() {
     if constexpr (vk_opts::validation_enabled) {
         extensions.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     }
+    extensions.push_back("VK_KHR_wayland_surface");
+    extensions.push_back("VK_KHR_surface");
     return extensions;
 }
 
@@ -408,7 +411,7 @@ void draw(VkBackend* backend, const std::span<Entity> entities, const SceneData*
 
     render_geometry(backend, cmd_buffer, entities);
 
-    render_ui(cmd_buffer);
+    // render_ui(cmd_buffer);
 
     vkCmdEndRendering(cmd_buffer);
 
@@ -587,13 +590,14 @@ void render_geometry(VkBackend*              backend,
 }
 
 void render_ui(VkCommandBuffer cmd_buf) {
-    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd_buf);
+    //    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd_buf);
 }
 
 VkShaderModule load_shader_module(VkBackend* backend, const char* file_path) {
 
     std::ifstream         file(file_path, std::ios::ate | std::ios::binary);
-    size_t                file_size = (size_t)file.tellg();
+    // size_t                file_size = (size_t)file.tellg();
+    size_t                file_size = std::filesystem::file_size(file_path);
     std::vector<uint32_t> buffer(file_size / sizeof(uint32_t));
 
     file.seekg(0);
@@ -612,7 +616,7 @@ VkShaderModule load_shader_module(VkBackend* backend, const char* file_path) {
     return shader_module;
 }
 
-void finish_pending_vk_work(VkBackend* backend) {
+void finish_pending_vk_work(const VkBackend* backend) {
     vkDeviceWaitIdle(backend->device_ctx.logical_device);
 }
 
