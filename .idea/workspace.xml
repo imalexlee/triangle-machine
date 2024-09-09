@@ -32,28 +32,185 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="876b3113-373b-4702-806f-fa999aa588d3" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.clang-format" beforeDir="false" afterPath="$PROJECT_DIR$/.clang-format" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/CMakeLists.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/shaders/fragment/simple_lighting.frag.glsl.spv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/shaders/input_structures.glsl" beforeDir="false" afterPath="$PROJECT_DIR$/shaders/input_structures.glsl" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/core/camera.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/camera.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/core/camera.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/camera.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/core/engine.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/engine.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/core/engine.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/engine.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/core/loaders/gltf_loader.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/core/loaders/gltf_loader.h" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/core/scene.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/scene.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/core/scene.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/scene.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/core/window.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/window.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/vk_backend/resources/vk_buffer.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/vk_backend/resources/vk_buffer.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/vk_backend/resources/vk_buffer.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/vk_backend/resources/vk_buffer.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/vk_backend/resources/vk_descriptor.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/vk_backend/resources/vk_descriptor.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/vk_backend/resources/vk_image.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/vk_backend/resources/vk_image.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/vk_backend/resources/vk_image.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/vk_backend/resources/vk_image.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/vk_backend/vk_backend.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/vk_backend/vk_backend.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/vk_backend/vk_backend.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/vk_backend/vk_backend.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/vk_backend/vk_init.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/vk_backend/vk_init.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/vk_backend/vk_scene.h" beforeDir="false" afterPath="$PROJECT_DIR$/src/vk_backend/vk_scene.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/.cmake/api/v1/query/cache-v2" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/.cmake/api/v1/query/cmakeFiles-v1" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/.cmake/api/v1/query/codemodel-v2" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/.cmake/api/v1/query/toolchains-v1" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/.cmake/api/v1/reply/cache-v2-1017e56f3b7915c6c8a1.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/.cmake/api/v1/reply/cmakeFiles-v1-a8a39d8a65e605412c4d.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/.cmake/api/v1/reply/codemodel-v2-89faf2c1fa5b05455e51.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/.cmake/api/v1/reply/directory-.-Debug-f5ebdc15457944623624.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/.cmake/api/v1/reply/directory-thirdparty-Debug-ca18efa0333c95a683e3.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/.cmake/api/v1/reply/directory-thirdparty.fastgltf-Debug-e705ac16acdd9dfad1a2.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/.cmake/api/v1/reply/directory-thirdparty.fmt-Debug-ec3bbbc3d471418a7fe3.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/.cmake/api/v1/reply/index-2024-09-07T17-55-22-0561.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/.cmake/api/v1/reply/target-Shaders-Debug-1fa0653ff60e0746cc8e.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/.cmake/api/v1/reply/target-fastgltf-Debug-e0c12134f1b8e7fd3526.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/.cmake/api/v1/reply/target-fmt-Debug-7453dc3dea1b465b9325.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/.cmake/api/v1/reply/target-imgui-Debug-c6bbfb6ac52734b17785.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/.cmake/api/v1/reply/target-triangle-machine-Debug-80472607d58b91190400.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/.cmake/api/v1/reply/toolchains-v1-78ce166816aea4eaa442.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/.ninja_deps" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/.ninja_log" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeCache.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/3.29.6/CMakeCCompiler.cmake" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/3.29.6/CMakeCXXCompiler.cmake" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/3.29.6/CMakeDetermineCompilerABI_C.bin" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/3.29.6/CMakeDetermineCompilerABI_CXX.bin" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/3.29.6/CMakeSystem.cmake" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/3.29.6/CompilerIdC/CMakeCCompilerId.c" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/3.29.6/CompilerIdC/a.out" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/3.29.6/CompilerIdCXX/CMakeCXXCompilerId.cpp" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/3.29.6/CompilerIdCXX/a.out" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/CMakeConfigureLog.yaml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/TargetDirectories.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/clion-Debug-log.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/clion-environment.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/cmake.check_cache" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/rules.ninja" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/triangle-machine.dir/src/core/camera.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/triangle-machine.dir/src/core/engine.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/triangle-machine.dir/src/core/loaders/gltf_loader.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/triangle-machine.dir/src/core/loaders/gltf_loader_2.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/triangle-machine.dir/src/core/scene.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/triangle-machine.dir/src/core/ui.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/triangle-machine.dir/src/core/window.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/triangle-machine.dir/src/entry.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/triangle-machine.dir/src/vk_backend/resources/vk_buffer.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/triangle-machine.dir/src/vk_backend/resources/vk_descriptor.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/triangle-machine.dir/src/vk_backend/resources/vk_image.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/triangle-machine.dir/src/vk_backend/vk_backend.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/triangle-machine.dir/src/vk_backend/vk_command.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/triangle-machine.dir/src/vk_backend/vk_debug.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/triangle-machine.dir/src/vk_backend/vk_device.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/triangle-machine.dir/src/vk_backend/vk_frame.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/triangle-machine.dir/src/vk_backend/vk_init.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/triangle-machine.dir/src/vk_backend/vk_pipeline.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/triangle-machine.dir/src/vk_backend/vk_swapchain.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/triangle-machine.dir/src/vk_backend/vk_sync.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/triangle-machine.dir/src/vk_backend/vk_vma_usage.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/Testing/Temporary/LastTest.log" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/build.ninja" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/cmake_install.cmake" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/compile_commands.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/imgui.ini" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/thirdparty/CMakeFiles/imgui.dir/imgui/backends/imgui_impl_glfw.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/thirdparty/CMakeFiles/imgui.dir/imgui/backends/imgui_impl_vulkan.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/thirdparty/CMakeFiles/imgui.dir/imgui/imgui.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/thirdparty/CMakeFiles/imgui.dir/imgui/imgui_demo.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/thirdparty/CMakeFiles/imgui.dir/imgui/imgui_draw.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/thirdparty/CMakeFiles/imgui.dir/imgui/imgui_tables.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/thirdparty/CMakeFiles/imgui.dir/imgui/imgui_widgets.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/thirdparty/cmake_install.cmake" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/thirdparty/fastgltf/CMakeFiles/Export/14b504216a8c2b5661a6a7c88f3023ae/fastgltfConfig-debug.cmake" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/thirdparty/fastgltf/CMakeFiles/Export/14b504216a8c2b5661a6a7c88f3023ae/fastgltfConfig.cmake" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/thirdparty/fastgltf/CMakeFiles/fastgltf.dir/deps/simdjson/simdjson.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/thirdparty/fastgltf/CMakeFiles/fastgltf.dir/src/base64.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/thirdparty/fastgltf/CMakeFiles/fastgltf.dir/src/fastgltf.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/thirdparty/fastgltf/cmake_install.cmake" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/thirdparty/fastgltf/libfastgltf.a" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/thirdparty/fmt/CMakeFiles/Export/b834597d9b1628ff12ae4314c3a2e4b8/fmt-targets-debug.cmake" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/thirdparty/fmt/CMakeFiles/Export/b834597d9b1628ff12ae4314c3a2e4b8/fmt-targets.cmake" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/thirdparty/fmt/CMakeFiles/fmt.dir/src/format.cc.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/thirdparty/fmt/CMakeFiles/fmt.dir/src/os.cc.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/thirdparty/fmt/cmake_install.cmake" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/thirdparty/fmt/fmt-config-version.cmake" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/thirdparty/fmt/fmt-config.cmake" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/thirdparty/fmt/fmt-targets.cmake" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/thirdparty/fmt/fmt.pc" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/thirdparty/fmt/libfmtd.a" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/thirdparty/libimgui.a" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/triangle-machine" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/.cmake/api/v1/query/cache-v2" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/.cmake/api/v1/query/cmakeFiles-v1" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/.cmake/api/v1/query/codemodel-v2" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/.cmake/api/v1/query/toolchains-v1" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/.cmake/api/v1/reply/cache-v2-5c6f3a29290fee5c4f7c.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/.cmake/api/v1/reply/cmakeFiles-v1-4e38479a75c4b163d311.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/.cmake/api/v1/reply/codemodel-v2-8e5517587fa02ab8d1e1.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/.cmake/api/v1/reply/directory-.-Release-f5ebdc15457944623624.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/.cmake/api/v1/reply/directory-thirdparty-Release-ca18efa0333c95a683e3.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/.cmake/api/v1/reply/directory-thirdparty.fastgltf-Release-e705ac16acdd9dfad1a2.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/.cmake/api/v1/reply/directory-thirdparty.fmt-Release-a335aac6677c67499788.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/.cmake/api/v1/reply/index-2024-09-09T03-27-13-0769.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/.cmake/api/v1/reply/target-Shaders-Release-7a607669b2401a57e8c9.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/.cmake/api/v1/reply/target-fastgltf-Release-c5ba5d40cf00c8355836.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/.cmake/api/v1/reply/target-fmt-Release-50f4a92c56c846f5a2fb.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/.cmake/api/v1/reply/target-imgui-Release-9e7798d51146a9fc3293.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/.cmake/api/v1/reply/target-triangle-machine-Release-e901971f0cb431f0c5fa.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/.cmake/api/v1/reply/toolchains-v1-78ce166816aea4eaa442.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/.ninja_deps" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/.ninja_log" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeCache.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/3.29.6/CMakeCCompiler.cmake" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/3.29.6/CMakeCXXCompiler.cmake" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/3.29.6/CMakeDetermineCompilerABI_C.bin" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/3.29.6/CMakeDetermineCompilerABI_CXX.bin" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/3.29.6/CMakeSystem.cmake" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/3.29.6/CompilerIdC/CMakeCCompilerId.c" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/3.29.6/CompilerIdC/a.out" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/3.29.6/CompilerIdCXX/CMakeCXXCompilerId.cpp" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/3.29.6/CompilerIdCXX/a.out" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/CMakeConfigureLog.yaml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/TargetDirectories.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/clion-Release-log.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/clion-environment.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/cmake.check_cache" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/rules.ninja" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/triangle-machine.dir/src/core/camera.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/triangle-machine.dir/src/core/engine.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/triangle-machine.dir/src/core/loaders/gltf_loader.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/triangle-machine.dir/src/core/loaders/gltf_loader_2.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/triangle-machine.dir/src/core/scene.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/triangle-machine.dir/src/core/ui.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/triangle-machine.dir/src/core/window.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/triangle-machine.dir/src/entry.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/triangle-machine.dir/src/vk_backend/resources/vk_buffer.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/triangle-machine.dir/src/vk_backend/resources/vk_descriptor.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/triangle-machine.dir/src/vk_backend/resources/vk_image.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/triangle-machine.dir/src/vk_backend/vk_backend.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/triangle-machine.dir/src/vk_backend/vk_command.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/triangle-machine.dir/src/vk_backend/vk_debug.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/triangle-machine.dir/src/vk_backend/vk_device.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/triangle-machine.dir/src/vk_backend/vk_frame.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/triangle-machine.dir/src/vk_backend/vk_init.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/triangle-machine.dir/src/vk_backend/vk_pipeline.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/triangle-machine.dir/src/vk_backend/vk_swapchain.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/triangle-machine.dir/src/vk_backend/vk_sync.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/CMakeFiles/triangle-machine.dir/src/vk_backend/vk_vma_usage.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/Testing/Temporary/LastTest.log" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/build.ninja" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/cmake_install.cmake" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/imgui.ini" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/thirdparty/CMakeFiles/imgui.dir/imgui/backends/imgui_impl_glfw.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/thirdparty/CMakeFiles/imgui.dir/imgui/backends/imgui_impl_vulkan.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/thirdparty/CMakeFiles/imgui.dir/imgui/imgui.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/thirdparty/CMakeFiles/imgui.dir/imgui/imgui_demo.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/thirdparty/CMakeFiles/imgui.dir/imgui/imgui_draw.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/thirdparty/CMakeFiles/imgui.dir/imgui/imgui_tables.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/thirdparty/CMakeFiles/imgui.dir/imgui/imgui_widgets.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/thirdparty/cmake_install.cmake" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/thirdparty/fastgltf/CMakeFiles/Export/14b504216a8c2b5661a6a7c88f3023ae/fastgltfConfig-release.cmake" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/thirdparty/fastgltf/CMakeFiles/Export/14b504216a8c2b5661a6a7c88f3023ae/fastgltfConfig.cmake" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/thirdparty/fastgltf/CMakeFiles/fastgltf.dir/deps/simdjson/simdjson.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/thirdparty/fastgltf/CMakeFiles/fastgltf.dir/src/base64.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/thirdparty/fastgltf/CMakeFiles/fastgltf.dir/src/fastgltf.cpp.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/thirdparty/fastgltf/cmake_install.cmake" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/thirdparty/fastgltf/libfastgltf.a" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/thirdparty/fmt/CMakeFiles/Export/b834597d9b1628ff12ae4314c3a2e4b8/fmt-targets-release.cmake" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/thirdparty/fmt/CMakeFiles/Export/b834597d9b1628ff12ae4314c3a2e4b8/fmt-targets.cmake" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/thirdparty/fmt/CMakeFiles/fmt.dir/src/format.cc.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/thirdparty/fmt/CMakeFiles/fmt.dir/src/os.cc.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/thirdparty/fmt/cmake_install.cmake" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/thirdparty/fmt/fmt-config-version.cmake" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/thirdparty/fmt/fmt-config.cmake" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/thirdparty/fmt/fmt-targets.cmake" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/thirdparty/fmt/fmt.pc" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/thirdparty/fmt/libfmt.a" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/thirdparty/libimgui.a" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-release/triangle-machine" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -289,7 +446,7 @@
       <workItem from="1725673320458" duration="15056000" />
       <workItem from="1725688739897" duration="6599000" />
       <workItem from="1725725512646" duration="8441000" />
-      <workItem from="1725847307254" duration="5774000" />
+      <workItem from="1725847307254" duration="6207000" />
     </task>
     <servers />
   </component>
