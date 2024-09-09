@@ -34,7 +34,7 @@ void init_window(Window* window, uint32_t width, uint32_t height, const char* ti
     // infinite cursor movement. no visible cursor
     glfwSetInputMode(window->glfw_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
-    // try to enable unscaled and unaccelerated cursor capture
+    //    try to enable unscaled and unaccelerated cursor capture
     if (glfwRawMouseMotionSupported()) {
         glfwSetInputMode(window->glfw_window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
     }
@@ -64,10 +64,7 @@ void register_cursor_callback(Window* window, std::function<void(double, double)
     window->cursor_callbacks.push_back(fn_ptr);
 }
 
-void key_callback(GLFWwindow*          window,
-                  int                  key,
-                  [[maybe_unused]] int scancode,
-                  int                  action,
+void key_callback(GLFWwindow* window, int key, [[maybe_unused]] int scancode, int action,
                   [[maybe_unused]] int mods) {
 
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {

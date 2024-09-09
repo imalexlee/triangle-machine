@@ -6,7 +6,7 @@
 #include "vk_backend/vk_device.h"
 #include "vk_backend/vk_frame.h"
 #include "vk_backend/vk_utils.h"
-#include <imgui_impl_vulkan.h>
+
 #include <vk_backend/vk_options.h>
 #include <vk_backend/vk_pipeline.h>
 #include <vk_backend/vk_scene.h>
@@ -60,20 +60,19 @@ struct VkBackend {
 
 VkInstance create_vk_instance(const char* app_name, const char* engine_name);
 
-void init_backend(
-    VkBackend* backend, VkInstance instance, VkSurfaceKHR surface, int width, int height);
+void init_backend(VkBackend* backend, VkInstance instance, VkSurfaceKHR surface, uint32_t width,
+                  uint32_t height);
 
-void finish_pending_vk_work(VkBackend* backend);
+void finish_pending_vk_work(const VkBackend* backend);
 
 void deinit_backend(VkBackend* backend);
 
-void draw(VkBackend* backend, const std::span<Entity> entities, const SceneData* scene_data);
+void draw(VkBackend* backend, std::span<Entity> entities, const SceneData* scene_data);
 
 void immediate_submit(const VkBackend*                           backend,
                       std::function<void(VkCommandBuffer cmd)>&& function);
 
 void create_imgui_vk_resources(VkBackend* backend);
 
-void create_pipeline(VkBackend*  backend,
-                     const char* vert_shader_path,
+void create_pipeline(VkBackend* backend, const char* vert_shader_path,
                      const char* frag_shader_path);

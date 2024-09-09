@@ -1,6 +1,5 @@
 #pragma once
 
-#include <core/loaders/gltf_loader.h>
 #include <span>
 #include <vector>
 #include <vk_backend/vk_backend.h>
@@ -13,7 +12,7 @@ struct Scene {
     glm::vec3           velocity        = {0, 0, 0};
 };
 
-void load_scene(Scene* scene, VkBackend* backend, std::span<const char*> gltf_paths);
+void load_scene(Scene* scene, const VkBackend* backend, std::span<const char*> gltf_paths);
 
 void update_scene(Scene* scene);
 

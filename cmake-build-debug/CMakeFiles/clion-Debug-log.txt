@@ -1,0 +1,29 @@
+/home/alexlee/.local/share/JetBrains/Toolbox/apps/clion/bin/cmake/linux/x64/bin/cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_MAKE_PROGRAM=/home/alexlee/.local/share/JetBrains/Toolbox/apps/clion/bin/ninja/linux/x64/ninja -DCMAKE_CXX_COMPILER=/bin/g++-12 -DCMAKE_EXPORT_COMPILE_COMMANDS=1 -G Ninja -S /home/alexlee/Desktop/triangle-machine -B /home/alexlee/Desktop/triangle-machine/cmake-build-debug
+-- Version: 10.2.2
+-- Build type: Debug
+-- Could NOT find simdjson (missing: simdjson_DIR)
+-- fastgltf: Found simdjson (Version 3.7.0)
+-- BUILDING SHADER
+-- /home/alexlee/Desktop/triangle-machine/shaders/vertex/indexed_draw.vert.glsl
+-- BUILDING SHADER
+-- /home/alexlee/Desktop/triangle-machine/shaders/vertex/indexed_triangle.vert.glsl
+-- BUILDING SHADER
+-- /home/alexlee/Desktop/triangle-machine/shaders/fragment/gooch.frag.glsl
+-- BUILDING SHADER
+-- /home/alexlee/Desktop/triangle-machine/shaders/fragment/no_lighting.frag.glsl
+-- BUILDING SHADER
+-- /home/alexlee/Desktop/triangle-machine/shaders/fragment/simple_lighting.frag.glsl
+-- BUILDING SHADER
+-- /home/alexlee/Desktop/triangle-machine/shaders/fragment/simple_lighting_2.frag.glsl
+-- Configuring done (0.2s)
+CMake Error at CMakeLists.txt:19 (add_executable):
+  Cannot find source file:
+
+    src/core/loaders/gltf_loader.cpp
+
+
+CMake Error at CMakeLists.txt:19 (add_executable):
+  No SOURCES given to target: triangle-machine
+
+
+CMake Generate step failed.  Build files cannot be regenerated correctly.

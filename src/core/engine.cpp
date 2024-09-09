@@ -3,11 +3,9 @@
 #include <GLFW/glfw3.h>
 #include <array>
 #include <core/camera.h>
-#include <core/loaders/gltf_loader.h>
 #include <core/scene.h>
 #include <core/ui.h>
 #include <core/window.h>
-#include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 #include <vk_backend/vk_backend.h>
 
@@ -17,23 +15,27 @@ void init_engine(Engine* engine) {
     assert(active_engine == nullptr);
     active_engine = engine;
 
-    glm::vec3 init_cam_pos = {0, -1, -8};
+    constexpr glm::vec3 init_cam_pos = {0, -1, -8};
 
     init_window(&engine->window, core_opts::initial_width, core_opts::initial_height,
                 "Triangle Machine");
 
     init_camera(&engine->camera, &engine->window, init_cam_pos);
 
-    VkInstance   instance = create_vk_instance("triangle machine", "my engine");
-    VkSurfaceKHR surface  = get_vulkan_surface(&engine->window, instance);
+    const VkInstance   instance = create_vk_instance("triangle machine", "my engine");
+    const VkSurfaceKHR surface  = get_vulkan_surface(&engine->window, instance);
 
     init_backend(&engine->backend, instance, surface, engine->window.width, engine->window.height);
     init_ui(&engine->ui, &engine->backend, engine->window.glfw_window);
 
-    create_pipeline(&engine->backend, "../../shaders/vertex/indexed_triangle.vert.glsl.spv",
-                    "../../shaders/fragment/simple_lighting.frag.glsl.spv");
+    create_pipeline(&engine->backend, "../shaders/vertex/indexed_draw.vert.glsl.spv",
+                    "../shaders/fragment/simple_lighting_2.frag.glsl.spv");
 
-    std::array gltf_paths = {"../../assets/glb/structure.glb"};
+    std::array gltf_paths = {
+        "../assets/gltf/main_sponza/pkg_a_Curtains/NewSponza_Curtains_glTF.gltf",
+        "../assets/gltf/main_sponza/pkg_b_ivy/NewSponza_IvyGrowth_glTF.gltf",
+        "../assets/gltf/main_sponza/pkg_c_trees/NewSponza_CypressTree_glTF.gltf",
+        "../assets/gltf/main_sponza/Main.1_Sponza/NewSponza_Main_glTF_002.gltf"};
     load_scene(&engine->scene, &engine->backend, gltf_paths);
 
     register_key_callback(&engine->window, [=](int key, int scancode, int action, int mods) {

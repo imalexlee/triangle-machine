@@ -9,10 +9,10 @@
 
 struct Engine {
     VkBackend backend;
-    Scene     scene;
-    Window    window;
-    Camera    camera;
-    UI        ui;
+    Scene scene;
+    Window window;
+    Camera camera;
+    UI ui;
 };
 
 void init_engine(Engine* engine);
