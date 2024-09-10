@@ -16,3 +16,6 @@
 [submodule "thirdparty/imgui"]
 	path = thirdparty/imgui
 	url = https://github.com/ocornut/imgui.git
+[submodule "thirdparty/thirdparty/taskflow"]
+	path = thirdparty/thirdparty/taskflow
+	url = https://github.com/taskflow/taskflow.git
