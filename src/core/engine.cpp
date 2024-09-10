@@ -29,7 +29,7 @@ void init_engine(Engine* engine) {
     init_ui(&engine->ui, &engine->backend, engine->window.glfw_window);
 
     create_pipeline(&engine->backend, "../shaders/vertex/indexed_draw.vert.glsl.spv",
-                    "../shaders/fragment/simple_lighting_2.frag.glsl.spv");
+                    "../shaders/fragment/simple_lighting.frag.glsl.spv");
 
     /*
     std::array gltf_paths = {

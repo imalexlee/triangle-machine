@@ -13,7 +13,7 @@
 
 // GLTF spec states clients should support at least 2 tex coordinates
 static constexpr int tex_coord_num = 2;
-struct Vertex2 {
+struct Vertex {
     glm::vec4 position{};
     glm::vec4 normal{};
     glm::vec2 tex_coord[tex_coord_num] = {
@@ -65,7 +65,7 @@ struct GLTFPrimitive {
 struct GLTFMesh {
     std::vector<GLTFPrimitive> primitives{};
     std::vector<uint32_t>      indices{};
-    std::vector<Vertex2>       vertices{};
+    std::vector<Vertex>        vertices{};
 };
 
 struct GLTFNode {
@@ -249,11 +249,6 @@ static std::vector<GLTFMesh> load_gltf_meshes(const fastgltf::Asset* my_asset) {
 
             fastgltf::iterateAccessorWithIndex<glm::vec3>(
                 *my_asset, *pos_accessor, [&](glm::vec3 pos, size_t i) {
-                    // assert(i + vertex_count < new_mesh.vertices.size());
-                    // if (i + vertex_count >= new_mesh.vertices.size()) {
-                    // std::cout << "accessing: " << i + vertex_count
-                    // << " and size is: " << new_mesh.vertices.size() << std::endl;
-                    // }
                     new_mesh.vertices[i + vertex_count].position.x = pos.x;
                     new_mesh.vertices[i + vertex_count].position.y = pos.y;
                     new_mesh.vertices[i + vertex_count].position.z = pos.z;
@@ -474,7 +469,7 @@ static std::vector<MeshBuffers> upload_gltf_mesh_buffers(VkBackend*             
     std::vector<MeshBuffers> mesh_buffers;
     mesh_buffers.reserve(meshes.size());
     for (const auto& mesh : meshes) {
-        MeshBuffers new_mesh_buffers = upload_mesh<Vertex2>(backend, mesh.indices, mesh.vertices);
+        MeshBuffers new_mesh_buffers = upload_mesh<Vertex>(backend, mesh.indices, mesh.vertices);
         mesh_buffers.push_back(new_mesh_buffers);
     }
 
