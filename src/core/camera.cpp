@@ -2,14 +2,10 @@
 #include <GLFW/glfw3.h>
 #include <chrono>
 #include <fmt/base.h>
-#include <glm/matrix.hpp>
 #include <vk_backend/vk_frame.h>
 
-void init_camera(Camera*   cam,
-                 Window*   window,
-                 glm::vec3 initial_pos,
-                 float     init_pitch_theta,
-                 float     init_yaw_theta) {
+void init_camera(Camera* cam, const Window* window, glm::vec3 initial_pos, float init_pitch_theta,
+                 float init_yaw_theta) {
 
     cam->position    = initial_pos;
     cam->pitch_theta = init_pitch_theta;
@@ -19,8 +15,8 @@ void init_camera(Camera*   cam,
     update_camera(cam, window->width, window->height);
 }
 
-void camera_key_callback(
-    Camera* cam, int key, [[maybe_unused]] int scancode, int action, [[maybe_unused]] int mods) {
+void camera_key_callback(Camera* cam, int key, [[maybe_unused]] int scancode, int action,
+                         [[maybe_unused]] int mods) {
     if (action == GLFW_PRESS) {
         if (key == GLFW_KEY_W) {
             cam->velocity.z = cam->movement_speed;
@@ -82,7 +78,8 @@ SceneData update_camera(Camera* cam, uint32_t window_width, uint32_t window_heig
     cam->view = cam_rotation * cam_translation;
 
     glm::mat4 projection = glm::perspective(
-        glm::radians(60.f), (float)window_width / (float)window_height, 10000.0f, 0.1f);
+        glm::radians(60.f), static_cast<float>(window_width) / static_cast<float>(window_height),
+        10000.0f, 0.1f);
 
     projection[1][1] *= -1;
 

@@ -23,7 +23,7 @@ AllocatedImage create_image(VkDevice device, VmaAllocator allocator, VkImageUsag
     image_ci.extent        = extent_3D;
     image_ci.format        = format;
     image_ci.usage         = usage;
-    image_ci.samples       = (VkSampleCountFlagBits)samples;
+    image_ci.samples       = static_cast<VkSampleCountFlagBits>(samples);
     image_ci.mipLevels     = 1;
     image_ci.imageType     = VK_IMAGE_TYPE_2D;
     image_ci.arrayLayers   = 1;
@@ -105,9 +105,9 @@ void blit_image(VkCommandBuffer cmd, VkImage src, VkImage dest, VkExtent2D src_e
     vkCmdBlitImage2(cmd, &blit_info);
 }
 
-void destroy_image(VkDevice device, VmaAllocator allocator, AllocatedImage& allocated_image) {
-    vmaDestroyImage(allocator, allocated_image.image, allocated_image.allocation);
-    vkDestroyImageView(device, allocated_image.image_view, nullptr);
+void destroy_image(VkDevice device, VmaAllocator allocator, const AllocatedImage* allocated_image) {
+    vmaDestroyImage(allocator, allocated_image->image, allocated_image->allocation);
+    vkDestroyImageView(device, allocated_image->image_view, nullptr);
 }
 
 VkImageSubresourceRange create_image_subresource_range(VkImageAspectFlags aspect_flags,

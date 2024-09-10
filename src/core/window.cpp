@@ -44,13 +44,13 @@ void init_window(Window* window, uint32_t width, uint32_t height, const char* ti
     glfwSetCursorPosCallback(window->glfw_window, cursor_callback);
 }
 
-void deinit_window(Window* window) {
+void deinit_window(const Window* window) {
     DEBUG_PRINT("destroying GLFW window");
     glfwDestroyWindow(window->glfw_window);
     glfwTerminate();
-};
+}
 
-VkSurfaceKHR get_vulkan_surface(Window* window, VkInstance instance) {
+VkSurfaceKHR get_vulkan_surface(const Window* window, VkInstance instance) {
     VkSurfaceKHR surface;
     VK_CHECK(glfwCreateWindowSurface(instance, window->glfw_window, nullptr, &surface));
     return surface;
@@ -80,7 +80,7 @@ void cursor_callback([[maybe_unused]] GLFWwindow* window, double x_pos, double y
     for (auto& callback : Window::cursor_callbacks) {
         callback(x_pos, y_pos);
     }
-};
+}
 
 void error_callback([[maybe_unused]] int error, const char* description) {
     fmt::println("GLFW errow: {}", description);

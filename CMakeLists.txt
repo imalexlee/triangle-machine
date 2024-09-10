@@ -41,13 +41,13 @@ add_executable(
 
 target_compile_options(
         ${PROJECT_NAME}
-        PRIVATE "$<$<CONFIG:DEBUG>:-g;-Wall;-Wextra>;-Wno-missing-field-initializers")
+        PUBLIC "$<$<CONFIG:DEBUG>:-g;>-Wall;-Wextra;-Wno-missing-field-initializers")
 
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
 target_compile_options(
         ${PROJECT_NAME}
         PUBLIC
-        "$<$<CONFIG:RELEASE>:-Ofast;-fno-signed-zeros;-flto;-Wall;-Wextra>;-Wno-missing-field-initializers>"
+        "$<$<CONFIG:RELEASE>:-Ofast;-fno-signed-zeros;-flto;-Wall;-Wextra>;-Wno-missing-field-initializers"
 )
 
 if (APPLE)

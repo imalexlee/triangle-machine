@@ -31,11 +31,15 @@ void init_engine(Engine* engine) {
     create_pipeline(&engine->backend, "../shaders/vertex/indexed_draw.vert.glsl.spv",
                     "../shaders/fragment/simple_lighting_2.frag.glsl.spv");
 
+    /*
     std::array gltf_paths = {
         "../assets/gltf/main_sponza/pkg_a_Curtains/NewSponza_Curtains_glTF.gltf",
         "../assets/gltf/main_sponza/pkg_b_ivy/NewSponza_IvyGrowth_glTF.gltf",
         "../assets/gltf/main_sponza/pkg_c_trees/NewSponza_CypressTree_glTF.gltf",
         "../assets/gltf/main_sponza/Main.1_Sponza/NewSponza_Main_glTF_002.gltf"};
+    */
+
+    std::array gltf_paths = {"../assets/glb/porsche.glb"};
     load_scene(&engine->scene, &engine->backend, gltf_paths);
 
     register_key_callback(&engine->window, [=](int key, int scancode, int action, int mods) {
@@ -59,7 +63,7 @@ void run_engine(Engine* engine) {
 
         update_ui(&engine->backend);
         draw(&engine->backend, engine->scene.entities, &scene_data);
-    };
+    }
 }
 
 void deinit_engine(Engine* engine) {
@@ -68,4 +72,4 @@ void deinit_engine(Engine* engine) {
     deinit_ui(&engine->ui);
     deinit_window(&engine->window);
     deinit_backend(&engine->backend);
-};
+}

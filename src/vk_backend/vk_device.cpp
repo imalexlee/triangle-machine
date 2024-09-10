@@ -81,7 +81,8 @@ void get_queue_family_indices(DeviceContext* device_ctx, VkSurfaceKHR surface) {
             graphics_index = i;
             present_index  = i;
             break;
-        } else if (present_supported) {
+        }
+        if (present_supported) {
             present_index = i;
         } else if (graphics_supported) {
             graphics_index = i;
@@ -98,8 +99,8 @@ void get_queue_family_indices(DeviceContext* device_ctx, VkSurfaceKHR surface) {
 }
 
 void create_logical_device(DeviceContext* device_ctx) {
-    std::set<uint32_t> unique_family_indices{device_ctx->queues.graphics_family_index,
-                                             device_ctx->queues.present_family_index};
+    std::set unique_family_indices{device_ctx->queues.graphics_family_index,
+                                   device_ctx->queues.present_family_index};
     std::vector<VkDeviceQueueCreateInfo> queue_infos;
     constexpr float                      priority = 1.f;
 
@@ -112,7 +113,7 @@ void create_logical_device(DeviceContext* device_ctx) {
         queue_ci.pQueuePriorities = &priority;
         queue_infos.push_back(queue_ci);
     }
-    constexpr std::array<const char*, 2> device_extensions{
+    constexpr std::array device_extensions{
         "VK_KHR_dynamic_rendering",
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
     };

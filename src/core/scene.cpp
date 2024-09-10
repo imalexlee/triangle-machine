@@ -4,7 +4,7 @@
 
 #include <fmt/base.h>
 
-void load_scene(Scene* scene, const VkBackend* backend, std::span<const char*> gltf_paths) {
+void load_scene(Scene* scene, VkBackend* backend, std::span<const char*> gltf_paths) {
     scene->entities.reserve(gltf_paths.size());
     for (const auto& path : gltf_paths) {
         scene->entities.push_back(load_entity(backend, path));

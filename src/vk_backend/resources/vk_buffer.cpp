@@ -21,14 +21,14 @@ AllocatedBuffer create_buffer(VkDeviceSize byte_size, VmaAllocator allocator,
     return allocated_buffer;
 }
 
-void destroy_buffer(VmaAllocator allocator, AllocatedBuffer* allocated_buffer) {
+void destroy_buffer(VmaAllocator allocator, const AllocatedBuffer* allocated_buffer) {
     vmaDestroyBuffer(allocator, allocated_buffer->buffer, allocated_buffer->allocation);
 }
 
-VkDeviceAddress get_buffer_device_address(VkDevice device, AllocatedBuffer buffer) {
+VkDeviceAddress get_buffer_device_address(VkDevice device, const AllocatedBuffer* buffer) {
     VkBufferDeviceAddressInfo device_address_info{};
     device_address_info.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-    device_address_info.buffer = buffer.buffer;
+    device_address_info.buffer = buffer->buffer;
 
     return vkGetBufferDeviceAddress(device, &device_address_info);
 }

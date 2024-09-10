@@ -27,7 +27,7 @@ VkResult init_debugger(Debugger* db, VkInstance instance, VkDevice device);
  * @param db	    The Debugger to deinitialize
  * @param instance  The instance attached to our debuggable Vulkan objects
  */
-void deinit_debugger(Debugger* db, VkInstance instance);
+void deinit_debugger(const Debugger* db, VkInstance instance);
 
 /**
  * @brief Sets up our desired message severity and types of messages we want

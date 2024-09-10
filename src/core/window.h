@@ -19,9 +19,9 @@ struct Window {
 
 void init_window(Window* window, uint32_t width, uint32_t height, const char* title);
 
-void deinit_window(Window* window);
+void deinit_window(const Window* window);
 
-[[nodiscard]] VkSurfaceKHR get_vulkan_surface(Window* window, const VkInstance instance);
+[[nodiscard]] VkSurfaceKHR get_vulkan_surface(const Window* window, VkInstance instance);
 
 void register_key_callback(Window* window, std::function<void(int, int, int, int)>&& fn_ptr);
 

@@ -2,10 +2,7 @@
 
 #include "vk_backend/resources/vk_buffer.h"
 #include "vk_backend/resources/vk_descriptor.h"
-#include "vk_backend/vk_command.h"
-#include <vk_backend/vk_scene.h>
-#include <vk_backend/vk_types.h>
-#include <vulkan/vulkan_core.h>
+#include "vk_command.h"
 
 // contains per-frame shader information
 struct SceneData {
@@ -32,11 +29,8 @@ struct Frame {
  * @param graphics_family_index	  Index of Vulkan queue which supports graphics operations
  * @param set_layout		  Descriptor set layout for resources attached to this frame
  */
-void init_frame(Frame*                frame,
-                VkDevice              device,
-                VmaAllocator          allocator,
-                uint32_t              graphics_family_index,
-                VkDescriptorSetLayout set_layout);
+void init_frame(Frame* frame, VkDevice device, VmaAllocator allocator,
+                uint32_t graphics_family_index, VkDescriptorSetLayout set_layout);
 
 /**
  * @brief Writes new scene data to device-local memory to be used during this frames presentation
@@ -46,9 +40,7 @@ void init_frame(Frame*                frame,
  * @param allocator   The allocator used to allocate this memory initially
  * @param scene_data  The scene data
  */
-void set_scene_data(const Frame*     frame,
-                    VkDevice         device,
-                    VmaAllocator     allocator,
+void set_scene_data(const Frame* frame, VkDevice device, VmaAllocator allocator,
                     const SceneData* scene_data);
 
 /**

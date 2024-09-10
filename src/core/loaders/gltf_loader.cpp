@@ -71,7 +71,6 @@ struct GLTFMesh {
 struct GLTFNode {
     uint32_t    mesh_i{};
     glm::mat4x4 transform{1.f};
-    //    std::vector<const GLTFNode> children;
 };
 
 [[maybe_unused]] static const fastgltf::Sampler default_sampler = {
@@ -80,14 +79,6 @@ struct GLTFNode {
     .wrapS     = fastgltf::Wrap::Repeat,
     .wrapT     = fastgltf::Wrap::Repeat,
     .name      = "default_sampler",
-};
-
-uint8_t                      white[4]        = {255, 255, 255, 255};
-static constexpr GLTFTexture default_texture = {
-    .data           = white,
-    .width          = 1,
-    .height         = 1,
-    .color_channels = 4,
 };
 
 constexpr TexCoordPair default_tex_coord_pair = {
@@ -106,9 +97,8 @@ static std::vector<GLTFTexture> load_gltf_textures(const fastgltf::Asset* asset)
 
     for (const auto& texture : asset->textures) {
         GLTFTexture            new_tex{};
-        const fastgltf::Image* image          = &asset->images[texture.imageIndex.value()];
-        constexpr int          color_channels = 4;
-        new_tex.color_channels                = color_channels;
+        const fastgltf::Image* image = &asset->images[texture.imageIndex.value()];
+        new_tex.color_channels       = 4;
         std::visit(fastgltf::visitor{
                        []([[maybe_unused]] auto& arg) {},
                        [&](const fastgltf::sources::URI& file_path) {
@@ -116,32 +106,23 @@ static std::vector<GLTFTexture> load_gltf_textures(const fastgltf::Asset* asset)
                            assert(file_path.uri.isLocalPath());
 
                            const std::string path(file_path.uri.path().begin(),
-                                                  file_path.uri.path().end()); // thanks C++
+                                                  file_path.uri.path().end());
 
                            new_tex.data = stbi_load(path.c_str(), &width, &height, &nr_channels,
-                                                    color_channels);
+                                                    new_tex.color_channels);
                            assert(new_tex.data);
-                           const uint32_t byte_size = width * height * color_channels;
-                           // new_tex.data             = std::vector(data, data + byte_size);
 
                            new_tex.width  = width;
                            new_tex.height = height;
-
-                           // TODO: free image
-                           // stbi_image_free(data);
                        },
                        [&](const fastgltf::sources::Array& vector) {
                            new_tex.data = stbi_load_from_memory(
                                vector.bytes.data(), static_cast<int>(vector.bytes.size()), &width,
-                               &height, &nr_channels, color_channels);
+                               &height, &nr_channels, new_tex.color_channels);
 
                            assert(new_tex.data);
-                           const uint32_t byte_size = width * height * color_channels;
-                           // new_tex.data             = std::vector(data, data + byte_size);
                            new_tex.width  = width;
                            new_tex.height = height;
-
-                           // stbi_image_free(data);
                        },
                        [&](const fastgltf::sources::BufferView& view) {
                            auto& buffer_view = asset->bufferViews[view.bufferViewIndex];
@@ -153,16 +134,11 @@ static std::vector<GLTFTexture> load_gltf_textures(const fastgltf::Asset* asset)
                                               new_tex.data = stbi_load_from_memory(
                                                   vector.bytes.data() + buffer_view.byteOffset,
                                                   static_cast<int>(buffer_view.byteLength), &width,
-                                                  &height, &nr_channels, color_channels);
+                                                  &height, &nr_channels, new_tex.color_channels);
                                               assert(new_tex.data);
 
-                                              const uint32_t byte_size =
-                                                  width * height * color_channels;
-                                              // new_tex.data   = std::vector(data, data +
-                                              // byte_size);
                                               new_tex.width  = width;
                                               new_tex.height = height;
-                                              // stbi_image_free(data);
                                           }},
                                       buffer.data);
                        },
@@ -315,11 +291,10 @@ static std::vector<GLTFMesh> load_gltf_meshes(const fastgltf::Asset* my_asset) {
     return gltf_meshes;
 }
 
-static std::vector<VkDescriptorSet> create_mesh_desc_sets(const VkBackend*          backend,
-                                                          DescriptorAllocator*      desc_allocator,
-                                                          VkDescriptorSetLayout     set_layout,
-                                                          std::span<const GLTFNode> gltf_nodes,
-                                                          std::span<const MeshBuffers> vk_meshes) {
+static std::vector<VkDescriptorSet>
+create_mesh_desc_sets(VkBackend* backend, DescriptorAllocator* desc_allocator,
+                      const VkDescriptorSetLayout set_layout, std::span<const GLTFNode> gltf_nodes,
+                      const std::span<const MeshBuffers> vk_meshes) {
     std::vector<VkDescriptorSet> mesh_desc_sets;
     mesh_desc_sets.reserve(gltf_nodes.size());
 
@@ -330,9 +305,7 @@ static std::vector<VkDescriptorSet> create_mesh_desc_sets(const VkBackend*      
                         mesh_pool_sizes);
 
     for (const auto& node : gltf_nodes) {
-        // const GLTFNode* node = &gltf_node;
-
-        const VkDescriptorSet new_desc_set =
+        VkDescriptorSet new_desc_set =
             allocate_desc_set(desc_allocator, backend->device_ctx.logical_device, set_layout);
 
         const AllocatedBuffer mesh_uniform_buffer =
@@ -344,7 +317,7 @@ static std::vector<VkDescriptorSet> create_mesh_desc_sets(const VkBackend*      
         auto* mapped_mesh_data = static_cast<MeshData*>(mesh_uniform_buffer.info.pMappedData);
         mapped_mesh_data->local_transform       = node.transform;
         mapped_mesh_data->vertex_buffer_address = get_buffer_device_address(
-            backend->device_ctx.logical_device, vk_meshes[node.mesh_i].vertices);
+            backend->device_ctx.logical_device, &vk_meshes[node.mesh_i].vertices);
 
         DescriptorWriter desc_writer;
         write_buffer_desc(&desc_writer, 0, mesh_uniform_buffer.buffer, sizeof(MeshData), 0,
@@ -353,15 +326,19 @@ static std::vector<VkDescriptorSet> create_mesh_desc_sets(const VkBackend*      
         update_desc_set(&desc_writer, backend->device_ctx.logical_device, new_desc_set);
 
         mesh_desc_sets.push_back(new_desc_set);
+
+        backend->deletion_queue.push_persistant([=] {
+            vmaDestroyBuffer(backend->allocator, mesh_uniform_buffer.buffer,
+                             mesh_uniform_buffer.allocation);
+        });
     }
 
     return mesh_desc_sets;
-};
+}
 static int times_entered = 0;
 // Adds draw objects to entity from a given root node
-void       create_node_tree(const fastgltf::Asset* asset,
-                            const glm::mat4x4*     transform, // NOLINT(*-no-recursion)
-                            size_t node_i, std::vector<GLTFNode>* gltf_nodes) {
+void       create_node_tree(const fastgltf::Asset* asset, const glm::mat4x4* transform,
+                            const size_t node_i, std::vector<GLTFNode>* gltf_nodes) {
 
     times_entered++;
     const fastgltf::Node* node = &asset->nodes[node_i];
@@ -379,7 +356,6 @@ void       create_node_tree(const fastgltf::Asset* asset,
     }
 
     for (const size_t child_i : node->children) {
-        // const fastgltf::Node* child_node = &asset->nodes[child_i];
         create_node_tree(asset, &new_gltf_node.transform, child_i, gltf_nodes);
     }
 
@@ -396,7 +372,6 @@ static std::vector<GLTFNode> load_gltf_nodes(const fastgltf::Asset* asset) {
 
     for (const auto& scene : asset->scenes) {
         for (const size_t root_node_i : scene.nodeIndices) {
-            // const fastgltf::Node* root_node      = &asset->nodes[root_node_i];
             constexpr glm::mat4 base_transform = glm::mat4{1.f};
             create_node_tree(asset, &base_transform, root_node_i, &gltf_nodes);
         }
@@ -465,7 +440,7 @@ static std::vector<VkSampler> upload_gltf_samplers(const VkBackend*             
 }
 
 static std::vector<TextureSampler>
-upload_gltf_textures(const VkBackend* backend, std::span<const GLTFTexture> textures,
+upload_gltf_textures(VkBackend* backend, std::span<const GLTFTexture> textures,
                      std::span<const fastgltf::Sampler> samplers) {
     const std::vector<VkSampler> vk_samplers = upload_gltf_samplers(backend, samplers);
     std::vector<TextureSampler>  tex_samplers;
@@ -481,24 +456,42 @@ upload_gltf_textures(const VkBackend* backend, std::span<const GLTFTexture> text
         }
         tex_samplers.push_back(new_tex_sampler);
     }
+
+    backend->deletion_queue.push_persistant([=] {
+        for (const VkSampler sampler : vk_samplers) {
+            vkDestroySampler(backend->device_ctx.logical_device, sampler, nullptr);
+        }
+        for (const auto& texture : tex_samplers) {
+            vmaDestroyImage(backend->allocator, texture.tex.image, texture.tex.allocation);
+            vkDestroyImageView(backend->device_ctx.logical_device, texture.tex.image_view, nullptr);
+        }
+    });
     return tex_samplers;
 }
 
-static std::vector<MeshBuffers> upload_gltf_mesh_buffers(const VkBackend*          backend,
+static std::vector<MeshBuffers> upload_gltf_mesh_buffers(VkBackend*                backend,
                                                          std::span<const GLTFMesh> meshes) {
     std::vector<MeshBuffers> mesh_buffers;
     mesh_buffers.reserve(meshes.size());
     for (const auto& mesh : meshes) {
-        MeshBuffers new_mesh_buffers =
-            upload_mesh_buffers<Vertex2>(backend, mesh.indices, mesh.vertices);
+        MeshBuffers new_mesh_buffers = upload_mesh<Vertex2>(backend, mesh.indices, mesh.vertices);
         mesh_buffers.push_back(new_mesh_buffers);
     }
+
+    backend->deletion_queue.push_persistant([=] {
+        for (const auto& mesh_buffer : mesh_buffers) {
+            vmaDestroyBuffer(backend->allocator, mesh_buffer.indices.buffer,
+                             mesh_buffer.indices.allocation);
+            vmaDestroyBuffer(backend->allocator, mesh_buffer.vertices.buffer,
+                             mesh_buffer.vertices.allocation);
+        }
+    });
     return mesh_buffers;
 }
 
 // last element will be the default material desc set
 static std::vector<VkDescriptorSet>
-create_mat_desc_sets(const VkBackend* backend, DescriptorAllocator* desc_allocator,
+create_mat_desc_sets(VkBackend* backend, DescriptorAllocator* desc_allocator,
                      VkDescriptorSetLayout set_layout, std::span<const GLTFMaterial> gltf_materials,
                      std::span<const TextureSampler> vk_textures) {
 
@@ -561,6 +554,11 @@ create_mat_desc_sets(const VkBackend* backend, DescriptorAllocator* desc_allocat
         update_desc_set(&desc_writer, backend->device_ctx.logical_device, new_desc_set);
 
         mat_desc_sets.push_back(new_desc_set);
+
+        backend->deletion_queue.push_persistant([=] {
+            vmaDestroyBuffer(backend->allocator, mat_uniform_buffer.buffer,
+                             mat_uniform_buffer.allocation);
+        });
     }
 
     {
@@ -592,12 +590,17 @@ create_mat_desc_sets(const VkBackend* backend, DescriptorAllocator* desc_allocat
         update_desc_set(&desc_writer, backend->device_ctx.logical_device, new_desc_set);
 
         mat_desc_sets.push_back(new_desc_set);
+
+        backend->deletion_queue.push_persistant([=] {
+            vmaDestroyBuffer(backend->allocator, mat_uniform_buffer.buffer,
+                             mat_uniform_buffer.allocation);
+        });
     }
 
     return mat_desc_sets;
 }
 
-Entity load_entity(const VkBackend* backend, const std::filesystem::path& path) {
+Entity load_entity(VkBackend* backend, const std::filesystem::path& path) {
 
     constexpr auto supported_extensions = fastgltf::Extensions::KHR_mesh_quantization |
                                           fastgltf::Extensions::KHR_texture_transform |
@@ -623,7 +626,6 @@ Entity load_entity(const VkBackend* backend, const std::filesystem::path& path) 
     }
     fastgltf::Asset asset;
     asset = std::move(load.get());
-    // const size_t default_scene_i = asset.defaultScene.value_or(0);
 
     const std::vector<GLTFTexture> gltf_textures  = load_gltf_textures(&asset);
     std::vector<GLTFMaterial>      gltf_materials = load_gltf_materials(asset);
@@ -642,14 +644,14 @@ Entity load_entity(const VkBackend* backend, const std::filesystem::path& path) 
     add_layout_binding(&layout_builder, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
     add_layout_binding(&layout_builder, 2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
-    const VkDescriptorSetLayout mat_desc_layout =
+    VkDescriptorSetLayout mat_desc_layout =
         build_set_layout(&layout_builder, backend->device_ctx.logical_device,
                          VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
 
     clear_layout_bindings(&layout_builder);
 
     add_layout_binding(&layout_builder, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-    const VkDescriptorSetLayout mesh_desc_layout =
+    VkDescriptorSetLayout mesh_desc_layout =
         build_set_layout(&layout_builder, backend->device_ctx.logical_device,
                          VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
 
@@ -698,12 +700,30 @@ Entity load_entity(const VkBackend* backend, const std::filesystem::path& path) 
                   return obj_a.mat_desc_set < obj_b.mat_desc_set;
               });
 
-    // should be 476 nodes with meshes
-
     entity.opaque_objs.shrink_to_fit();
     entity.transparent_objs.shrink_to_fit();
 
-    // TODO: free resources
+    for (auto& texture : gltf_textures) {
+        stbi_image_free(texture.data);
+    }
+
+    backend->deletion_queue.push_persistant([=] {
+        vkDestroyDescriptorSetLayout(backend->device_ctx.logical_device, mesh_desc_layout, nullptr);
+        vkDestroyDescriptorSetLayout(backend->device_ctx.logical_device, mat_desc_layout, nullptr);
+
+        for (const auto p : mesh_desc_allocator.ready_pools) {
+            vkDestroyDescriptorPool(backend->device_ctx.logical_device, p, nullptr);
+        }
+        for (const auto p : mesh_desc_allocator.full_pools) {
+            vkDestroyDescriptorPool(backend->device_ctx.logical_device, p, nullptr);
+        }
+        for (const auto p : mat_desc_allocator.ready_pools) {
+            vkDestroyDescriptorPool(backend->device_ctx.logical_device, p, nullptr);
+        }
+        for (const auto p : mat_desc_allocator.full_pools) {
+            vkDestroyDescriptorPool(backend->device_ctx.logical_device, p, nullptr);
+        }
+    });
 
     return entity;
-};
+}

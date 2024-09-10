@@ -3,7 +3,7 @@
 #include <fmt/base.h>
 #include <vulkan/vulkan_core.h>
 
-PipelineInfo build_pipeline(PipelineBuilder* pb, VkDevice device) {
+PipelineInfo build_pipeline(const PipelineBuilder* pb, VkDevice device) {
     VkPipeline new_pipeline;
 
     VkPipelineVertexInputStateCreateInfo vertex_input_ci{};
@@ -11,8 +11,7 @@ PipelineInfo build_pipeline(PipelineBuilder* pb, VkDevice device) {
     vertex_input_ci.vertexBindingDescriptionCount   = 0;
     vertex_input_ci.vertexAttributeDescriptionCount = 0;
 
-    std::array<VkDynamicState, 2> dynamic_states{VK_DYNAMIC_STATE_SCISSOR,
-                                                 VK_DYNAMIC_STATE_VIEWPORT};
+    std::array dynamic_states{VK_DYNAMIC_STATE_SCISSOR, VK_DYNAMIC_STATE_VIEWPORT};
 
     VkPipelineDynamicStateCreateInfo dynamic_ci{};
     dynamic_ci.sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
@@ -66,10 +65,8 @@ void set_pipeline_render_state(PipelineBuilder* pb, VkFormat color_format, VkFor
     pb->rendering_ci.depthAttachmentFormat   = depth_format;
 }
 
-void set_pipeline_shaders(PipelineBuilder* pb,
-                          VkShaderModule   vert_shader,
-                          VkShaderModule   frag_shader,
-                          const char*      entry_name) {
+void set_pipeline_shaders(PipelineBuilder* pb, VkShaderModule vert_shader,
+                          VkShaderModule frag_shader, const char* entry_name) {
     VkPipelineShaderStageCreateInfo vertex_stage_ci{};
     vertex_stage_ci.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     vertex_stage_ci.stage  = VK_SHADER_STAGE_VERTEX_BIT;
@@ -94,10 +91,8 @@ void set_pipeline_topology(PipelineBuilder* pb, VkPrimitiveTopology topology) {
     pb->input_assembly_state.primitiveRestartEnable = VK_FALSE;
 }
 
-void set_pipeline_raster_state(PipelineBuilder* pb,
-                               VkCullModeFlags  cull_mode,
-                               VkFrontFace      front_face,
-                               VkPolygonMode    poly_mode) {
+void set_pipeline_raster_state(PipelineBuilder* pb, VkCullModeFlags cull_mode,
+                               VkFrontFace front_face, VkPolygonMode poly_mode) {
 
     pb->rasterization_state = {.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
     pb->rasterization_state.cullMode                = cull_mode;
@@ -116,10 +111,8 @@ void set_pipeline_multisampling(PipelineBuilder* pb, VkSampleCountFlagBits sampl
     pb->multisample_state.alphaToCoverageEnable = VK_FALSE;
     pb->multisample_state.alphaToOneEnable      = VK_FALSE;
 }
-void set_pipeline_depth_state(PipelineBuilder* pb,
-                              bool             depth_test_enabled,
-                              bool             write_enabled,
-                              VkCompareOp      compare_op) {
+void set_pipeline_depth_state(PipelineBuilder* pb, bool depth_test_enabled, bool write_enabled,
+                              VkCompareOp compare_op) {
     pb->depth_stencil_state = {.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
     pb->depth_stencil_state.depthTestEnable       = depth_test_enabled;
     pb->depth_stencil_state.depthWriteEnable      = write_enabled;
@@ -132,10 +125,9 @@ void set_pipeline_depth_state(PipelineBuilder* pb,
     pb->depth_stencil_state.maxDepthBounds        = 1.f;
 }
 
-void set_pipeline_layout(PipelineBuilder*                 pb,
-                         std::span<VkDescriptorSetLayout> desc_set_layouts,
-                         std::span<VkPushConstantRange>   push_constant_ranges,
-                         VkPipelineLayoutCreateFlags      flags) {
+void set_pipeline_layout(PipelineBuilder* pb, std::span<VkDescriptorSetLayout> desc_set_layouts,
+                         std::span<VkPushConstantRange> push_constant_ranges,
+                         VkPipelineLayoutCreateFlags    flags) {
     pb->pipeline_layout_ci             = {.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
     pb->pipeline_layout_ci.flags       = flags;
     pb->pipeline_layout_ci.pSetLayouts = desc_set_layouts.data();

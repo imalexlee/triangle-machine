@@ -5,10 +5,8 @@
 #define GLFW_INCLUDE_NONE
 #include "global_utils.h"
 #include "imgui.h"
-#include "vk_backend/resources/vk_buffer.h"
 #include "vk_backend/resources/vk_descriptor.h"
 #include "vk_backend/vk_pipeline.h"
-#include "vk_backend/vk_scene.h"
 #include "vk_init.h"
 #include <GLFW/glfw3.h>
 #include <cassert>
@@ -22,7 +20,6 @@
 #include <vk_backend/vk_command.h>
 #include <vk_backend/vk_debug.h>
 #include <vk_backend/vk_device.h>
-#include <vk_backend/vk_frame.h>
 #include <vk_backend/vk_swapchain.h>
 #include <vk_backend/vk_types.h>
 #include <vk_backend/vk_utils.h>
@@ -33,6 +30,7 @@
 
 #include "imgui_impl_vulkan.h"
 #include "vk_backend/vk_sync.h"
+#include "vk_options.h"
 
 // initialization
 static void    create_allocator(VkBackend* backend);
@@ -44,7 +42,7 @@ VkShaderModule load_shader_module(const VkBackend* backend, const char* file_pat
 // state update
 static void    resize(VkBackend* backend);
 // rendering
-void render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf, const std::span<Entity> entities);
+void render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf, std::span<const Entity> entities);
 static void   render_ui(VkCommandBuffer cmd_buf);
 // utils
 static Frame* get_current_frame(VkBackend* backend) {
@@ -186,7 +184,7 @@ void configure_render_resources(VkBackend* backend) {
                                      VK_ATTACHMENT_STORE_OP_DONT_CARE);
 
     backend->scene_rendering_info = create_rendering_info(
-        backend->scene_color_attachment, backend->scene_depth_attachment, backend->image_extent);
+        &backend->scene_color_attachment, &backend->scene_depth_attachment, backend->image_extent);
 }
 
 void create_default_data(VkBackend* backend) {
@@ -347,7 +345,7 @@ void create_pipeline(VkBackend* backend, const char* vert_shader_path,
     set_pipeline_depth_state(&pb, true, false, VK_COMPARE_OP_GREATER_OR_EQUAL);
     backend->transparent_pipeline_info = build_pipeline(&pb, backend->device_ctx.logical_device);
 
-    backend->deletion_queue.push_persistant([=]() {
+    backend->deletion_queue.push_persistant([=] {
         vkDestroyShaderModule(backend->device_ctx.logical_device, vert_shader, nullptr);
         vkDestroyShaderModule(backend->device_ctx.logical_device, frag_shader, nullptr);
     });
@@ -366,7 +364,7 @@ std::vector<const char*> get_instance_extensions() {
     return extensions;
 }
 
-void draw(VkBackend* backend, std::span<Entity> entities, const SceneData* scene_data) {
+void draw(VkBackend* backend, std::span<const Entity> entities, const SceneData* scene_data) {
     auto start_frame_time = system_clock::now();
 
     Frame*          current_frame = get_current_frame(backend);
@@ -468,14 +466,14 @@ void resize(VkBackend* backend) {
 
     reset_swapchain_context(&backend->swapchain_context, &backend->device_ctx);
 
-    destroy_image(backend->device_ctx.logical_device, backend->allocator, backend->depth_image);
-    destroy_image(backend->device_ctx.logical_device, backend->allocator, backend->color_image);
+    destroy_image(backend->device_ctx.logical_device, backend->allocator, &backend->depth_image);
+    destroy_image(backend->device_ctx.logical_device, backend->allocator, &backend->color_image);
 
     backend->image_extent.width  = backend->swapchain_context.extent.width;
     backend->image_extent.height = backend->swapchain_context.extent.height;
 
     destroy_image(backend->device_ctx.logical_device, backend->allocator,
-                  backend->color_resolve_image);
+                  &backend->color_resolve_image);
     backend->color_resolve_image =
         create_image(backend->device_ctx.logical_device, backend->allocator,
                      VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
@@ -499,7 +497,7 @@ void resize(VkBackend* backend) {
 }
 
 void render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf,
-                     const std::span<Entity> entities) {
+                     std::span<const Entity> entities) {
     auto buffer_recording_start = system_clock::now();
 
     VkViewport viewport{};
@@ -584,7 +582,7 @@ void render_ui(VkCommandBuffer cmd_buf) {
 VkShaderModule load_shader_module(const VkBackend* backend, const char* file_path) {
 
     std::ifstream         file(file_path, std::ios::ate | std::ios::binary);
-    size_t                file_size = (size_t)file.tellg();
+    size_t                file_size = file.tellg();
     std::vector<uint32_t> buffer(file_size / sizeof(uint32_t));
 
     file.seekg(0);
@@ -633,14 +631,12 @@ void deinit_backend(VkBackend* backend) {
     vkDestroyDescriptorPool(backend->device_ctx.logical_device, backend->imm_descriptor_pool,
                             nullptr);
 
-    destroy_image(backend->device_ctx.logical_device, backend->allocator, backend->color_image);
-    destroy_image(backend->device_ctx.logical_device, backend->allocator, backend->depth_image);
-    destroy_image(backend->device_ctx.logical_device, backend->allocator, backend->default_texture);
+    destroy_image(backend->device_ctx.logical_device, backend->allocator, &backend->color_image);
+    destroy_image(backend->device_ctx.logical_device, backend->allocator, &backend->depth_image);
     destroy_image(backend->device_ctx.logical_device, backend->allocator,
-                  backend->color_resolve_image);
-
-    deinit_desc_allocator(&backend->mat_desc_allocator, backend->device_ctx.logical_device);
-    deinit_desc_allocator(&backend->obj_desc_allocator, backend->device_ctx.logical_device);
+                  &backend->default_texture);
+    destroy_image(backend->device_ctx.logical_device, backend->allocator,
+                  &backend->color_resolve_image);
 
     vkDestroySampler(backend->device_ctx.logical_device, backend->default_nearest_sampler, nullptr);
     vkDestroySampler(backend->device_ctx.logical_device, backend->default_linear_sampler, nullptr);
