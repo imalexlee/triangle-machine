@@ -15,7 +15,7 @@ void init_ui(UI* ui, VkBackend* backend, GLFWwindow* window) {
     create_imgui_vk_resources(backend);
 }
 
-void update_ui(VkBackend* backend) {
+void update_ui(const VkBackend* backend) {
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplGlfw_NewFrame();
 
@@ -39,7 +39,7 @@ void update_ui(VkBackend* backend) {
     ImGui::Render();
 }
 
-void deinit_ui(UI* ui) {
+void deinit_ui(const UI* ui) {
 
     ImGui_ImplGlfw_Shutdown();
     ImGui_ImplVulkan_Shutdown();

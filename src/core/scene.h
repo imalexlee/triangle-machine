@@ -1,6 +1,5 @@
 #pragma once
 
-#include <core/loaders/gltf_loader.h>
 #include <span>
 #include <vector>
 #include <vk_backend/vk_backend.h>

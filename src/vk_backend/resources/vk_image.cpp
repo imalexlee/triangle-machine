@@ -1,15 +1,12 @@
-#include "vk_backend/vk_backend.h"
-#include <vk_backend/vk_sync.h>
+
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
+#include "vk_backend/vk_backend.h"
+#include <vk_backend/vk_sync.h>
 
 // creates a 2D image along with its image_view
-AllocatedImage create_image(VkDevice          device,
-                            VmaAllocator      allocator,
-                            VkImageUsageFlags usage,
-                            VkExtent2D        extent,
-                            VkFormat          format,
-                            uint32_t          samples) {
+AllocatedImage create_image(VkDevice device, VmaAllocator allocator, VkImageUsageFlags usage,
+                            VkExtent2D extent, VkFormat format, uint32_t samples) {
 
     VkExtent3D extent_3D{
         .width  = extent.width,
@@ -26,7 +23,7 @@ AllocatedImage create_image(VkDevice          device,
     image_ci.extent        = extent_3D;
     image_ci.format        = format;
     image_ci.usage         = usage;
-    image_ci.samples       = (VkSampleCountFlagBits)samples;
+    image_ci.samples       = static_cast<VkSampleCountFlagBits>(samples);
     image_ci.mipLevels     = 1;
     image_ci.imageType     = VK_IMAGE_TYPE_2D;
     image_ci.arrayLayers   = 1;
@@ -52,11 +49,8 @@ AllocatedImage create_image(VkDevice          device,
     return allocated_image;
 }
 
-VkImageView create_image_view(VkDevice           device,
-                              VkImage            image,
-                              VkFormat           format,
-                              VkImageAspectFlags aspect_flags,
-                              uint32_t           mip_levels) {
+VkImageView create_image_view(VkDevice device, VkImage image, VkFormat format,
+                              VkImageAspectFlags aspect_flags, uint32_t mip_levels) {
 
     VkImageView           image_view;
     VkImageViewCreateInfo image_view_ci{};
@@ -77,8 +71,8 @@ VkImageView create_image_view(VkDevice           device,
     return image_view;
 }
 
-void blit_image(
-    VkCommandBuffer cmd, VkImage src, VkImage dest, VkExtent2D src_extent, VkExtent2D dst_extent) {
+void blit_image(VkCommandBuffer cmd, VkImage src, VkImage dest, VkExtent2D src_extent,
+                VkExtent2D dst_extent) {
     VkImageBlit2 blit_region{.sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2, .pNext = nullptr};
     blit_region.srcOffsets[1].x = src_extent.width;
     blit_region.srcOffsets[1].y = src_extent.height;
@@ -111,9 +105,9 @@ void blit_image(
     vkCmdBlitImage2(cmd, &blit_info);
 }
 
-void destroy_image(VkDevice device, VmaAllocator allocator, AllocatedImage& allocated_image) {
-    vmaDestroyImage(allocator, allocated_image.image, allocated_image.allocation);
-    vkDestroyImageView(device, allocated_image.image_view, nullptr);
+void destroy_image(VkDevice device, VmaAllocator allocator, const AllocatedImage* allocated_image) {
+    vmaDestroyImage(allocator, allocated_image->image, allocated_image->allocation);
+    vkDestroyImageView(device, allocated_image->image_view, nullptr);
 }
 
 VkImageSubresourceRange create_image_subresource_range(VkImageAspectFlags aspect_flags,
@@ -127,23 +121,20 @@ VkImageSubresourceRange create_image_subresource_range(VkImageAspectFlags aspect
     return subresource_range;
 }
 
-AllocatedImage upload_texture(const VkBackend*  backend,
-                              void*             data,
-                              VkImageUsageFlags usage,
-                              uint32_t          height,
-                              uint32_t          width) {
-    VkExtent2D extent{.width = width, .height = height};
+AllocatedImage upload_texture(const VkBackend* backend, const uint8_t* data,
+                              VkImageUsageFlags usage, uint32_t color_channels, uint32_t width,
+                              uint32_t height) {
+    const VkExtent2D extent{.width = width, .height = height};
 
-    uint32_t data_size = width * height * sizeof(uint32_t);
+    const uint32_t byte_size = width * height * color_channels;
 
     AllocatedBuffer staging_buf = create_buffer(
-        data_size, backend->allocator, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        byte_size, backend->allocator, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         VMA_MEMORY_USAGE_AUTO_PREFER_HOST, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
 
-    vmaCopyMemoryToAllocation(backend->allocator, data, staging_buf.allocation, 0, data_size);
+    vmaCopyMemoryToAllocation(backend->allocator, data, staging_buf.allocation, 0, byte_size);
 
-    AllocatedImage new_texture;
-    new_texture =
+    const AllocatedImage new_texture =
         create_image(backend->device_ctx.logical_device, backend->allocator,
                      usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT, extent, VK_FORMAT_R8G8B8A8_UNORM);
 

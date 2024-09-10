@@ -6,18 +6,15 @@
 #include <algorithm>
 #include <cstdint>
 #include <set>
-#include <vk_backend/vk_options.h>
 #include <vulkan/vulkan_core.h>
 
-SwapchainSupportDetails query_support_details(SwapchainContext* swapchain_ctx,
-                                              VkPhysicalDevice  physical_device);
+SwapchainSupportDetails query_support_details(const SwapchainContext* swapchain_ctx,
+                                              VkPhysicalDevice        physical_device);
 void create_swapchain(SwapchainContext* swapchain_ctx, const DeviceContext* device_ctx);
 void destroy_swapchain(SwapchainContext* swapchain_ctx, VkDevice device);
 
-void init_swapchain_context(SwapchainContext*    swapchain_ctx,
-                            const DeviceContext* device_ctx,
-                            VkSurfaceKHR         surface,
-                            VkPresentModeKHR     desired_present_mode) {
+void init_swapchain_context(SwapchainContext* swapchain_ctx, const DeviceContext* device_ctx,
+                            VkSurfaceKHR surface, VkPresentModeKHR desired_present_mode) {
     swapchain_ctx->surface      = surface;
     swapchain_ctx->present_mode = desired_present_mode;
 
@@ -36,9 +33,8 @@ void reset_swapchain_context(SwapchainContext* swapchain_ctx, const DeviceContex
     create_swapchain(swapchain_ctx, device_ctx);
 }
 
-void deinit_swapchain_context(SwapchainContext* swapchain_ctx,
-                              VkDevice          device,
-                              VkInstance        instance) {
+void deinit_swapchain_context(SwapchainContext* swapchain_ctx, VkDevice device,
+                              VkInstance instance) {
     destroy_swapchain(swapchain_ctx, device);
     vkDestroySurfaceKHR(instance, swapchain_ctx->surface, nullptr);
 }
@@ -83,9 +79,9 @@ void create_swapchain(SwapchainContext* swapchain_ctx, const DeviceContext* devi
     // swapchain_ci.oldSwapchain
     // = swapchain;
 
-    const std::set<uint32_t> unique_queue_families{device_ctx->queues.graphics_family_index,
-                                                   device_ctx->queues.present_family_index};
-    std::vector<uint32_t>    queue_family_indices;
+    const std::set        unique_queue_families{device_ctx->queues.graphics_family_index,
+                                         device_ctx->queues.present_family_index};
+    std::vector<uint32_t> queue_family_indices;
 
     if (unique_queue_families.size() > 1) {
         DEBUG_PRINT("using swapchain sharing mode CONCURRENT");
@@ -132,8 +128,8 @@ void destroy_swapchain(SwapchainContext* swapchain_ctx, VkDevice device) {
     swapchain_ctx->image_views.clear();
 }
 
-SwapchainSupportDetails query_support_details(SwapchainContext* swapchain_ctx,
-                                              VkPhysicalDevice  physical_device) {
+SwapchainSupportDetails query_support_details(const SwapchainContext* swapchain_ctx,
+                                              VkPhysicalDevice        physical_device) {
     SwapchainSupportDetails swap_chain_details{};
     VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, swapchain_ctx->surface,
                                                        &swap_chain_details.capabilities));
@@ -160,4 +156,4 @@ SwapchainSupportDetails query_support_details(SwapchainContext* swapchain_ctx,
             swap_chain_details.present_modes.data()));
     }
     return swap_chain_details;
-};
+}

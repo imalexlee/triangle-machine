@@ -1,4 +1,7 @@
 #include "scene.h"
+
+#include "loaders/gltf_loader.h"
+
 #include <fmt/base.h>
 
 void load_scene(Scene* scene, VkBackend* backend, std::span<const char*> gltf_paths) {

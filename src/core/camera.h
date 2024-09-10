@@ -21,13 +21,10 @@ struct Camera {
     double cursor_y;
 };
 
-void init_camera(Camera*   cam,
-                 Window*   window,
-                 glm::vec3 initial_pos,
-                 float     init_pitch_theta = 0.f,
-                 float init_yaw_theta       = 0.f);
+void init_camera(Camera* cam, const Window* window, glm::vec3 initial_pos,
+                 float init_pitch_theta = 0.f, float init_yaw_theta = 0.f);
 
-SceneData update_camera(Camera* cam, int window_width, int window_height);
+SceneData update_camera(Camera* cam, uint32_t window_width, uint32_t window_height);
 
 void camera_key_callback(Camera* cam, int key, int scancode, int action, int mods);
 

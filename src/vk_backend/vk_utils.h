@@ -2,6 +2,7 @@
 
 #include <deque>
 #include <functional>
+#include <vulkan/vk_enum_string_helper.h>
 
 #define VK_CHECK(x)                                                                                \
     do {                                                                                           \

@@ -3,11 +3,10 @@
 #include <iostream>
 #include <vulkan/vulkan_core.h>
 
-static constexpr std::array<VkValidationFeatureEnableEXT, 3> enabled_validation_features{
-    VkValidationFeatureEnableEXT::VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
-    VkValidationFeatureEnableEXT::
-        VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
-    VkValidationFeatureEnableEXT::VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
+static constexpr std::array enabled_validation_features{
+    VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
+    VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
+    VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
 };
 
 static VkBool32 debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT      messageSeverity,
@@ -25,27 +24,26 @@ VkBool32 debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT           message
         std::cerr << "\n";
     }
     return VK_FALSE;
-};
+}
 
 VkResult init_debugger(Debugger* db, VkInstance instance, VkDevice device) {
 
     db->logical_device = device;
 
-    auto msg_fn = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(
-        instance, "vkCreateDebugUtilsMessengerEXT");
+    auto msg_fn = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
+        vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT"));
     VkDebugUtilsMessengerCreateInfoEXT messenger_ci = create_messenger_info();
 
     if (msg_fn != nullptr) {
 
-        db->obj_name_pfn = (PFN_vkSetDebugUtilsObjectNameEXT)(vkGetInstanceProcAddr(
-            instance, "vkSetDebugUtilsObjectNameEXT"));
+        db->obj_name_pfn = reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(
+            vkGetInstanceProcAddr(instance, "vkSetDebugUtilsObjectNameEXT"));
 
         VkResult result = msg_fn(instance, &messenger_ci, nullptr, &db->messenger);
 
         return result;
-    } else {
-        return VK_ERROR_EXTENSION_NOT_PRESENT;
     }
+    return VK_ERROR_EXTENSION_NOT_PRESENT;
 }
 
 VkDebugUtilsMessengerCreateInfoEXT create_messenger_info() {
@@ -73,10 +71,10 @@ VkValidationFeaturesEXT create_validation_features() {
     return validation_features;
 }
 
-void deinit_debugger(Debugger* db, VkInstance instance) {
+void deinit_debugger(const Debugger* db, VkInstance instance) {
     DEBUG_PRINT("Destroying Debugger");
-    auto destroy_messenger_fn = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(
-        instance, "vkDestroyDebugUtilsMessengerEXT");
+    auto destroy_messenger_fn = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
+        vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT"));
     if (destroy_messenger_fn != nullptr) {
         destroy_messenger_fn(instance, db->messenger, nullptr);
     }

@@ -34,7 +34,7 @@ void init_window(Window* window, uint32_t width, uint32_t height, const char* ti
     // infinite cursor movement. no visible cursor
     glfwSetInputMode(window->glfw_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
-    // try to enable unscaled and unaccelerated cursor capture
+    //    try to enable unscaled and unaccelerated cursor capture
     if (glfwRawMouseMotionSupported()) {
         glfwSetInputMode(window->glfw_window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
     }
@@ -44,13 +44,13 @@ void init_window(Window* window, uint32_t width, uint32_t height, const char* ti
     glfwSetCursorPosCallback(window->glfw_window, cursor_callback);
 }
 
-void deinit_window(Window* window) {
+void deinit_window(const Window* window) {
     DEBUG_PRINT("destroying GLFW window");
     glfwDestroyWindow(window->glfw_window);
     glfwTerminate();
-};
+}
 
-VkSurfaceKHR get_vulkan_surface(Window* window, VkInstance instance) {
+VkSurfaceKHR get_vulkan_surface(const Window* window, VkInstance instance) {
     VkSurfaceKHR surface;
     VK_CHECK(glfwCreateWindowSurface(instance, window->glfw_window, nullptr, &surface));
     return surface;
@@ -64,10 +64,7 @@ void register_cursor_callback(Window* window, std::function<void(double, double)
     window->cursor_callbacks.push_back(fn_ptr);
 }
 
-void key_callback(GLFWwindow*          window,
-                  int                  key,
-                  [[maybe_unused]] int scancode,
-                  int                  action,
+void key_callback(GLFWwindow* window, int key, [[maybe_unused]] int scancode, int action,
                   [[maybe_unused]] int mods) {
 
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
@@ -83,7 +80,7 @@ void cursor_callback([[maybe_unused]] GLFWwindow* window, double x_pos, double y
     for (auto& callback : Window::cursor_callbacks) {
         callback(x_pos, y_pos);
     }
-};
+}
 
 void error_callback([[maybe_unused]] int error, const char* description) {
     fmt::println("GLFW errow: {}", description);

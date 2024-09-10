@@ -10,8 +10,8 @@ AlignConsecutiveDeclarations:
   Enabled: true
   AcrossEmptyLines: false
   AcrossComments: true
-  AlignFunctionPointers: true
+  #AlignFunctionPointers: true
 AlignConsecutiveAssignments: true
-BinPackArguments: true
-BinPackParameters: false
-AllowAllParametersOfDeclarationOnNextLine: true
+#BinPackArguments: true
+#BinPackParameters: true
+AllowAllParametersOfDeclarationOnNextLine: false

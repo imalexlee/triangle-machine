@@ -57,7 +57,7 @@ struct DescriptorAllocator {
 /**
  * @brief Initializes an allocator that can dynamically allocate descriptor sets
  *
- * @param desc_allocate	    The DescriptorAllocator to initialize
+ * @param desc_allocator	    The DescriptorAllocator to initialize
  * @param device	    The device to allocate descriptor pools from
  * @param init_set_count    The initial amount of descriptor sets to be allocated in the pool
  * @param pool_size_ratios  The type and amount of descriptors to reserve space for in each set

@@ -9,7 +9,7 @@ struct Vertex {
     float     uv_x;
     glm::vec3 normal;
     float     uv_y;
-    glm::vec4 color;
+    glm::vec4 padding;
 };
 
 struct DrawObject {

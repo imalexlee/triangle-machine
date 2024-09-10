@@ -2,13 +2,12 @@
 #include <vector>
 #include <vulkan/vulkan_core.h>
 
-VkDescriptorPool
-create_pool(VkDevice device, uint32_t max_sets, std::span<PoolSizeRatio> pool_size_ratios);
+VkDescriptorPool create_pool(VkDevice device, uint32_t max_sets,
+                             std::span<PoolSizeRatio> pool_size_ratios);
 VkDescriptorPool get_pool(DescriptorAllocator* desc_allocator, VkDevice device);
 
-void add_layout_binding(DescriptorLayoutBuilder* layout_builder,
-                        uint32_t                 binding,
-                        VkDescriptorType         type) {
+void add_layout_binding(DescriptorLayoutBuilder* layout_builder, uint32_t binding,
+                        VkDescriptorType type) {
     VkDescriptorSetLayoutBinding layout_binding{};
     layout_binding.binding         = binding;
     layout_binding.descriptorType  = type;
@@ -21,9 +20,8 @@ void clear_layout_bindings(DescriptorLayoutBuilder* layout_builder) {
     layout_builder->bindings.clear();
 }
 
-VkDescriptorSetLayout build_set_layout(DescriptorLayoutBuilder* layout_builder,
-                                       VkDevice                 device,
-                                       VkShaderStageFlags       shader_stages) {
+VkDescriptorSetLayout build_set_layout(DescriptorLayoutBuilder* layout_builder, VkDevice device,
+                                       VkShaderStageFlags shader_stages) {
     for (auto& binding : layout_builder->bindings) {
         binding.stageFlags |= shader_stages;
     }
@@ -41,13 +39,9 @@ VkDescriptorSetLayout build_set_layout(DescriptorLayoutBuilder* layout_builder,
     return set;
 }
 
-void write_buffer_desc(DescriptorWriter* desc_writer,
-                       int               binding,
-                       VkBuffer          buffer,
-                       size_t            size,
-                       size_t            offset,
-                       VkDescriptorType  type) {
-    VkDescriptorBufferInfo& info = desc_writer->buffer_infos.emplace_back(
+void write_buffer_desc(DescriptorWriter* desc_writer, int binding, VkBuffer buffer, size_t size,
+                       size_t offset, VkDescriptorType type) {
+    const VkDescriptorBufferInfo& info = desc_writer->buffer_infos.emplace_back(
         VkDescriptorBufferInfo{.buffer = buffer, .offset = offset, .range = size});
 
     VkWriteDescriptorSet write = {.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
@@ -62,12 +56,8 @@ void write_buffer_desc(DescriptorWriter* desc_writer,
     desc_writer->writes.push_back(write);
 }
 
-void write_image_desc(DescriptorWriter* desc_writer,
-                      int               binding,
-                      VkImageView       image,
-                      VkSampler         sampler,
-                      VkImageLayout     layout,
-                      VkDescriptorType  type) {
+void write_image_desc(DescriptorWriter* desc_writer, int binding, VkImageView image,
+                      VkSampler sampler, VkImageLayout layout, VkDescriptorType type) {
     VkDescriptorImageInfo& info = desc_writer->image_infos.emplace_back(
         VkDescriptorImageInfo{.sampler = sampler, .imageView = image, .imageLayout = layout});
 
@@ -98,10 +88,8 @@ void update_desc_set(DescriptorWriter* desc_writer, VkDevice device, VkDescripto
                            nullptr);
 }
 
-void init_desc_allocator(DescriptorAllocator*     desc_allocator,
-                         VkDevice                 device,
-                         uint32_t                 init_set_count,
-                         std::span<PoolSizeRatio> pool_size_ratios) {
+void init_desc_allocator(DescriptorAllocator* desc_allocator, VkDevice device,
+                         uint32_t init_set_count, std::span<PoolSizeRatio> pool_size_ratios) {
     desc_allocator->ratios.clear();
 
     std::vector<VkDescriptorPoolSize> sizes;
@@ -109,14 +97,13 @@ void init_desc_allocator(DescriptorAllocator*     desc_allocator,
         desc_allocator->ratios.push_back(ratio);
     }
 
-    VkDescriptorPool new_pool = create_pool(device, init_set_count, pool_size_ratios);
+    const VkDescriptorPool new_pool = create_pool(device, init_set_count, pool_size_ratios);
     desc_allocator->ready_pools.push_back(new_pool);
     // set a bigger size for the next pool if we run out of space
     desc_allocator->sets_per_pool = init_set_count * 1.5;
 }
 
-VkDescriptorSet allocate_desc_set(DescriptorAllocator*  desc_allocator,
-                                  VkDevice              device,
+VkDescriptorSet allocate_desc_set(DescriptorAllocator* desc_allocator, VkDevice device,
                                   VkDescriptorSetLayout layout) {
     VkDescriptorPool            pool = get_pool(desc_allocator, device);
     VkDescriptorSetAllocateInfo alloc_info{};
@@ -151,12 +138,12 @@ void reset_desc_pools(DescriptorAllocator* desc_allocator, VkDevice device) {
 }
 
 void deinit_desc_allocator(DescriptorAllocator* desc_allocator, VkDevice device) {
-    for (auto p : desc_allocator->ready_pools) {
-        vkDestroyDescriptorPool(device, p, 0);
+    for (const auto p : desc_allocator->ready_pools) {
+        vkDestroyDescriptorPool(device, p, nullptr);
     }
     desc_allocator->ready_pools.clear();
-    for (auto p : desc_allocator->full_pools) {
-        vkDestroyDescriptorPool(device, p, 0);
+    for (const auto p : desc_allocator->full_pools) {
+        vkDestroyDescriptorPool(device, p, nullptr);
     }
     desc_allocator->full_pools.clear();
 }
@@ -165,7 +152,7 @@ void deinit_desc_allocator(DescriptorAllocator* desc_allocator, VkDevice device)
 VkDescriptorPool get_pool(DescriptorAllocator* desc_allocator, VkDevice device) {
 
     VkDescriptorPool new_pool;
-    if (desc_allocator->ready_pools.size() != 0) {
+    if (!desc_allocator->ready_pools.empty()) {
         new_pool = desc_allocator->ready_pools.back();
         desc_allocator->ready_pools.pop_back();
     } else {
@@ -179,11 +166,11 @@ VkDescriptorPool get_pool(DescriptorAllocator* desc_allocator, VkDevice device) 
     return new_pool;
 }
 
-VkDescriptorPool
-create_pool(VkDevice device, uint32_t max_sets, std::span<PoolSizeRatio> pool_size_ratios) {
+VkDescriptorPool create_pool(VkDevice device, uint32_t max_sets,
+                             std::span<PoolSizeRatio> pool_size_ratios) {
 
     std::vector<VkDescriptorPoolSize> sizes;
-    for (PoolSizeRatio& ratio : pool_size_ratios) {
+    for (const PoolSizeRatio& ratio : pool_size_ratios) {
         sizes.push_back({
             .type            = ratio.type,
             .descriptorCount = max_sets * ratio.desc_per_set,

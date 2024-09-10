@@ -13,6 +13,6 @@ struct UI {
 
 void init_ui(UI* ui, VkBackend* backend, GLFWwindow* window);
 
-void update_ui(VkBackend* backend);
+void update_ui(const VkBackend* backend);
 
-void deinit_ui(UI* ui);
+void deinit_ui(const UI* ui);

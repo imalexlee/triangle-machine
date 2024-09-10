@@ -1,3 +1,4 @@
 out/
 assets/
-
+cmake-build-debug/
+cmake-build-release/
