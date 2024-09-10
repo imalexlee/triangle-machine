@@ -4,14 +4,6 @@
 #include <vector>
 #include <vulkan/vulkan_core.h>
 
-struct Vertex {
-    glm::vec3 position;
-    float     uv_x;
-    glm::vec3 normal;
-    float     uv_y;
-    glm::vec4 padding;
-};
-
 struct DrawObject {
     VkDescriptorSet mat_desc_set;
     VkDescriptorSet obj_desc_set;

@@ -1,4 +1,6 @@
 #include "ui.h"
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_vulkan.h>
 
 void init_ui(UI* ui, VkBackend* backend, GLFWwindow* window) {
     ui->imgui_ctx = ImGui::CreateContext();
