@@ -4,6 +4,7 @@ project(triangle-machine)
 
 find_package(glfw3 REQUIRED)
 find_package(Vulkan REQUIRED)
+#find_package(glslang CONFIG REQUIRED)
 
 if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
@@ -56,6 +57,9 @@ endif ()
 
 add_subdirectory(thirdparty/fmt)
 add_subdirectory(thirdparty/fastgltf)
+add_subdirectory(thirdparty/meshoptimizer)
+add_subdirectory(thirdparty/etc2comp)
+add_subdirectory(thirdparty/glslang)
 add_subdirectory(thirdparty)
 
 target_include_directories(
@@ -65,19 +69,43 @@ target_include_directories(
         PRIVATE thirdparty/fmt/include
         PRIVATE thirdparty/stb_image
         PRIVATE thirdparty/VulkanMemoryAllocator
-        PRIVATE thirdparty/fastgltf/include
-        PRIVATE thirdparty/fastgltf/include)
+        PRIVATE thirdparty/taskflow
+        PRIVATE thirdparty/etc2comp
+        PRIVATE thirdparty/etc2comp/EtcTool
+        PRIVATE thirdparty/etc2comp/EtcLib/Etc
+        PRIVATE thirdparty/etc2comp/EtcLib/EtcCodec
+        thirdparty/glslang
+        thirdparty/glslang/StandAlone
+        thirdparty/glslang/src
+        thirdparty/glslang/glslang/Include
+        PRIVATE
+        thirdparty/fastgltf/include)
+
 
 target_link_directories(${PROJECT_NAME} PUBLIC thirdparty/fmt/src PUBLIC
         thirdparty/fastgltf/src)
 
+
 target_link_libraries(
         ${PROJECT_NAME}
-        PRIVATE glfw
-        PRIVATE fastgltf
-        PRIVATE fmt
-        PRIVATE imgui
-        PRIVATE Vulkan::Vulkan)
+        PUBLIC
+        glfw
+        meshoptimizer
+        fastgltf
+        fmt
+        imgui
+        EtcLib
+        #        glslang::glslang
+        #        glslang::SPIRV
+        #        glslang::glslang-default-resource-limits
+        #        glslang-standalone
+        #        glslang
+
+        assimp
+        Vulkan::Vulkan)
+
+target_sources(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/../thirdparty/etc2comp/EtcTool/EtcFile.cpp)
+target_sources(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/../thirdparty/etc2comp/EtcTool/EtcFileHeader.cpp)
 
 find_program(
         GLSL_VALIDATOR glslangValidator
