@@ -84,8 +84,9 @@ SceneData update_camera(Camera* cam, uint32_t window_width, uint32_t window_heig
     projection[1][1] *= -1;
 
     SceneData scene_data;
-    scene_data.view_proj = projection * cam->view;
-    scene_data.eye_pos   = cam->position;
+    scene_data.view    = cam->view;
+    scene_data.proj    = projection;
+    scene_data.eye_pos = cam->position;
 
     // auto end_time = system_clock::now();
     // auto dur      = duration<float>(end_time - start_time);

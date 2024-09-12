@@ -15,6 +15,7 @@
 #include <fastgltf/types.hpp>
 #include <fmt/base.h>
 #include <fmt/format.h>
+#include <fstream>
 #include <string>
 #include <vk_backend/vk_command.h>
 #include <vk_backend/vk_debug.h>
@@ -37,6 +38,7 @@ static void           create_default_data(VkBackend* backend);
 static void           create_desc_layouts(VkBackend* backend);
 static void           configure_debugger(VkBackend* backend);
 static void           configure_render_resources(VkBackend* backend);
+static void           create_grid_pipeline(VkBackend* backend);
 static VkShaderModule load_shader_module(const VkBackend* backend, std::span<uint32_t> shader_spv);
 // state update
 static void           resize(VkBackend* backend);
@@ -44,6 +46,7 @@ static void           resize(VkBackend* backend);
 static void           render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf,
                                       std::span<const Entity> entities);
 static void           render_ui(VkCommandBuffer cmd_buf);
+static void           render_grid(VkBackend* backend, VkCommandBuffer cmd_buf);
 // utils
 static Frame*         get_current_frame(VkBackend* backend) {
     return &backend->frames[backend->frame_num % backend->frames.size()];
@@ -105,9 +108,59 @@ void init_backend(VkBackend* backend, VkInstance instance, VkSurfaceKHR surface,
 
     create_default_data(backend);
 
+    create_grid_pipeline(backend);
+
     if constexpr (vk_opts::validation_enabled) {
         configure_debugger(backend);
     }
+}
+
+static void create_grid_pipeline(VkBackend* backend) {
+    PipelineBuilder pb;
+
+    std::ifstream v_file("../shaders/vertex/grid.vert.glsl.spv", std::ios::ate | std::ios::binary);
+    size_t        v_file_size = v_file.tellg();
+    std::vector<uint32_t> v_buf(v_file_size / sizeof(uint32_t));
+
+    v_file.seekg(0);
+    v_file.read(reinterpret_cast<char*>(v_buf.data()), v_file_size);
+    v_file.close();
+
+    std::ifstream         f_file("../shaders/fragment/grid.frag.glsl.spv",
+                                 std::ios::ate | std::ios::binary);
+    size_t                f_file_size = f_file.tellg();
+    std::vector<uint32_t> f_buf(f_file_size / sizeof(uint32_t));
+
+    f_file.seekg(0);
+    f_file.read(reinterpret_cast<char*>(f_buf.data()), f_file_size);
+    f_file.close();
+
+    const VkShaderModule vert_shader = load_shader_module(backend, v_buf);
+    const VkShaderModule frag_shader = load_shader_module(backend, f_buf);
+
+    std::array set_layouts{backend->global_desc_set_layout};
+
+    set_pipeline_shaders(&pb, vert_shader, frag_shader);
+    set_pipeline_topology(&pb, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+    set_pipeline_raster_state(&pb, VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE,
+                              VK_POLYGON_MODE_FILL);
+    set_pipeline_multisampling(
+        &pb, static_cast<VkSampleCountFlagBits>(backend->device_ctx.raster_samples));
+    set_pipeline_depth_state(&pb, true, true, VK_COMPARE_OP_GREATER_OR_EQUAL);
+
+    set_pipeline_render_state(&pb, backend->color_image.image_format,
+                              backend->depth_image.image_format);
+    set_pipeline_blending(&pb, BlendMode::alpha);
+
+    std::array<VkPushConstantRange, 0> push_constant_ranges{{}};
+
+    set_pipeline_layout(&pb, set_layouts, push_constant_ranges, 0);
+    backend->grid_pipeline_info = build_pipeline(&pb, backend->device_ctx.logical_device);
+
+    backend->deletion_queue.push_persistant([=] {
+        vkDestroyShaderModule(backend->device_ctx.logical_device, vert_shader, nullptr);
+        vkDestroyShaderModule(backend->device_ctx.logical_device, frag_shader, nullptr);
+    });
 }
 
 // adding names to these 64 bit handles helps a lot when reading validation errors
@@ -173,7 +226,7 @@ void create_desc_layouts(VkBackend* backend) {
 
 void configure_render_resources(VkBackend* backend) {
 
-    backend->scene_clear_value = {.color = {{1.f, 1.f, 1.f, 1.f}}};
+    backend->scene_clear_value = {.color = {{0.1f, 0.1f, 0.1f, 0.2f}}};
 
     backend->scene_color_attachment = create_color_attachment_info(
         backend->color_image.image_view, &backend->scene_clear_value, VK_ATTACHMENT_LOAD_OP_CLEAR,
@@ -329,7 +382,7 @@ void create_pipeline(VkBackend* backend, std::span<uint32_t> vert_shader_spv,
 
     set_pipeline_shaders(&pb, vert_shader, frag_shader);
     set_pipeline_topology(&pb, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-    set_pipeline_raster_state(&pb, VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE,
+    set_pipeline_raster_state(&pb, VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE,
                               VK_POLYGON_MODE_FILL);
     set_pipeline_multisampling(
         &pb, static_cast<VkSampleCountFlagBits>(backend->device_ctx.raster_samples));
@@ -406,6 +459,8 @@ void draw(VkBackend* backend, std::span<const Entity> entities, const SceneData*
     vkCmdBeginRendering(cmd_buffer, &backend->scene_rendering_info);
 
     render_geometry(backend, cmd_buffer, entities);
+
+    render_grid(backend, cmd_buffer);
 
     render_ui(cmd_buffer);
 
@@ -579,6 +634,34 @@ void render_ui(VkCommandBuffer cmd_buf) {
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd_buf);
 }
 
+void render_grid(VkBackend* backend, VkCommandBuffer cmd_buf) {
+
+    VkViewport viewport{};
+    viewport.x        = 0.0f;
+    viewport.y        = 0.0f;
+    viewport.width    = backend->image_extent.width;
+    viewport.height   = backend->image_extent.height;
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+
+    VkRect2D scissor{};
+    scissor.extent = backend->image_extent;
+    scissor.offset = {0, 0};
+
+    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                      backend->grid_pipeline_info.pipeline);
+
+    vkCmdSetViewport(cmd_buf, 0, 1, &viewport);
+
+    vkCmdSetScissor(cmd_buf, 0, 1, &scissor);
+
+    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            backend->grid_pipeline_info.pipeline_layout, 0, 1,
+                            &get_current_frame(backend)->desc_set, 0, nullptr);
+
+    vkCmdDraw(cmd_buf, 6, 1, 0, 0);
+}
+
 VkShaderModule load_shader_module(const VkBackend* backend, std::span<uint32_t> shader_spv) {
 
     // std::ifstream         file(file_path, std::ios::ate | std::ios::binary);
@@ -645,6 +728,8 @@ void deinit_backend(VkBackend* backend) {
                             backend->opaque_pipeline_info.pipeline_layout, nullptr);
     vkDestroyPipelineLayout(backend->device_ctx.logical_device,
                             backend->transparent_pipeline_info.pipeline_layout, nullptr);
+    vkDestroyPipelineLayout(backend->device_ctx.logical_device,
+                            backend->grid_pipeline_info.pipeline_layout, nullptr);
 
     vkDestroyDescriptorSetLayout(backend->device_ctx.logical_device,
                                  backend->global_desc_set_layout, nullptr);
@@ -657,6 +742,8 @@ void deinit_backend(VkBackend* backend) {
                       nullptr);
     vkDestroyPipeline(backend->device_ctx.logical_device,
                       backend->transparent_pipeline_info.pipeline, nullptr);
+    vkDestroyPipeline(backend->device_ctx.logical_device, backend->grid_pipeline_info.pipeline,
+                      nullptr);
 
     vkDestroyFence(backend->device_ctx.logical_device, backend->imm_fence, nullptr);
 

@@ -111,7 +111,6 @@ target_sources(
         ${CMAKE_CURRENT_BINARY_DIR}/../thirdparty/etc2comp/EtcTool/EtcFileHeader.cpp
 )
 
-#[[
 find_program(
         GLSL_VALIDATOR glslangValidator
         HINTS /usr/bin /usr/local/bin $ENV{VULKAN_SDK_PATH}/Bin/
@@ -149,4 +148,4 @@ endforeach (GLSL)
 
 add_custom_target(Shaders DEPENDS ${SPIRV_BINARY_FILES})
 add_dependencies(${PROJECT_NAME} Shaders)
-]]
+

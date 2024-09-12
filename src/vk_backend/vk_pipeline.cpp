@@ -67,21 +67,25 @@ void set_pipeline_render_state(PipelineBuilder* pb, VkFormat color_format, VkFor
 
 void set_pipeline_shaders(PipelineBuilder* pb, VkShaderModule vert_shader,
                           VkShaderModule frag_shader, const char* entry_name) {
-    VkPipelineShaderStageCreateInfo vertex_stage_ci{};
-    vertex_stage_ci.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    vertex_stage_ci.stage  = VK_SHADER_STAGE_VERTEX_BIT;
-    vertex_stage_ci.pName  = entry_name;
-    vertex_stage_ci.module = vert_shader;
-
-    VkPipelineShaderStageCreateInfo frag_stage_ci{};
-    frag_stage_ci.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    frag_stage_ci.stage  = VK_SHADER_STAGE_FRAGMENT_BIT;
-    frag_stage_ci.pName  = entry_name;
-    frag_stage_ci.module = frag_shader;
-
     pb->shader_stages.clear();
-    pb->shader_stages.push_back(vertex_stage_ci);
-    pb->shader_stages.push_back(frag_stage_ci);
+
+    if (vert_shader) {
+        VkPipelineShaderStageCreateInfo vertex_stage_ci{};
+        vertex_stage_ci.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        vertex_stage_ci.stage  = VK_SHADER_STAGE_VERTEX_BIT;
+        vertex_stage_ci.pName  = entry_name;
+        vertex_stage_ci.module = vert_shader;
+        pb->shader_stages.push_back(vertex_stage_ci);
+    }
+
+    if (frag_shader) {
+        VkPipelineShaderStageCreateInfo frag_stage_ci{};
+        frag_stage_ci.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        frag_stage_ci.stage  = VK_SHADER_STAGE_FRAGMENT_BIT;
+        frag_stage_ci.pName  = entry_name;
+        frag_stage_ci.module = frag_shader;
+        pb->shader_stages.push_back(frag_stage_ci);
+    }
 }
 
 void set_pipeline_topology(PipelineBuilder* pb, VkPrimitiveTopology topology) {
@@ -161,21 +165,21 @@ void set_pipeline_blending_alpha(PipelineBuilder* pb) {
                                                 VK_COLOR_COMPONENT_G_BIT |
                                                 VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
     pb->color_blend_attachment.blendEnable         = VK_TRUE;
-    pb->color_blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
-    pb->color_blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_DST_ALPHA;
     pb->color_blend_attachment.colorBlendOp        = VK_BLEND_OP_ADD;
+    pb->color_blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    pb->color_blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    pb->color_blend_attachment.alphaBlendOp        = VK_BLEND_OP_ADD;
     pb->color_blend_attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
     pb->color_blend_attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-    pb->color_blend_attachment.alphaBlendOp        = VK_BLEND_OP_ADD;
 }
 
 void set_pipeline_blending(PipelineBuilder* pb, BlendMode blend_mode) {
     switch (blend_mode) {
-    case additive: {
+    case BlendMode::additive: {
         set_pipeline_blending_additive(pb);
         break;
     }
-    case alpha: {
+    case BlendMode::alpha: {
         set_pipeline_blending_alpha(pb);
         break;
     }
