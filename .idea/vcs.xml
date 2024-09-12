@@ -4,6 +4,9 @@
     <mapping directory="" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/thirdparty/etc2comp" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/thirdparty/glslang" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/thirdparty/glslang/External/googletest" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/thirdparty/glslang/External/spirv-tools" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/thirdparty/glslang/External/spirv-tools/external/spirv-headers" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/thirdparty/imgui" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/thirdparty/meshoptimizer" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/thirdparty/taskflow" vcs="Git" />
