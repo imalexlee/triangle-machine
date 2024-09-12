@@ -38,7 +38,10 @@ add_executable(
         src/vk_backend/vk_vma_usage.cpp
         src/vk_backend/resources/vk_descriptor.cpp
         src/vk_backend/resources/vk_buffer.cpp
-        src/vk_backend/resources/vk_image.cpp)
+        src/vk_backend/resources/vk_image.cpp
+        src/core/shader.cpp
+        src/core/shader.h
+)
 
 target_compile_options(
         ${PROJECT_NAME}
@@ -74,39 +77,41 @@ target_include_directories(
         PRIVATE thirdparty/etc2comp/EtcTool
         PRIVATE thirdparty/etc2comp/EtcLib/Etc
         PRIVATE thirdparty/etc2comp/EtcLib/EtcCodec
+        PRIVATE thirdparty/fastgltf/include
+        thirdparty/glslang/glslang/Include
         thirdparty/glslang
         thirdparty/glslang/StandAlone
-        thirdparty/glslang/src
-        thirdparty/glslang/glslang/Include
-        PRIVATE
-        thirdparty/fastgltf/include)
-
+)
 
 target_link_directories(${PROJECT_NAME} PUBLIC thirdparty/fmt/src PUBLIC
         thirdparty/fastgltf/src)
 
-
 target_link_libraries(
         ${PROJECT_NAME}
-        PUBLIC
-        glfw
+        PUBLIC glfw
         meshoptimizer
         fastgltf
         fmt
         imgui
         EtcLib
-        #        glslang::glslang
-        #        glslang::SPIRV
-        #        glslang::glslang-default-resource-limits
-        #        glslang-standalone
-        #        glslang
-
+        glslang
+        glslang::glslang
+        glslang::SPIRV
+        glslang::glslang-default-resource-limits
         assimp
         Vulkan::Vulkan)
 
-target_sources(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/../thirdparty/etc2comp/EtcTool/EtcFile.cpp)
-target_sources(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/../thirdparty/etc2comp/EtcTool/EtcFileHeader.cpp)
+target_sources(
+        ${PROJECT_NAME}
+        PUBLIC
+        ${CMAKE_CURRENT_BINARY_DIR}/../thirdparty/etc2comp/EtcTool/EtcFile.cpp)
+target_sources(
+        ${PROJECT_NAME}
+        PUBLIC
+        ${CMAKE_CURRENT_BINARY_DIR}/../thirdparty/etc2comp/EtcTool/EtcFileHeader.cpp
+)
 
+#[[
 find_program(
         GLSL_VALIDATOR glslangValidator
         HINTS /usr/bin /usr/local/bin $ENV{VULKAN_SDK_PATH}/Bin/
@@ -144,3 +149,4 @@ endforeach (GLSL)
 
 add_custom_target(Shaders DEPENDS ${SPIRV_BINARY_FILES})
 add_dependencies(${PROJECT_NAME} Shaders)
+]]
