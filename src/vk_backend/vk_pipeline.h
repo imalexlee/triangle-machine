@@ -5,7 +5,7 @@
 #include <vk_backend/vk_types.h>
 #include <vulkan/vulkan_core.h>
 
-enum BlendMode {
+enum class BlendMode {
     additive,
     alpha,
     none,

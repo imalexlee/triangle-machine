@@ -1,7 +1,6 @@
 #version 450
 
 #extension GL_GOOGLE_include_directive: require
-#extension GL_ARB_shading_language_include: require
 #include "../input_structures.glsl"
 
 layout (location = 1) in vec2 color_uv;

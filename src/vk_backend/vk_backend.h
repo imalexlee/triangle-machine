@@ -26,6 +26,7 @@ struct VkBackend {
     VmaAllocator              allocator;
     PipelineInfo              opaque_pipeline_info;
     PipelineInfo              transparent_pipeline_info;
+    PipelineInfo              grid_pipeline_info;
     VkDescriptorSetLayout     global_desc_set_layout;
     VkDescriptorSetLayout     mat_desc_set_layout;
     VkDescriptorSetLayout     draw_obj_desc_set_layout;
