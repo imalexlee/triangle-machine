@@ -66,8 +66,8 @@ void immediate_submit(const VkBackend*                           backend,
 
 void create_imgui_vk_resources(VkBackend* backend);
 
-void create_pipeline(VkBackend* backend, const char* vert_shader_path,
-                     const char* frag_shader_path);
+void create_pipeline(VkBackend* backend, std::span<uint32_t> vert_shader_spv,
+                     std::span<uint32_t> frag_shader_spv);
 
 template <typename T>
 [[nodiscard]] MeshBuffers upload_mesh(const VkBackend*                backend,
@@ -90,7 +90,6 @@ template <typename T>
 
     MeshBuffers new_mesh_buffer;
     new_mesh_buffer.vertices =
-        // ReSharper disable once CppClassIsIncomplete
         create_buffer(vertex_buffer_bytes, backend->allocator,
                       VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
                           VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,

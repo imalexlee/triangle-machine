@@ -4,6 +4,7 @@ project(triangle-machine)
 
 find_package(glfw3 REQUIRED)
 find_package(Vulkan REQUIRED)
+#find_package(glslang CONFIG REQUIRED)
 
 if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
@@ -37,7 +38,10 @@ add_executable(
         src/vk_backend/vk_vma_usage.cpp
         src/vk_backend/resources/vk_descriptor.cpp
         src/vk_backend/resources/vk_buffer.cpp
-        src/vk_backend/resources/vk_image.cpp)
+        src/vk_backend/resources/vk_image.cpp
+        src/core/shader.cpp
+        src/core/shader.h
+)
 
 target_compile_options(
         ${PROJECT_NAME}
@@ -56,6 +60,9 @@ endif ()
 
 add_subdirectory(thirdparty/fmt)
 add_subdirectory(thirdparty/fastgltf)
+add_subdirectory(thirdparty/meshoptimizer)
+add_subdirectory(thirdparty/etc2comp)
+add_subdirectory(thirdparty/glslang)
 add_subdirectory(thirdparty)
 
 target_include_directories(
@@ -65,20 +72,46 @@ target_include_directories(
         PRIVATE thirdparty/fmt/include
         PRIVATE thirdparty/stb_image
         PRIVATE thirdparty/VulkanMemoryAllocator
+        PRIVATE thirdparty/taskflow
+        PRIVATE thirdparty/etc2comp
+        PRIVATE thirdparty/etc2comp/EtcTool
+        PRIVATE thirdparty/etc2comp/EtcLib/Etc
+        PRIVATE thirdparty/etc2comp/EtcLib/EtcCodec
         PRIVATE thirdparty/fastgltf/include
-        PRIVATE thirdparty/fastgltf/include)
+        thirdparty/glslang/glslang/Include
+        thirdparty/glslang
+        thirdparty/glslang/StandAlone
+)
 
 target_link_directories(${PROJECT_NAME} PUBLIC thirdparty/fmt/src PUBLIC
         thirdparty/fastgltf/src)
 
 target_link_libraries(
         ${PROJECT_NAME}
-        PRIVATE glfw
-        PRIVATE fastgltf
-        PRIVATE fmt
-        PRIVATE imgui
-        PRIVATE Vulkan::Vulkan)
+        PUBLIC glfw
+        meshoptimizer
+        fastgltf
+        fmt
+        imgui
+        EtcLib
+        glslang
+        glslang::glslang
+        glslang::SPIRV
+        glslang::glslang-default-resource-limits
+        assimp
+        Vulkan::Vulkan)
 
+target_sources(
+        ${PROJECT_NAME}
+        PUBLIC
+        ${CMAKE_CURRENT_BINARY_DIR}/../thirdparty/etc2comp/EtcTool/EtcFile.cpp)
+target_sources(
+        ${PROJECT_NAME}
+        PUBLIC
+        ${CMAKE_CURRENT_BINARY_DIR}/../thirdparty/etc2comp/EtcTool/EtcFileHeader.cpp
+)
+
+#[[
 find_program(
         GLSL_VALIDATOR glslangValidator
         HINTS /usr/bin /usr/local/bin $ENV{VULKAN_SDK_PATH}/Bin/
@@ -116,3 +149,4 @@ endforeach (GLSL)
 
 add_custom_target(Shaders DEPENDS ${SPIRV_BINARY_FILES})
 add_dependencies(${PROJECT_NAME} Shaders)
+]]

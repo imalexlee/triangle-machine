@@ -1,5 +1,7 @@
 #include "engine.h"
 #include "core_options.h"
+#include "shader.h"
+
 #include <GLFW/glfw3.h>
 #include <array>
 #include <core/camera.h>
@@ -7,6 +9,7 @@
 #include <core/ui.h>
 #include <core/window.h>
 #include <glm/vec3.hpp>
+
 #include <vk_backend/vk_backend.h>
 
 static Engine* active_engine = nullptr;
@@ -28,8 +31,13 @@ void init_engine(Engine* engine) {
     init_backend(&engine->backend, instance, surface, engine->window.width, engine->window.height);
     init_ui(&engine->ui, &engine->backend, engine->window.glfw_window);
 
-    create_pipeline(&engine->backend, "../shaders/vertex/indexed_draw.vert.glsl.spv",
-                    "../shaders/fragment/simple_lighting.frag.glsl.spv");
+    std::vector<uint32_t> vert_spv;
+    compile_shader("../shaders/vertex/indexed_draw.vert.glsl", GLSLANG_STAGE_VERTEX, &vert_spv);
+    std::vector<uint32_t> frag_spv;
+    compile_shader("../shaders/fragment/simple_lighting.frag.glsl", GLSLANG_STAGE_FRAGMENT,
+                   &frag_spv);
+
+    create_pipeline(&engine->backend, vert_spv, frag_spv);
 
     /*
     std::array gltf_paths = {

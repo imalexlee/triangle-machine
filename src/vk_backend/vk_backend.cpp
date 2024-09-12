@@ -15,7 +15,6 @@
 #include <fastgltf/types.hpp>
 #include <fmt/base.h>
 #include <fmt/format.h>
-#include <fstream>
 #include <string>
 #include <vk_backend/vk_command.h>
 #include <vk_backend/vk_debug.h>
@@ -33,19 +32,20 @@
 #include "vk_options.h"
 
 // initialization
-static void    create_allocator(VkBackend* backend);
-static void    create_default_data(VkBackend* backend);
-static void    create_desc_layouts(VkBackend* backend);
-static void    configure_debugger(VkBackend* backend);
-static void    configure_render_resources(VkBackend* backend);
-VkShaderModule load_shader_module(const VkBackend* backend, const char* file_path);
+static void           create_allocator(VkBackend* backend);
+static void           create_default_data(VkBackend* backend);
+static void           create_desc_layouts(VkBackend* backend);
+static void           configure_debugger(VkBackend* backend);
+static void           configure_render_resources(VkBackend* backend);
+static VkShaderModule load_shader_module(const VkBackend* backend, std::span<uint32_t> shader_spv);
 // state update
-static void    resize(VkBackend* backend);
+static void           resize(VkBackend* backend);
 // rendering
-void render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf, std::span<const Entity> entities);
-static void   render_ui(VkCommandBuffer cmd_buf);
+static void           render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf,
+                                      std::span<const Entity> entities);
+static void           render_ui(VkCommandBuffer cmd_buf);
 // utils
-static Frame* get_current_frame(VkBackend* backend) {
+static Frame*         get_current_frame(VkBackend* backend) {
     return &backend->frames[backend->frame_num % backend->frames.size()];
 }
 static std::vector<const char*> get_instance_extensions();
@@ -312,11 +312,11 @@ VkInstance create_vk_instance(const char* app_name, const char* engine_name) {
     return instance;
 }
 
-void create_pipeline(VkBackend* backend, const char* vert_shader_path,
-                     const char* frag_shader_path) {
+void create_pipeline(VkBackend* backend, std::span<uint32_t> vert_shader_spv,
+                     std::span<uint32_t> frag_shader_spv) {
     PipelineBuilder      pb;
-    const VkShaderModule vert_shader = load_shader_module(backend, vert_shader_path);
-    const VkShaderModule frag_shader = load_shader_module(backend, frag_shader_path);
+    const VkShaderModule vert_shader = load_shader_module(backend, vert_shader_spv);
+    const VkShaderModule frag_shader = load_shader_module(backend, frag_shader_spv);
 
     std::array set_layouts{backend->global_desc_set_layout, backend->mat_desc_set_layout,
                            backend->draw_obj_desc_set_layout};
@@ -579,21 +579,21 @@ void render_ui(VkCommandBuffer cmd_buf) {
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd_buf);
 }
 
-VkShaderModule load_shader_module(const VkBackend* backend, const char* file_path) {
+VkShaderModule load_shader_module(const VkBackend* backend, std::span<uint32_t> shader_spv) {
 
-    std::ifstream         file(file_path, std::ios::ate | std::ios::binary);
-    size_t                file_size = file.tellg();
-    std::vector<uint32_t> buffer(file_size / sizeof(uint32_t));
+    // std::ifstream         file(file_path, std::ios::ate | std::ios::binary);
+    // size_t                file_size = file.tellg();
+    // std::vector<uint32_t> buffer(file_size / sizeof(uint32_t));
 
-    file.seekg(0);
-    file.read(reinterpret_cast<char*>(buffer.data()), file_size);
-    file.close();
+    // file.seekg(0);
+    // file.read(reinterpret_cast<char*>(buffer.data()), file_size);
+    // file.close();
 
     VkShaderModule           shader_module;
     VkShaderModuleCreateInfo shader_module_ci{};
     shader_module_ci.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    shader_module_ci.codeSize = file_size;
-    shader_module_ci.pCode    = buffer.data();
+    shader_module_ci.codeSize = shader_spv.size() * sizeof(uint32_t);
+    shader_module_ci.pCode    = reinterpret_cast<uint32_t*>(shader_spv.data());
 
     VK_CHECK(vkCreateShaderModule(backend->device_ctx.logical_device, &shader_module_ci, nullptr,
                                   &shader_module));
