@@ -1,15 +1,15 @@
 
 /*
-#include "shader.h"
+#include "../../../thirdparty/glslang/glslang/Public/ShaderLang.h"
 
+#include <../../../thirdparty/glslang/glslang/Include/glslang_c_interface.h>
 #include <assert.h>
+#include <filesystem>
 #include <fstream>
-#include <glslang/Include/glslang_c_interface.h>
-#include <glslang/SPIRV/GlslangToSpv.h>
 #include <iostream>
-
-static std::string read_file(const std::string& filename);
-static std::string process_includes(std::string content, const std::string& base_dir);
+#include <string>
+#include <vector>
+#include <vulkan/vulkan_core.h>
 static std::string parse_shader_file(const std::string& filename);
 
 glslang_resource_t glslang_resources = {
@@ -119,20 +119,23 @@ glslang_resource_t glslang_resources = {
                }
 };
 
-int compile_shader(const std::filesystem::path& file_path, glslang_stage_t stage,
+int compile_shader(const std::filesystem::path file_path, VkShaderStageFlagBits stage,
                    std::vector<uint32_t>* output) {
 
     std::string shader_source = parse_shader_file(file_path);
 
+    // see type of glslang_stage_t to see why I right shift
+    auto glslang_stage = static_cast<glslang_stage_t>(stage >> 1);
+
     const glslang_input_t glslang_input = {
         .language                          = GLSLANG_SOURCE_GLSL,
-        .stage                             = stage,
+        .stage                             = glslang_stage,
         .client                            = GLSLANG_CLIENT_VULKAN,
         .client_version                    = GLSLANG_TARGET_VULKAN_1_3,
         .target_language                   = GLSLANG_TARGET_SPV,
         .target_language_version           = GLSLANG_TARGET_SPV_1_6,
         .code                              = shader_source.data(),
-        .default_version                   = 100,
+        .default_version                   = 460,
         .default_profile                   = GLSLANG_NO_PROFILE,
         .force_default_version_and_profile = false,
         .forward_compatible                = false,
@@ -148,6 +151,7 @@ int compile_shader(const std::filesystem::path& file_path, glslang_stage_t stage
         std::cerr << "GLSL Preprocessing Failed\n";
         std::cerr << glslang_shader_get_info_log(shader) << "\n";
         std::cerr << glslang_shader_get_info_debug_log(shader) << "\n";
+        std::cerr << file_path << '\n';
         return -1;
     }
 
@@ -155,6 +159,7 @@ int compile_shader(const std::filesystem::path& file_path, glslang_stage_t stage
         std::cerr << "GLSL Parsing Failed\n";
         std::cerr << glslang_shader_get_info_log(shader) << "\n";
         std::cerr << glslang_shader_get_info_debug_log(shader) << "\n";
+        std::cerr << file_path << '\n';
         return -1;
     }
 
@@ -166,11 +171,11 @@ int compile_shader(const std::filesystem::path& file_path, glslang_stage_t stage
         std::cerr << "GLSL Linking Failed\n";
         std::cerr << glslang_program_get_info_log(program) << "\n";
         std::cerr << glslang_program_get_info_debug_log(program) << "\n";
+        std::cerr << file_path << '\n';
         return -1;
     }
 
-    glslang_program_SPIRV_generate(program, stage);
-
+    glslang_program_SPIRV_generate(program, glslang_stage);
     output->resize(glslang_program_SPIRV_get_size(program));
     glslang_program_SPIRV_get(program, output->data());
     return 1;

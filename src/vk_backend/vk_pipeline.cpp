@@ -57,6 +57,25 @@ PipelineInfo build_pipeline(const PipelineBuilder* pb, VkDevice device) {
     };
 }
 
+VkPipelineLayout create_pipeline_layout(VkDevice                         device,
+                                        std::span<VkDescriptorSetLayout> desc_set_layouts,
+                                        std::span<VkPushConstantRange>   push_constant_ranges,
+                                        VkPipelineLayoutCreateFlags      flags) {
+
+    VkPipelineLayoutCreateInfo pipeline_layout_ci{};
+    pipeline_layout_ci.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipeline_layout_ci.flags                  = flags;
+    pipeline_layout_ci.pSetLayouts            = desc_set_layouts.data();
+    pipeline_layout_ci.setLayoutCount         = desc_set_layouts.size();
+    pipeline_layout_ci.pPushConstantRanges    = push_constant_ranges.data();
+    pipeline_layout_ci.pushConstantRangeCount = push_constant_ranges.size();
+
+    VkPipelineLayout pipeline_layout;
+    VK_CHECK(vkCreatePipelineLayout(device, &pipeline_layout_ci, nullptr, &pipeline_layout));
+
+    return pipeline_layout;
+};
+
 void set_pipeline_render_state(PipelineBuilder* pb, VkFormat color_format, VkFormat depth_format) {
     pb->color_attachment_format = color_format;
     pb->rendering_ci            = {.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
@@ -67,25 +86,21 @@ void set_pipeline_render_state(PipelineBuilder* pb, VkFormat color_format, VkFor
 
 void set_pipeline_shaders(PipelineBuilder* pb, VkShaderModule vert_shader,
                           VkShaderModule frag_shader, const char* entry_name) {
+    VkPipelineShaderStageCreateInfo vertex_stage_ci{};
+    vertex_stage_ci.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    vertex_stage_ci.stage  = VK_SHADER_STAGE_VERTEX_BIT;
+    vertex_stage_ci.pName  = entry_name;
+    vertex_stage_ci.module = vert_shader;
+
+    VkPipelineShaderStageCreateInfo frag_stage_ci{};
+    frag_stage_ci.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    frag_stage_ci.stage  = VK_SHADER_STAGE_FRAGMENT_BIT;
+    frag_stage_ci.pName  = entry_name;
+    frag_stage_ci.module = frag_shader;
+
     pb->shader_stages.clear();
-
-    if (vert_shader) {
-        VkPipelineShaderStageCreateInfo vertex_stage_ci{};
-        vertex_stage_ci.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        vertex_stage_ci.stage  = VK_SHADER_STAGE_VERTEX_BIT;
-        vertex_stage_ci.pName  = entry_name;
-        vertex_stage_ci.module = vert_shader;
-        pb->shader_stages.push_back(vertex_stage_ci);
-    }
-
-    if (frag_shader) {
-        VkPipelineShaderStageCreateInfo frag_stage_ci{};
-        frag_stage_ci.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        frag_stage_ci.stage  = VK_SHADER_STAGE_FRAGMENT_BIT;
-        frag_stage_ci.pName  = entry_name;
-        frag_stage_ci.module = frag_shader;
-        pb->shader_stages.push_back(frag_stage_ci);
-    }
+    pb->shader_stages.push_back(vertex_stage_ci);
+    pb->shader_stages.push_back(frag_stage_ci);
 }
 
 void set_pipeline_topology(PipelineBuilder* pb, VkPrimitiveTopology topology) {
@@ -115,6 +130,7 @@ void set_pipeline_multisampling(PipelineBuilder* pb, VkSampleCountFlagBits sampl
     pb->multisample_state.alphaToCoverageEnable = VK_FALSE;
     pb->multisample_state.alphaToOneEnable      = VK_FALSE;
 }
+
 void set_pipeline_depth_state(PipelineBuilder* pb, bool depth_test_enabled, bool write_enabled,
                               VkCompareOp compare_op) {
     pb->depth_stencil_state = {.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};

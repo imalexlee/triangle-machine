@@ -31,13 +31,15 @@ void init_engine(Engine* engine) {
     init_backend(&engine->backend, instance, surface, engine->window.width, engine->window.height);
     init_ui(&engine->ui, &engine->backend, engine->window.glfw_window);
 
-    std::vector<uint32_t> vert_spv;
-    compile_shader("../shaders/vertex/indexed_draw.vert.glsl", GLSLANG_STAGE_VERTEX, &vert_spv);
-    std::vector<uint32_t> frag_spv;
-    compile_shader("../shaders/fragment/simple_lighting.frag.glsl", GLSLANG_STAGE_FRAGMENT,
-                   &frag_spv);
+    // std::vector<uint32_t> vert_spv;
+    // compile_shader("../shaders/vertex/indexed_draw.vert.glsl", GLSLANG_STAGE_VERTEX, &vert_spv);
+    // std::vector<uint32_t> frag_spv;
+    // compile_shader("../shaders/fragment/simple_lighting.frag", GLSLANG_STAGE_FRAGMENT,
+    // &frag_spv);
 
-    create_pipeline(&engine->backend, vert_spv, frag_spv);
+    // create_pipeline(&engine->backend, vert_spv, frag_spv);
+    upload_vert_shader(&engine->backend, "../shaders/vertex/indexed_draw.vert", "vert shader");
+    upload_frag_shader(&engine->backend, "../shaders/fragment/simple_lighting.frag", "frag shader");
 
     /*
     std::array gltf_paths = {
@@ -70,7 +72,7 @@ void run_engine(Engine* engine) {
         update_scene(&engine->scene);
 
         update_ui(&engine->backend);
-        draw(&engine->backend, engine->scene.entities, &scene_data);
+        draw(&engine->backend, engine->scene.entities, &scene_data, 0, 0);
     }
 }
 

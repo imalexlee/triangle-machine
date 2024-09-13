@@ -9,6 +9,7 @@
     <mapping directory="$PROJECT_DIR$/thirdparty/glslang/External/spirv-tools/external/spirv-headers" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/thirdparty/imgui" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/thirdparty/meshoptimizer" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/thirdparty/shaderc" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/thirdparty/taskflow" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/thirdparty/thirdparty/etc2comp" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/thirdparty/thirdparty/taskflow" vcs="Git" />

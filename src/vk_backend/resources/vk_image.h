@@ -17,29 +17,26 @@ struct TextureSampler {
     VkSampler      sampler;
 };
 
-AllocatedImage create_image(VkDevice device, VmaAllocator allocator, VkImageUsageFlags usage,
-                            VkExtent2D extent, VkFormat format, uint32_t samples = 1);
+[[nodiscard]] AllocatedImage create_image(VkDevice device, VmaAllocator allocator,
+                                          VkImageUsageFlags usage, VkExtent2D extent,
+                                          VkFormat format, uint32_t samples = 1);
 
 void blit_image(VkCommandBuffer cmd, VkImage src, VkImage dest, VkExtent2D src_extent,
                 VkExtent2D dst_extent);
 
 void destroy_image(VkDevice device, VmaAllocator allocator, const AllocatedImage* allocated_image);
 
-VkImageView create_image_view(VkDevice device, VkImage image, VkFormat format,
-                              VkImageAspectFlags aspect_flags, uint32_t mip_levels = 1);
+[[nodiscard]] VkImageView create_image_view(VkDevice device, VkImage image, VkFormat format,
+                                            VkImageAspectFlags aspect_flags,
+                                            uint32_t           mip_levels = 1);
+[[nodiscard]] VkSampler
+create_sampler(VkDevice device, VkFilter min_filter, VkFilter mag_filter,
+               VkSamplerAddressMode address_mode_u = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+               VkSamplerAddressMode address_mode_v = VK_SAMPLER_ADDRESS_MODE_REPEAT);
 
-VkImageSubresourceRange create_image_subresource_range(VkImageAspectFlags aspect_flags,
-                                                       uint32_t           mip_levels = 1);
+[[nodiscard]] VkImageSubresourceRange
+create_image_subresource_range(VkImageAspectFlags aspect_flags, uint32_t mip_levels = 1);
 
-VkRenderingAttachmentInfo create_color_attachment_info(VkImageView view, const VkClearValue* clear,
-                                                       VkAttachmentLoadOp  load_op,
-                                                       VkAttachmentStoreOp store_op,
-                                                       VkImageView         resolve_img_view);
-
-VkRenderingAttachmentInfo create_depth_attachment_info(VkImageView view, VkAttachmentLoadOp load_op,
-                                                       VkAttachmentStoreOp store_op);
-
-// uploads texture to gpu memory
-AllocatedImage upload_texture(const VkBackend* backend, const uint8_t* data,
-                              VkImageUsageFlags usage, uint32_t color_channels, uint32_t width,
-                              uint32_t height);
+[[nodiscard]] AllocatedImage upload_texture(const VkBackend* backend, const uint8_t* data,
+                                            VkImageUsageFlags usage, uint32_t color_channels,
+                                            uint32_t width, uint32_t height);

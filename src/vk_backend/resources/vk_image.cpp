@@ -71,6 +71,21 @@ VkImageView create_image_view(VkDevice device, VkImage image, VkFormat format,
     return image_view;
 }
 
+VkSampler create_sampler(VkDevice device, VkFilter min_filter, VkFilter mag_filter,
+                         VkSamplerAddressMode address_mode_u, VkSamplerAddressMode address_mode_v) {
+    VkSamplerCreateInfo sampler_ci{};
+    sampler_ci.sType        = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    sampler_ci.minFilter    = min_filter;
+    sampler_ci.magFilter    = mag_filter;
+    sampler_ci.addressModeU = address_mode_u;
+    sampler_ci.addressModeV = address_mode_v;
+
+    VkSampler sampler;
+    VK_CHECK(vkCreateSampler(device, &sampler_ci, nullptr, &sampler));
+
+    return sampler;
+};
+
 void blit_image(VkCommandBuffer cmd, VkImage src, VkImage dest, VkExtent2D src_extent,
                 VkExtent2D dst_extent) {
     VkImageBlit2 blit_region{.sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2, .pNext = nullptr};

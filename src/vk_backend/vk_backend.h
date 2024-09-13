@@ -1,13 +1,15 @@
 #pragma once
 
+#include "resources/vk_shader.h"
 #include "vk_backend/resources/vk_image.h"
 #include "vk_backend/vk_command.h"
 #include "vk_backend/vk_debug.h"
 #include "vk_backend/vk_frame.h"
+#include "vk_ext.h"
 #include <vk_backend/vk_pipeline.h>
 #include <vk_backend/vk_scene.h>
 #include <vk_backend/vk_swapchain.h>
-#include <vulkan/vulkan_core.h>
+// #include <vulkan/vulkan_core.h>
 
 struct Stats {
     uint64_t total_draw_time;
@@ -27,6 +29,8 @@ struct VkBackend {
     PipelineInfo              opaque_pipeline_info;
     PipelineInfo              transparent_pipeline_info;
     PipelineInfo              grid_pipeline_info;
+    std::vector<Shader>       vert_shaders;
+    std::vector<Shader>       frag_shaders;
     VkDescriptorSetLayout     global_desc_set_layout;
     VkDescriptorSetLayout     mat_desc_set_layout;
     VkDescriptorSetLayout     draw_obj_desc_set_layout;
@@ -48,6 +52,8 @@ struct VkBackend {
     VkSampler                 default_linear_sampler;
     VkSampler                 default_nearest_sampler;
     AllocatedImage            default_texture;
+    VkExtContext              ext_ctx;
+    VkPipelineLayout          goe_pipeline_layout;
     DeletionQueue             deletion_queue;
 };
 
@@ -60,7 +66,8 @@ void finish_pending_vk_work(const VkBackend* backend);
 
 void deinit_backend(VkBackend* backend);
 
-void draw(VkBackend* backend, std::span<const Entity> entities, const SceneData* scene_data);
+void draw(VkBackend* backend, std::span<const Entity> entities, const SceneData* scene_data,
+          size_t vert_shader, size_t frag_shader);
 
 void immediate_submit(const VkBackend*                           backend,
                       std::function<void(VkCommandBuffer cmd)>&& function);
@@ -69,6 +76,12 @@ void create_imgui_vk_resources(VkBackend* backend);
 
 void create_pipeline(VkBackend* backend, std::span<uint32_t> vert_shader_spv,
                      std::span<uint32_t> frag_shader_spv);
+
+void upload_vert_shader(VkBackend* backend, const std::filesystem::path& file_path,
+                        const std::string& name);
+
+void upload_frag_shader(VkBackend* backend, const std::filesystem::path& file_path,
+                        const std::string& name);
 
 template <typename T>
 [[nodiscard]] MeshBuffers upload_mesh(const VkBackend*                backend,

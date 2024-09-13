@@ -4,7 +4,6 @@ project(triangle-machine)
 
 find_package(glfw3 REQUIRED)
 find_package(Vulkan REQUIRED)
-#find_package(glslang CONFIG REQUIRED)
 
 if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
@@ -41,6 +40,11 @@ add_executable(
         src/vk_backend/resources/vk_image.cpp
         src/core/shader.cpp
         src/core/shader.h
+        src/vk_backend/resources/vk_shader.cpp
+        src/vk_backend/resources/vk_shader.h
+        src/vk_backend/vk_ext.cpp
+        src/vk_backend/vk_ext.h
+        #  src/vk_backend/resources/glslang_comp.cpp
 )
 
 target_compile_options(
@@ -62,7 +66,8 @@ add_subdirectory(thirdparty/fmt)
 add_subdirectory(thirdparty/fastgltf)
 add_subdirectory(thirdparty/meshoptimizer)
 add_subdirectory(thirdparty/etc2comp)
-add_subdirectory(thirdparty/glslang)
+#add_subdirectory(thirdparty/glslang)
+add_subdirectory(thirdparty/shaderc)
 add_subdirectory(thirdparty)
 
 target_include_directories(
@@ -78,9 +83,7 @@ target_include_directories(
         PRIVATE thirdparty/etc2comp/EtcLib/Etc
         PRIVATE thirdparty/etc2comp/EtcLib/EtcCodec
         PRIVATE thirdparty/fastgltf/include
-        thirdparty/glslang/glslang/Include
-        thirdparty/glslang
-        thirdparty/glslang/StandAlone
+        PRIVATE thirdparty/shaderc/utils
 )
 
 target_link_directories(${PROJECT_NAME} PUBLIC thirdparty/fmt/src PUBLIC
@@ -94,10 +97,8 @@ target_link_libraries(
         fmt
         imgui
         EtcLib
-        glslang
-        glslang::glslang
-        glslang::SPIRV
-        glslang::glslang-default-resource-limits
+        shaderc
+        shaderc_util
         assimp
         Vulkan::Vulkan)
 
@@ -117,7 +118,7 @@ find_program(
         $ENV{VULKAN_SDK_PATH}/Bin32/)
 
 file(GLOB_RECURSE GLSL_SOURCE_FILES_VERTEX
-        "${PROJECT_SOURCE_DIR}/shaders/vertex/*.vert.glsl")
+        "${PROJECT_SOURCE_DIR}/shaders/vertex/*.vert")
 
 foreach (GLSL ${GLSL_SOURCE_FILES_VERTEX})
     message(STATUS "BUILDING SHADER")
@@ -132,7 +133,7 @@ foreach (GLSL ${GLSL_SOURCE_FILES_VERTEX})
 endforeach (GLSL)
 
 file(GLOB_RECURSE GLSL_SOURCE_FILES_FRAGMENT
-        "${PROJECT_SOURCE_DIR}/shaders/fragment/*.frag.glsl")
+        "${PROJECT_SOURCE_DIR}/shaders/fragment/*.frag")
 
 foreach (GLSL ${GLSL_SOURCE_FILES_FRAGMENT})
     message(STATUS "BUILDING SHADER")
