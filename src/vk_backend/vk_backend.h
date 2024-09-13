@@ -19,6 +19,7 @@ struct Stats {
     float    frame_time;
     float    draw_time;
 };
+
 struct VkBackend {
     DeviceContext             device_ctx;
     VkInstance                instance;
@@ -29,8 +30,7 @@ struct VkBackend {
     PipelineInfo              opaque_pipeline_info;
     PipelineInfo              transparent_pipeline_info;
     PipelineInfo              grid_pipeline_info;
-    std::vector<Shader>       vert_shaders;
-    std::vector<Shader>       frag_shaders;
+    ShaderContext             shader_ctx;
     VkDescriptorSetLayout     global_desc_set_layout;
     VkDescriptorSetLayout     mat_desc_set_layout;
     VkDescriptorSetLayout     draw_obj_desc_set_layout;

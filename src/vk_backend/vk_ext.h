@@ -1,9 +1,10 @@
 #pragma once
-#include "resources/vk_shader.h"
+#include <vulkan/vulkan.h>
 
 struct VkExtContext {
 
     PFN_vkCreateShadersEXT               vkCreateShadersEXT;
+    PFN_vkDestroyShaderEXT               vkDestroyShaderEXT;
     PFN_vkCmdBindShadersEXT              vkCmdBindShadersEXT;
     PFN_vkCmdSetPolygonModeEXT           vkCmdSetPolygonModeEXT;
     PFN_vkCmdSetRasterizationSamplesEXT  vkCmdSetRasterizationSamplesEXT;

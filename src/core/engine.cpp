@@ -1,6 +1,5 @@
 #include "engine.h"
 #include "core_options.h"
-#include "shader.h"
 
 #include <GLFW/glfw3.h>
 #include <array>

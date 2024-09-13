@@ -114,6 +114,8 @@ void init_backend(VkBackend* backend, VkInstance instance, VkSurfaceKHR surface,
 
     create_pipeline_layouts(backend);
 
+    init_shader_ctx(&backend->shader_ctx);
+
     init_vk_ext_context(&backend->ext_ctx, backend->device_ctx.logical_device);
 
     if constexpr (vk_opts::validation_enabled) {
@@ -430,12 +432,11 @@ void upload_vert_shader(VkBackend* backend, const std::filesystem::path& file_pa
     std::array set_layouts{backend->global_desc_set_layout, backend->mat_desc_set_layout,
                            backend->draw_obj_desc_set_layout};
 
-    add_shader(&builder, file_path, name, set_layouts, push_constant_ranges,
-               VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_FRAGMENT_BIT);
+    stage_shader(&backend->shader_ctx, file_path, name, set_layouts, push_constant_ranges,
+                 VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_FRAGMENT_BIT);
 
-    std::vector<Shader> new_vert_shaders = create_unlinked_shaders(&builder, backend);
-
-    backend->vert_shaders.push_back(new_vert_shaders[0]);
+    commit_unlinked_shaders(&backend->shader_ctx, &backend->ext_ctx,
+                            backend->device_ctx.logical_device);
 }
 
 void upload_frag_shader(VkBackend* backend, const std::filesystem::path& file_path,
@@ -450,12 +451,11 @@ void upload_frag_shader(VkBackend* backend, const std::filesystem::path& file_pa
     std::array set_layouts{backend->global_desc_set_layout, backend->mat_desc_set_layout,
                            backend->draw_obj_desc_set_layout};
 
-    add_shader(&builder, file_path, name, set_layouts, push_constant_ranges,
-               VK_SHADER_STAGE_FRAGMENT_BIT, 0);
+    stage_shader(&backend->shader_ctx, file_path, name, set_layouts, push_constant_ranges,
+                 VK_SHADER_STAGE_FRAGMENT_BIT, 0);
 
-    std::vector<Shader> new_frag_shaders = create_unlinked_shaders(&builder, backend);
-
-    backend->frag_shaders.push_back(new_frag_shaders[0]);
+    commit_unlinked_shaders(&backend->shader_ctx, &backend->ext_ctx,
+                            backend->device_ctx.logical_device);
 }
 
 std::vector<const char*> get_instance_extensions() {
@@ -644,11 +644,13 @@ void render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf, std::span<cons
     vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, backend->goe_pipeline_layout,
                             0, 1, &get_current_frame(backend)->desc_set, 0, nullptr);
 
-    backend->ext_ctx.vkCmdBindShadersEXT(cmd_buf, 1, &backend->vert_shaders[vert_shader].stage,
-                                         &backend->vert_shaders[vert_shader].shader);
+    backend->ext_ctx.vkCmdBindShadersEXT(cmd_buf, 1,
+                                         &backend->shader_ctx.vert_shaders[vert_shader].stage,
+                                         &backend->shader_ctx.vert_shaders[vert_shader].shader);
 
-    backend->ext_ctx.vkCmdBindShadersEXT(cmd_buf, 1, &backend->frag_shaders[frag_shader].stage,
-                                         &backend->frag_shaders[frag_shader].shader);
+    backend->ext_ctx.vkCmdBindShadersEXT(cmd_buf, 1,
+                                         &backend->shader_ctx.frag_shaders[frag_shader].stage,
+                                         &backend->shader_ctx.frag_shaders[frag_shader].shader);
 
     vkCmdSetViewportWithCount(cmd_buf, 1, &viewport);
 
@@ -819,15 +821,21 @@ void deinit_backend(VkBackend* backend) {
     destroy_image(backend->device_ctx.logical_device, backend->allocator,
                   &backend->color_resolve_image);
 
+    deinit_shader_ctx(&backend->shader_ctx, &backend->ext_ctx, backend->device_ctx.logical_device);
+
     vkDestroySampler(backend->device_ctx.logical_device, backend->default_nearest_sampler, nullptr);
     vkDestroySampler(backend->device_ctx.logical_device, backend->default_linear_sampler, nullptr);
 
+    /*
     vkDestroyPipelineLayout(backend->device_ctx.logical_device,
                             backend->opaque_pipeline_info.pipeline_layout, nullptr);
     vkDestroyPipelineLayout(backend->device_ctx.logical_device,
                             backend->transparent_pipeline_info.pipeline_layout, nullptr);
+    */
     vkDestroyPipelineLayout(backend->device_ctx.logical_device,
                             backend->grid_pipeline_info.pipeline_layout, nullptr);
+    vkDestroyPipelineLayout(backend->device_ctx.logical_device, backend->goe_pipeline_layout,
+                            nullptr);
 
     vkDestroyDescriptorSetLayout(backend->device_ctx.logical_device,
                                  backend->global_desc_set_layout, nullptr);
@@ -836,10 +844,12 @@ void deinit_backend(VkBackend* backend) {
     vkDestroyDescriptorSetLayout(backend->device_ctx.logical_device,
                                  backend->draw_obj_desc_set_layout, nullptr);
 
+    /*
     vkDestroyPipeline(backend->device_ctx.logical_device, backend->opaque_pipeline_info.pipeline,
                       nullptr);
     vkDestroyPipeline(backend->device_ctx.logical_device,
                       backend->transparent_pipeline_info.pipeline, nullptr);
+    */
     vkDestroyPipeline(backend->device_ctx.logical_device, backend->grid_pipeline_info.pipeline,
                       nullptr);
 
@@ -848,6 +858,7 @@ void deinit_backend(VkBackend* backend) {
     vmaDestroyAllocator(backend->allocator);
 
     deinit_cmd_context(&backend->imm_cmd_context, backend->device_ctx.logical_device);
+
     deinit_swapchain_context(&backend->swapchain_context, backend->device_ctx.logical_device,
                              backend->instance);
 
