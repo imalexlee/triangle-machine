@@ -17,7 +17,7 @@ layout (location = 4) out vec3 vert_pos;
 
 void main() {
     Vertex v = obj_data.vertex_buffer.vertices[gl_VertexIndex];
-    gl_Position = scene_data.proj * scene_data.view * (obj_data.local_transform * vec4(v.pos.xyz, 1.f) + vec4(constants.pos, 1.f));
+    gl_Position = scene_data.view_proj * (obj_data.local_transform * vec4(v.pos.xyz, 1.f) + vec4(constants.pos, 1.f));
     frag_color = (obj_data.local_transform * vec4(v.norm.xyz, 1.f)).xyz;
     surface_normal = v.norm.xyz;
     eye_pos = scene_data.eye_pos;

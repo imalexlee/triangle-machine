@@ -113,8 +113,9 @@ void create_swapchain(SwapchainContext* swapchain_ctx, const DeviceContext* devi
                                      &actual_image_count, swapchain_ctx->images.data()));
 
     for (const auto& image : swapchain_ctx->images) {
-        swapchain_ctx->image_views.push_back(create_image_view(
-            device_ctx->logical_device, image, swapchain_ctx->format, VK_IMAGE_ASPECT_COLOR_BIT));
+        swapchain_ctx->image_views.push_back(
+            create_image_view(device_ctx->logical_device, image, VK_IMAGE_VIEW_TYPE_2D,
+                              swapchain_ctx->format, VK_IMAGE_ASPECT_COLOR_BIT));
     }
 }
 

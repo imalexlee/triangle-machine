@@ -1,5 +1,5 @@
 #include "vk_device.h"
-#include <algorithm>
+#include <algorith>
 #include <array>
 #include <iostream>
 #include <optional>
@@ -117,13 +117,19 @@ void create_logical_device(DeviceContext* device_ctx) {
         VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
         VK_EXT_SHADER_OBJECT_EXTENSION_NAME,
+        VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME,
 
     };
+    VkPhysicalDeviceVertexInputDynamicStateFeaturesEXT vertex_input_feature{};
+    vertex_input_feature.sType =
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_INPUT_DYNAMIC_STATE_FEATURES_EXT;
+    vertex_input_feature.vertexInputDynamicState = VK_TRUE;
 
     // Enable Shader Object
     VkPhysicalDeviceShaderObjectFeaturesEXT shader_object_feature{};
     shader_object_feature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_OBJECT_FEATURES_EXT;
     shader_object_feature.shaderObject = VK_TRUE;
+    shader_object_feature.pNext        = &vertex_input_feature;
 
     VkPhysicalDeviceInheritedViewportScissorFeaturesNV inherited_scissor_feature{};
     inherited_scissor_feature.sType =

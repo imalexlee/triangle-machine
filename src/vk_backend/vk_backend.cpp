@@ -33,24 +33,29 @@
 #include "vk_options.h"
 
 // initialization
-static void           create_allocator(VkBackend* backend);
-static void           create_default_data(VkBackend* backend);
-static void           create_desc_layouts(VkBackend* backend);
-static void           configure_debugger(VkBackend* backend);
-static void           configure_render_resources(VkBackend* backend);
-static void           create_grid_pipeline(VkBackend* backend);
-static void           create_pipeline_layouts(VkBackend* backend);
+static void create_allocator(VkBackend* backend);
+static void create_default_data(VkBackend* backend);
+static void create_desc_layouts(VkBackend* backend);
+static void configure_debugger(VkBackend* backend);
+static void configure_render_resources(VkBackend* backend);
+static void create_grid_pipeline(VkBackend* backend);
+static void create_pipeline_layouts(VkBackend* backend);
+void        init_sky_box(VkBackend* backend);
+
 static VkShaderModule load_shader_module(const VkBackend* backend, std::span<uint32_t> shader_spv);
 // state update
 static void           resize(VkBackend* backend);
+void                  set_render_state(VkBackend* backend, VkCommandBuffer cmd_buf);
 // rendering
 static void           render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf,
                                       std::span<const Entity> entities, size_t vert_shader,
                                       size_t frag_shader);
 static void           render_ui(VkCommandBuffer cmd_buf);
 static void           render_grid(VkBackend* backend, VkCommandBuffer cmd_buf);
+static void   render_sky_box(VkBackend* backend, VkCommandBuffer cmd_buf, uint32_t vert_shader_i,
+                             uint32_t frag_shader_i);
 // utils
-static Frame*         get_current_frame(VkBackend* backend) {
+static Frame* get_current_frame(VkBackend* backend) {
     return &backend->frames[backend->frame_num % backend->frames.size()];
 }
 static std::vector<const char*> get_instance_extensions();
@@ -73,6 +78,7 @@ void init_backend(VkBackend* backend, VkInstance instance, VkSurfaceKHR surface,
 
     create_allocator(backend);
     create_desc_layouts(backend);
+    init_sky_box(backend);
 
     for (Frame& frame : backend->frames) {
         init_frame(&frame, backend->device_ctx.logical_device, backend->allocator,
@@ -83,20 +89,21 @@ void init_backend(VkBackend* backend, VkInstance instance, VkSurfaceKHR surface,
     backend->image_extent.width  = width;
     backend->image_extent.height = height;
 
-    backend->color_resolve_image =
-        create_image(backend->device_ctx.logical_device, backend->allocator,
-                     VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                     backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
-
-    backend->color_image = create_image(
+    backend->color_resolve_image = create_image(
         backend->device_ctx.logical_device, backend->allocator,
-        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
-        backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, backend->device_ctx.raster_samples);
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
 
-    backend->depth_image =
+    backend->color_image =
         create_image(backend->device_ctx.logical_device, backend->allocator,
-                     VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, backend->image_extent,
-                     VK_FORMAT_D32_SFLOAT, backend->device_ctx.raster_samples);
+                     VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
+                     VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT,
+                     backend->device_ctx.raster_samples);
+
+    backend->depth_image = create_image(backend->device_ctx.logical_device, backend->allocator,
+                                        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                                        VK_IMAGE_VIEW_TYPE_2D, backend->image_extent,
+                                        VK_FORMAT_D32_SFLOAT, backend->device_ctx.raster_samples);
 
     // create color attachments and  rendering information from our allocated images
     configure_render_resources(backend);
@@ -123,19 +130,89 @@ void init_backend(VkBackend* backend, VkInstance instance, VkSurfaceKHR surface,
     }
 }
 
+static constexpr std::array skybox_vertices = {
+    // positions
+    -1.0f, 1.0f,  -1.0f, -1.0f, -1.0f, -1.0f, 1.0f,  -1.0f, -1.0f, 1.0f,  -1.0f, -1.0f,
+    1.0f,  1.0f,  -1.0f, -1.0f, 1.0f,  -1.0f, -1.0f, -1.0f, 1.0f,  -1.0f, -1.0f, -1.0f,
+    -1.0f, 1.0f,  -1.0f, -1.0f, 1.0f,  -1.0f, -1.0f, 1.0f,  1.0f,  -1.0f, -1.0f, 1.0f,
+    1.0f,  -1.0f, -1.0f, 1.0f,  -1.0f, 1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  1.0f,
+    1.0f,  1.0f,  -1.0f, 1.0f,  -1.0f, -1.0f, -1.0f, -1.0f, 1.0f,  -1.0f, 1.0f,  1.0f,
+    1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  -1.0f, 1.0f,  -1.0f, -1.0f, 1.0f,
+    -1.0f, 1.0f,  -1.0f, 1.0f,  1.0f,  -1.0f, 1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  1.0f,
+    -1.0f, 1.0f,  1.0f,  -1.0f, 1.0f,  -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, 1.0f,
+    1.0f,  -1.0f, -1.0f, 1.0f,  -1.0f, -1.0f, -1.0f, -1.0f, 1.0f,  1.0f,  -1.0f, 1.0f,
+};
+void init_sky_box(VkBackend* backend) {
+
+    std::vector<PoolSizeRatio> mat_pool_sizes = {
+  //   {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         1},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1},
+    };
+    init_desc_allocator(&backend->sky_box_desc_allocator, backend->device_ctx.logical_device, 1,
+                        mat_pool_sizes);
+
+    DescriptorLayoutBuilder layout_builder;
+    // add_layout_binding(&layout_builder, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    add_layout_binding(&layout_builder, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+
+    backend->sky_box_desc_set_layout =
+        build_set_layout(&layout_builder, backend->device_ctx.logical_device,
+                         VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+    backend->sky_box_desc_set =
+        allocate_desc_set(&backend->sky_box_desc_allocator, backend->device_ctx.logical_device,
+                          backend->sky_box_desc_set_layout);
+
+    backend->sky_box_buffer = create_buffer(
+        skybox_vertices.size() * sizeof(skybox_vertices[0]), backend->allocator,
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT);
+
+    vmaCopyMemoryToAllocation(backend->allocator, skybox_vertices.data(),
+                              backend->sky_box_buffer.allocation, 0,
+                              backend->sky_box_buffer.info.size);
+
+    backend->deletion_queue.push_persistant([=] {
+        deinit_desc_allocator(&backend->sky_box_desc_allocator, backend->device_ctx.logical_device);
+    });
+};
+
+void upload_sky_box(VkBackend* backend, const uint8_t* texture_data, uint32_t color_channels,
+                    uint32_t width, uint32_t height) {
+
+    AllocatedImage cube_tex =
+        upload_texture(backend, texture_data, VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_VIEW_TYPE_CUBE,
+                       6, color_channels, width, height);
+
+    DescriptorWriter desc_writer;
+    write_image_desc(&desc_writer, 1, cube_tex.image_view, backend->default_nearest_sampler,
+                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                     VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+
+    update_desc_set(&desc_writer, backend->device_ctx.logical_device, backend->sky_box_desc_set);
+
+    backend->deletion_queue.push_persistant(
+        [=] { vmaDestroyImage(backend->allocator, cube_tex.image, cube_tex.allocation); });
+}
+
 void create_pipeline_layouts(VkBackend* backend) {
 
-    std::array set_layouts{backend->global_desc_set_layout, backend->mat_desc_set_layout,
-                           backend->draw_obj_desc_set_layout};
+    std::array geo_set_layouts{backend->global_desc_set_layout, backend->mat_desc_set_layout,
+                               backend->draw_obj_desc_set_layout};
 
-    std::array<VkPushConstantRange, 1> push_constant_ranges{{{
+    std::array<VkPushConstantRange, 1> geo_push_constant_ranges{{{
         .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
         .offset     = 0,
         .size       = sizeof(EntityPushConstants),
     }}};
 
-    backend->goe_pipeline_layout = create_pipeline_layout(backend->device_ctx.logical_device,
-                                                          set_layouts, push_constant_ranges, 0);
+    backend->geo_pipeline_layout = create_pipeline_layout(
+        backend->device_ctx.logical_device, geo_set_layouts, geo_push_constant_ranges, 0);
+
+    std::array sky_box_set_layouts{backend->global_desc_set_layout,
+                                   backend->sky_box_desc_set_layout};
+
+    backend->sky_box_pipeline_layout =
+        create_pipeline_layout(backend->device_ctx.logical_device, sky_box_set_layouts, {}, 0);
 }
 
 static void create_grid_pipeline(VkBackend* backend) {
@@ -206,6 +283,9 @@ void configure_debugger(VkBackend* backend) {
     set_handle_name(&backend->debugger, backend->imm_cmd_context.primary_buffer,
                     VK_OBJECT_TYPE_COMMAND_BUFFER, "imm cmd buf");
 
+    set_handle_name(&backend->debugger, backend->sky_box_buffer.buffer, VK_OBJECT_TYPE_BUFFER,
+                    "skybox buffer");
+
     for (size_t i = 0; i < backend->frames.size(); i++) {
         const Frame& frame = backend->frames[i];
         set_handle_name(&backend->debugger, frame.command_context.primary_buffer,
@@ -248,7 +328,8 @@ void create_desc_layouts(VkBackend* backend) {
 
 void configure_render_resources(VkBackend* backend) {
 
-    backend->scene_clear_value = {.color = {{0.1f, 0.1f, 0.1f, 0.2f}}};
+    // backend->scene_clear_value = {.color = {{0.1f, 0.1f, 0.1f, 0.2f}}};
+    backend->scene_clear_value = {.color = {{0.8f, 0.8f, 0.8f, 0.2f}}};
 
     backend->scene_color_attachment = create_color_attachment_info(
         backend->color_image.image_view, &backend->scene_clear_value, VK_ATTACHMENT_LOAD_OP_CLEAR,
@@ -274,9 +355,10 @@ void create_default_data(VkBackend* backend) {
     backend->default_nearest_sampler =
         create_sampler(backend->device_ctx.logical_device, VK_FILTER_NEAREST, VK_FILTER_NEAREST);
 
-    uint32_t white           = 0xFFFFFFFF;
-    backend->default_texture = upload_texture(backend, reinterpret_cast<uint8_t*>(&white),
-                                              VK_IMAGE_USAGE_SAMPLED_BIT, 4, 1, 1);
+    uint32_t white = 0xFFFFFFFF;
+    backend->default_texture =
+        upload_texture(backend, reinterpret_cast<uint8_t*>(&white), VK_IMAGE_USAGE_SAMPLED_BIT,
+                       VK_IMAGE_VIEW_TYPE_2D, 1, 4, 1, 1);
 }
 
 void create_imgui_vk_resources(VkBackend* backend) {
@@ -435,8 +517,8 @@ void upload_vert_shader(VkBackend* backend, const std::filesystem::path& file_pa
     stage_shader(&backend->shader_ctx, file_path, name, set_layouts, push_constant_ranges,
                  VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_FRAGMENT_BIT);
 
-    commit_unlinked_shaders(&backend->shader_ctx, &backend->ext_ctx,
-                            backend->device_ctx.logical_device);
+    commit_shaders(&backend->shader_ctx, &backend->ext_ctx, backend->device_ctx.logical_device,
+                   ShaderType::unlinked);
 }
 
 void upload_frag_shader(VkBackend* backend, const std::filesystem::path& file_path,
@@ -454,8 +536,22 @@ void upload_frag_shader(VkBackend* backend, const std::filesystem::path& file_pa
     stage_shader(&backend->shader_ctx, file_path, name, set_layouts, push_constant_ranges,
                  VK_SHADER_STAGE_FRAGMENT_BIT, 0);
 
-    commit_unlinked_shaders(&backend->shader_ctx, &backend->ext_ctx,
-                            backend->device_ctx.logical_device);
+    commit_shaders(&backend->shader_ctx, &backend->ext_ctx, backend->device_ctx.logical_device,
+                   ShaderType::unlinked);
+}
+
+void upload_sky_box_shaders(VkBackend* backend, const std::filesystem::path& vert_path,
+                            const std::filesystem::path& frag_path, const std::string& name) {
+
+    std::array set_layouts{backend->global_desc_set_layout, backend->sky_box_desc_set_layout};
+
+    stage_shader(&backend->shader_ctx, vert_path, name, set_layouts, {}, VK_SHADER_STAGE_VERTEX_BIT,
+                 VK_SHADER_STAGE_FRAGMENT_BIT);
+    stage_shader(&backend->shader_ctx, frag_path, name, set_layouts, {},
+                 VK_SHADER_STAGE_FRAGMENT_BIT, 0);
+
+    commit_shaders(&backend->shader_ctx, &backend->ext_ctx, backend->device_ctx.logical_device,
+                   ShaderType::linked);
 }
 
 std::vector<const char*> get_instance_extensions() {
@@ -511,7 +607,11 @@ void draw(VkBackend* backend, std::span<const Entity> entities, const SceneData*
     insert_image_memory_barrier(cmd_buffer, backend->depth_image.image, VK_IMAGE_LAYOUT_UNDEFINED,
                                 VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
+    set_render_state(backend, cmd_buffer);
+
     vkCmdBeginRendering(cmd_buffer, &backend->scene_rendering_info);
+
+    render_sky_box(backend, cmd_buffer, 1, 1);
 
     render_geometry(backend, cmd_buffer, entities, vert_shader, frag_shader);
 
@@ -529,7 +629,7 @@ void draw(VkBackend* backend, std::span<const Entity> entities, const SceneData*
                                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
     blit_image(cmd_buffer, backend->color_resolve_image.image, swapchain_image,
-               backend->swapchain_context.extent, backend->image_extent);
+               backend->swapchain_context.extent, backend->image_extent, 1, 1);
 
     insert_image_memory_barrier(cmd_buffer, swapchain_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                 VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
@@ -584,20 +684,21 @@ void resize(VkBackend* backend) {
 
     destroy_image(backend->device_ctx.logical_device, backend->allocator,
                   &backend->color_resolve_image);
-    backend->color_resolve_image =
-        create_image(backend->device_ctx.logical_device, backend->allocator,
-                     VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                     backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
-
-    backend->color_image = create_image(
+    backend->color_resolve_image = create_image(
         backend->device_ctx.logical_device, backend->allocator,
-        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
-        backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, backend->device_ctx.raster_samples);
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
 
-    backend->depth_image =
+    backend->color_image =
         create_image(backend->device_ctx.logical_device, backend->allocator,
-                     VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, backend->image_extent,
-                     VK_FORMAT_D32_SFLOAT, backend->device_ctx.raster_samples);
+                     VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
+                     VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT,
+                     backend->device_ctx.raster_samples);
+
+    backend->depth_image = create_image(backend->device_ctx.logical_device, backend->allocator,
+                                        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                                        VK_IMAGE_VIEW_TYPE_2D, backend->image_extent,
+                                        VK_FORMAT_D32_SFLOAT, backend->device_ctx.raster_samples);
 
     configure_render_resources(backend);
 
@@ -606,9 +707,7 @@ void resize(VkBackend* backend) {
     }
 }
 
-void render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf, std::span<const Entity> entities,
-                     size_t vert_shader, size_t frag_shader) {
-    auto buffer_recording_start = system_clock::now();
+void set_render_state(VkBackend* backend, VkCommandBuffer cmd_buf) {
 
     VkViewport viewport{};
     viewport.x        = 0.0f;
@@ -621,36 +720,6 @@ void render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf, std::span<cons
     VkRect2D scissor{};
     scissor.extent = backend->image_extent;
     scissor.offset = {0, 0};
-
-    PipelineInfo    current_pipeline_info;
-    VkDescriptorSet current_mat_desc = VK_NULL_HANDLE;
-
-    const auto record_obj = [&](const DrawObject* obj) {
-        if (obj->mat_desc_set != current_mat_desc) {
-            current_mat_desc = obj->mat_desc_set;
-            vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                    backend->goe_pipeline_layout, 1, 1, &obj->mat_desc_set, 0,
-                                    nullptr);
-        }
-
-        vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                backend->goe_pipeline_layout, 2, 1, &obj->obj_desc_set, 0, nullptr);
-
-        vkCmdBindIndexBuffer(cmd_buf, obj->index_buffer, 0, VK_INDEX_TYPE_UINT32);
-
-        vkCmdDrawIndexed(cmd_buf, obj->indices_count, 1, obj->indices_start, 0, 0);
-    };
-
-    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, backend->goe_pipeline_layout,
-                            0, 1, &get_current_frame(backend)->desc_set, 0, nullptr);
-
-    backend->ext_ctx.vkCmdBindShadersEXT(cmd_buf, 1,
-                                         &backend->shader_ctx.vert_shaders[vert_shader].stage,
-                                         &backend->shader_ctx.vert_shaders[vert_shader].shader);
-
-    backend->ext_ctx.vkCmdBindShadersEXT(cmd_buf, 1,
-                                         &backend->shader_ctx.frag_shaders[frag_shader].stage,
-                                         &backend->shader_ctx.frag_shaders[frag_shader].shader);
 
     vkCmdSetViewportWithCount(cmd_buf, 1, &viewport);
 
@@ -670,14 +739,6 @@ void render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf, std::span<cons
 
     vkCmdSetFrontFace(cmd_buf, VK_FRONT_FACE_COUNTER_CLOCKWISE);
 
-    backend->ext_ctx.vkCmdSetPolygonModeEXT(cmd_buf, VK_POLYGON_MODE_FILL);
-
-    vkCmdSetDepthTestEnable(cmd_buf, VK_TRUE);
-
-    vkCmdSetDepthWriteEnable(cmd_buf, VK_TRUE);
-
-    vkCmdSetDepthCompareOp(cmd_buf, VK_COMPARE_OP_GREATER_OR_EQUAL);
-
     vkCmdSetDepthBiasEnable(cmd_buf, VK_FALSE);
 
     vkCmdSetStencilTestEnable(cmd_buf, VK_FALSE);
@@ -691,6 +752,56 @@ void render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf, std::span<cons
 
     backend->ext_ctx.vkCmdSetColorWriteMaskEXT(cmd_buf, 0, 1, &component_flags);
 
+    backend->ext_ctx.vkCmdSetPolygonModeEXT(cmd_buf, VK_POLYGON_MODE_FILL);
+
+    vkCmdSetDepthTestEnable(cmd_buf, VK_TRUE);
+
+    vkCmdSetDepthWriteEnable(cmd_buf, VK_TRUE);
+
+    vkCmdSetDepthCompareOp(cmd_buf, VK_COMPARE_OP_GREATER_OR_EQUAL);
+}
+
+void render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf, std::span<const Entity> entities,
+                     size_t vert_shader, size_t frag_shader) {
+    auto buffer_recording_start = system_clock::now();
+
+    VkDescriptorSet current_mat_desc = VK_NULL_HANDLE;
+
+    const auto record_obj = [&](const DrawObject* obj) {
+        if (obj->mat_desc_set != current_mat_desc) {
+            current_mat_desc = obj->mat_desc_set;
+            vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    backend->geo_pipeline_layout, 1, 1, &obj->mat_desc_set, 0,
+                                    nullptr);
+        }
+
+        vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                backend->geo_pipeline_layout, 2, 1, &obj->obj_desc_set, 0, nullptr);
+
+        vkCmdBindIndexBuffer(cmd_buf, obj->index_buffer, 0, VK_INDEX_TYPE_UINT32);
+
+        vkCmdDrawIndexed(cmd_buf, obj->indices_count, 1, obj->indices_start, 0, 0);
+    };
+
+    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, backend->geo_pipeline_layout,
+                            0, 1, &get_current_frame(backend)->desc_set, 0, nullptr);
+
+    backend->ext_ctx.vkCmdBindShadersEXT(cmd_buf, 1,
+                                         &backend->shader_ctx.vert_shaders[vert_shader].stage,
+                                         &backend->shader_ctx.vert_shaders[vert_shader].shader);
+
+    backend->ext_ctx.vkCmdBindShadersEXT(cmd_buf, 1,
+                                         &backend->shader_ctx.frag_shaders[frag_shader].stage,
+                                         &backend->shader_ctx.frag_shaders[frag_shader].shader);
+
+    backend->ext_ctx.vkCmdSetPolygonModeEXT(cmd_buf, VK_POLYGON_MODE_FILL);
+
+    vkCmdSetDepthTestEnable(cmd_buf, VK_TRUE);
+
+    vkCmdSetDepthWriteEnable(cmd_buf, VK_TRUE);
+
+    vkCmdSetDepthCompareOp(cmd_buf, VK_COMPARE_OP_GREATER_OR_EQUAL);
+
     for (const auto& entity : entities) {
 
         VkColorBlendEquationEXT blend_equation = {};
@@ -700,7 +811,7 @@ void render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf, std::span<cons
             .pos = entity.pos,
         };
 
-        vkCmdPushConstants(cmd_buf, backend->goe_pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
+        vkCmdPushConstants(cmd_buf, backend->geo_pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
                            sizeof(EntityPushConstants), &constants);
 
         for (const DrawObject& obj : entity.opaque_objs) {
@@ -769,6 +880,46 @@ void render_grid(VkBackend* backend, VkCommandBuffer cmd_buf) {
 
     vkCmdDraw(cmd_buf, 6, 1, 0, 0);
 }
+void render_sky_box(VkBackend* backend, VkCommandBuffer cmd_buf, uint32_t vert_shader_i,
+                    uint32_t frag_shader_i) {
+
+    backend->ext_ctx.vkCmdBindShadersEXT(cmd_buf, 1,
+                                         &backend->shader_ctx.vert_shaders[vert_shader_i].stage,
+                                         &backend->shader_ctx.vert_shaders[vert_shader_i].shader);
+
+    backend->ext_ctx.vkCmdBindShadersEXT(cmd_buf, 1,
+                                         &backend->shader_ctx.frag_shaders[frag_shader_i].stage,
+                                         &backend->shader_ctx.frag_shaders[frag_shader_i].shader);
+
+    VkVertexInputBindingDescription2EXT input_description{};
+    input_description.sType     = VK_STRUCTURE_TYPE_VERTEX_INPUT_BINDING_DESCRIPTION_2_EXT;
+    input_description.binding   = 0;
+    input_description.stride    = sizeof(float) * 3;
+    input_description.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    input_description.divisor   = 1;
+
+    VkVertexInputAttributeDescription2EXT attribute_description{};
+    attribute_description.sType   = VK_STRUCTURE_TYPE_VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT;
+    attribute_description.binding = 0;
+    attribute_description.format  = VK_FORMAT_R32G32B32_SFLOAT;
+    attribute_description.offset  = 0;
+
+    backend->ext_ctx.vkCmdSetVertexInputEXT(cmd_buf, 1, &input_description, 1,
+                                            &attribute_description);
+
+    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            backend->sky_box_pipeline_layout, 0, 1,
+                            &get_current_frame(backend)->desc_set, 0, nullptr);
+
+    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            backend->sky_box_pipeline_layout, 1, 1, &backend->sky_box_desc_set, 0,
+                            nullptr);
+
+    VkDeviceSize offsets = {0};
+    vkCmdBindVertexBuffers(cmd_buf, 0, 1, &backend->sky_box_buffer.buffer, &offsets);
+
+    vkCmdDraw(cmd_buf, skybox_vertices.size() / 3, 1, 0, 0);
+}
 
 VkShaderModule load_shader_module(const VkBackend* backend, std::span<uint32_t> shader_spv) {
 
@@ -834,7 +985,7 @@ void deinit_backend(VkBackend* backend) {
     */
     vkDestroyPipelineLayout(backend->device_ctx.logical_device,
                             backend->grid_pipeline_info.pipeline_layout, nullptr);
-    vkDestroyPipelineLayout(backend->device_ctx.logical_device, backend->goe_pipeline_layout,
+    vkDestroyPipelineLayout(backend->device_ctx.logical_device, backend->geo_pipeline_layout,
                             nullptr);
 
     vkDestroyDescriptorSetLayout(backend->device_ctx.logical_device,

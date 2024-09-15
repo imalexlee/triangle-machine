@@ -25,4 +25,6 @@ void init_vk_ext_context(VkExtContext* ext_ctx, VkDevice device) {
         vkGetDeviceProcAddr(device, "vkCmdSetColorBlendEquationEXT"));
     ext_ctx->vkCmdSetAlphaToOneEnableEXT = reinterpret_cast<PFN_vkCmdSetAlphaToOneEnableEXT>(
         vkGetDeviceProcAddr(device, "vkCmdSetAlphaToOneEnableEXT"));
+    ext_ctx->vkCmdSetVertexInputEXT = reinterpret_cast<PFN_vkCmdSetVertexInputEXT>(
+        vkGetDeviceProcAddr(device, "vkCmdSetVertexInputEXT"));
 }

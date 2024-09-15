@@ -61,11 +61,15 @@ void stage_shader(ShaderContext* shader_ctx, const std::filesystem::path& file_p
     shader_ctx->builder.spvs.push_back(shader_spv);
 }
 
+/*
 void commit_linked_shaders(ShaderContext* shader_ctx, const VkExtContext* ext_ctx,
                            VkDevice device) {
 
-    for (auto& creation_info : shader_ctx->builder.create_infos) {
-        creation_info.flags |= VK_SHADER_CREATE_LINK_STAGE_BIT_EXT;
+    for (size_t i = 0; i < shader_ctx->builder.create_infos.size(); i++) {
+        shader_ctx->builder.create_infos[i].flags |= VK_SHADER_CREATE_LINK_STAGE_BIT_EXT;
+        shader_ctx->builder.create_infos[i].pCode = shader_ctx->builder.spvs[i].data();
+        shader_ctx->builder.create_infos[i].codeSize =
+            shader_ctx->builder.spvs[i].size() * sizeof(uint32_t);
     }
 
     std::vector<VkShaderEXT> shader_exts;
@@ -98,13 +102,16 @@ void commit_linked_shaders(ShaderContext* shader_ctx, const VkExtContext* ext_ct
     }
     flush_builder_state(&shader_ctx->builder);
 }
+*/
 
-void commit_unlinked_shaders(ShaderContext* shader_ctx, const VkExtContext* ext_ctx,
-                             VkDevice device) {
+void commit_shaders(ShaderContext* shader_ctx, const VkExtContext* ext_ctx, VkDevice device,
+                    ShaderType shader_type) {
     std::vector<VkShaderEXT> shader_exts;
     shader_exts.resize(shader_ctx->builder.create_infos.size());
 
     for (size_t i = 0; i < shader_ctx->builder.create_infos.size(); i++) {
+        shader_ctx->builder.create_infos[i].flags |=
+            shader_type == ShaderType::linked ? VK_SHADER_CREATE_LINK_STAGE_BIT_EXT : 0;
         shader_ctx->builder.create_infos[i].pCode = shader_ctx->builder.spvs[i].data();
         shader_ctx->builder.create_infos[i].codeSize =
             shader_ctx->builder.spvs[i].size() * sizeof(uint32_t);

@@ -14,6 +14,7 @@ struct VkExtContext {
     PFN_vkCmdSetColorBlendEquationEXT    vkCmdSetColorBlendEquationEXT;
     PFN_vkCmdSetColorWriteMaskEXT        vkCmdSetColorWriteMaskEXT;
     PFN_vkCmdSetAlphaToOneEnableEXT      vkCmdSetAlphaToOneEnableEXT;
+    PFN_vkCmdSetVertexInputEXT           vkCmdSetVertexInputEXT;
 };
 
 void init_vk_ext_context(VkExtContext* ext_ctx, VkDevice device);

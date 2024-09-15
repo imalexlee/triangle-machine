@@ -2,8 +2,8 @@
 
 layout (location = 0) in vec3 nearPoint;
 layout (location = 1) in vec3 farPoint;
-layout (location = 2) in mat4 view;
-layout (location = 6) in mat4 projection;
+layout (location = 2) in mat4 view_proj;
+//layout (location = 6) in mat4 projection;
 layout (location = 0) out vec4 outColor;
 
 vec4 grid(vec3 pos) {
@@ -23,7 +23,7 @@ vec4 grid(vec3 pos) {
 }
 
 float fadeFactor(vec3 pos) {
-    float z = (projection * view * vec4(pos.xyz, 1.0)).z;
+    float z = (view_proj * vec4(pos.xyz, 1.0)).z;
     // Empirical values are used to determine when to cut off the grid before moire patterns become visible.
     return z * 6 - 0.5;
 }

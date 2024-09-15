@@ -442,8 +442,9 @@ upload_gltf_textures(VkBackend* backend, std::span<const GLTFTexture> textures,
     tex_samplers.reserve(tex_samplers.size());
     for (const auto& texture : textures) {
         TextureSampler new_tex_sampler{};
-        new_tex_sampler.tex = upload_texture(backend, texture.data, VK_IMAGE_USAGE_SAMPLED_BIT,
-                                             texture.color_channels, texture.width, texture.height);
+        new_tex_sampler.tex =
+            upload_texture(backend, texture.data, VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_VIEW_TYPE_2D,
+                           1, texture.color_channels, texture.width, texture.height);
         if (texture.sampler_i.has_value()) {
             new_tex_sampler.sampler = vk_samplers[texture.sampler_i.value()];
         } else {

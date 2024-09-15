@@ -27,6 +27,11 @@ struct ShaderContext {
     ShaderBuilder       builder;
 };
 
+enum class ShaderType {
+    unlinked,
+    linked,
+};
+
 void init_shader_ctx(ShaderContext* shader_ctx);
 
 void deinit_shader_ctx(const ShaderContext* shader_ctx, const VkExtContext* ext_ctx,
@@ -37,7 +42,8 @@ void stage_shader(ShaderContext* shader_ctx, const std::filesystem::path& file_p
                   std::span<VkPushConstantRange> push_constant_ranges, VkShaderStageFlagBits stage,
                   VkShaderStageFlags next_stage);
 
-void commit_linked_shaders(ShaderContext* shader_ctx, const VkExtContext* ext_ctx, VkDevice device);
+// void commit_linked_shaders(ShaderContext* shader_ctx, const VkExtContext* ext_ctx, VkDevice
+// device);
 
-void commit_unlinked_shaders(ShaderContext* shader_ctx, const VkExtContext* ext_ctx,
-                             VkDevice device);
+void commit_shaders(ShaderContext* shader_ctx, const VkExtContext* ext_ctx, VkDevice device,
+                    ShaderType shader_type);

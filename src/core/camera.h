@@ -5,11 +5,12 @@
 #define GLM_ENABLE_EXPERIMENTAL
 
 #include <core/window.h>
-#include <glm/gtx/quaternion.hpp>
+// #include <glm/gtx/quaternion.hpp>
 #include <glm/gtx/transform.hpp>
 
 struct Camera {
     glm::vec3 position;
+    glm::vec4 direction;
     glm::vec3 velocity;
     glm::mat4 view;
 

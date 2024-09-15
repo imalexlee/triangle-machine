@@ -21,39 +21,44 @@ struct Stats {
 };
 
 struct VkBackend {
-    DeviceContext             device_ctx;
     VkInstance                instance;
     VkSurfaceKHR              surface;
-    Debugger                  debugger;
-    SwapchainContext          swapchain_context;
-    VmaAllocator              allocator;
-    PipelineInfo              opaque_pipeline_info;
-    PipelineInfo              transparent_pipeline_info;
-    PipelineInfo              grid_pipeline_info;
-    ShaderContext             shader_ctx;
-    VkDescriptorSetLayout     global_desc_set_layout;
-    VkDescriptorSetLayout     mat_desc_set_layout;
-    VkDescriptorSetLayout     draw_obj_desc_set_layout;
-    Stats                     stats;
-    CommandContext            imm_cmd_context;
-    VkDescriptorPool          imm_descriptor_pool;
-    VkFence                   imm_fence;
-    AllocatedImage            color_image;
-    AllocatedImage            color_resolve_image;
     VkExtent2D                image_extent;
     VkClearValue              scene_clear_value;
     VkRenderingAttachmentInfo scene_color_attachment;
     VkRenderingAttachmentInfo scene_depth_attachment;
     VkRenderingInfo           scene_rendering_info;
+    VkDescriptorPool          imm_descriptor_pool;
+    VkFence                   imm_fence;
+    VkSampler                 default_linear_sampler;
+    VkSampler                 default_nearest_sampler;
+    VkPipelineLayout          geo_pipeline_layout;
+    VkPipelineLayout          sky_box_pipeline_layout;
+    VkDescriptorSet           sky_box_desc_set;
+    VkDescriptorSetLayout     sky_box_desc_set_layout;
+    VkDescriptorSetLayout     global_desc_set_layout;
+    VkDescriptorSetLayout     mat_desc_set_layout;
+    VkDescriptorSetLayout     draw_obj_desc_set_layout;
+    VmaAllocator              allocator;
+    DescriptorAllocator       sky_box_desc_allocator;
+    DeviceContext             device_ctx;
+    Debugger                  debugger;
+    SwapchainContext          swapchain_context;
+    PipelineInfo              opaque_pipeline_info;
+    PipelineInfo              transparent_pipeline_info;
+    PipelineInfo              grid_pipeline_info;
+    ShaderContext             shader_ctx;
+    Stats                     stats;
+    CommandContext            imm_cmd_context;
+    AllocatedImage            color_image;
+    AllocatedImage            color_resolve_image;
     AllocatedImage            depth_image;
+    AllocatedImage            default_texture;
+    AllocatedBuffer           sky_box_buffer;
     uint64_t                  frame_num{1};
     std::array<Frame, 3>      frames;
     SceneData                 scene_data;
-    VkSampler                 default_linear_sampler;
-    VkSampler                 default_nearest_sampler;
-    AllocatedImage            default_texture;
     VkExtContext              ext_ctx;
-    VkPipelineLayout          goe_pipeline_layout;
     DeletionQueue             deletion_queue;
 };
 
@@ -82,6 +87,12 @@ void upload_vert_shader(VkBackend* backend, const std::filesystem::path& file_pa
 
 void upload_frag_shader(VkBackend* backend, const std::filesystem::path& file_path,
                         const std::string& name);
+
+void upload_sky_box_shaders(VkBackend* backend, const std::filesystem::path& vert_path,
+                            const std::filesystem::path& frag_path, const std::string& name);
+
+void upload_sky_box(VkBackend* backend, const uint8_t* texture_data, uint32_t color_channels,
+                    uint32_t width, uint32_t height);
 
 template <typename T>
 [[nodiscard]] MeshBuffers upload_mesh(const VkBackend*                backend,
