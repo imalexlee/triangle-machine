@@ -12,7 +12,6 @@
 #include <cassert>
 #include <chrono>
 #include <cstring>
-#include <fastgltf/types.hpp>
 #include <fmt/base.h>
 #include <fmt/format.h>
 #include <fstream>
@@ -33,70 +32,6 @@
 #include "vk_backend/vk_sync.h"
 #include "vk_options.h"
 
-static std::string read_file(const std::string& filename) {
-    std::ifstream file(filename);
-    assert(file.is_open());
-    std::stringstream buffer;
-    buffer << file.rdbuf();
-    file.close();
-    return buffer.str();
-}
-
-static std::string process_includes(std::string content, const std::string& base_dir) {
-    bool found_include = true;
-    while (found_include) {
-        found_include = false;
-        size_t pos    = 0;
-        while ((pos = content.find("#include", pos)) != std::string::npos) {
-            size_t start = pos;
-            size_t end   = content.find('\n', start);
-            if (end == std::string::npos) {
-                end = content.length();
-            }
-            size_t quote_start = content.find('"', start);
-            size_t quote_end   = content.find('"', quote_start + 1);
-            if (quote_start != std::string::npos && quote_end != std::string::npos) {
-                std::string filename = content.substr(quote_start + 1, quote_end - quote_start - 1);
-                std::string full_path       = base_dir + "/" + filename;
-                std::string include_content = read_file(full_path);
-                content.replace(start, end - start, include_content);
-                found_include = true;
-            }
-            pos = end;
-        }
-    }
-    return content;
-}
-
-static std::string parse_shader_file(const std::string& filename) {
-    std::string content  = read_file(filename);
-    std::string base_dir = filename.substr(0, filename.find_last_of("/"));
-    // simple text replacement of #includes when compiling shaders at runtime
-    content = process_includes(content, base_dir);
-    return content;
-}
-
-static std::vector<uint32_t> compile_shader_spv(shaderc_compiler_t    compiler,
-                                                const std::string&    filename,
-                                                VkShaderStageFlagBits shader_stage) {
-
-    std::string shader_source = parse_shader_file(filename);
-
-    auto shader_kind = static_cast<shaderc_shader_kind>(shader_stage >> 1);
-
-    shaderc_compilation_result_t result =
-        shaderc_compile_into_spv(compiler, shader_source.data(), shader_source.size(), shader_kind,
-                                 filename.data(), "main", nullptr);
-
-    std::vector<uint32_t> spv;
-    spv.resize(result->output_data_size / sizeof(uint32_t));
-    memcpy(spv.data(), result->GetBytes(), result->output_data_size);
-
-    shaderc_result_release(result);
-
-    return spv;
-}
-
 // initialization
 static void create_allocator(VkBackend* backend);
 static void create_default_data(VkBackend* backend);
@@ -104,7 +39,6 @@ static void create_desc_layouts(VkBackend* backend);
 static void configure_debugger(VkBackend* backend);
 static void configure_render_resources(VkBackend* backend);
 static void create_grid_pipeline(VkBackend* backend);
-// static void create_skybox_pipeline(VkBackend* backend);
 static void create_pipeline_layouts(VkBackend* backend);
 void        init_sky_box(VkBackend* backend);
 
@@ -184,7 +118,6 @@ void init_backend(VkBackend* backend, VkInstance instance, VkSurfaceKHR surface,
     create_default_data(backend);
 
     create_grid_pipeline(backend);
-    // create_skybox_pipeline(backend);
 
     create_pipeline_layouts(backend);
 
@@ -209,50 +142,7 @@ static constexpr std::array skybox_vertices = {
     -1.0f, 1.0f,  1.0f,  -1.0f, 1.0f,  -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f, 1.0f,
     1.0f,  -1.0f, -1.0f, 1.0f,  -1.0f, -1.0f, -1.0f, -1.0f, 1.0f,  1.0f,  -1.0f, 1.0f,
 };
-static constexpr glm::vec3 cubemapVertices[36] = {
-  // positions
-    {-1.0f, 1.0f,  -1.0f},
-    {-1.0f, -1.0f, -1.0f},
-    {1.0f,  -1.0f, -1.0f},
-    {1.0f,  -1.0f, -1.0f},
-    {1.0f,  1.0f,  -1.0f},
-    {-1.0f, 1.0f,  -1.0f},
 
-    {-1.0f, -1.0f, 1.0f },
-    {-1.0f, -1.0f, -1.0f},
-    {-1.0f, 1.0f,  -1.0f},
-    {-1.0f, 1.0f,  -1.0f},
-    {-1.0f, 1.0f,  1.0f },
-    {-1.0f, -1.0f, 1.0f },
-
-    {1.0f,  -1.0f, -1.0f},
-    {1.0f,  -1.0f, 1.0f },
-    {1.0f,  1.0f,  1.0f },
-    {1.0f,  1.0f,  1.0f },
-    {1.0f,  1.0f,  -1.0f},
-    {1.0f,  -1.0f, -1.0f},
-
-    {-1.0f, -1.0f, 1.0f },
-    {-1.0f, 1.0f,  1.0f },
-    {1.0f,  1.0f,  1.0f },
-    {1.0f,  1.0f,  1.0f },
-    {1.0f,  -1.0f, 1.0f },
-    {-1.0f, -1.0f, 1.0f },
-
-    {-1.0f, 1.0f,  -1.0f},
-    {1.0f,  1.0f,  -1.0f},
-    {1.0f,  1.0f,  1.0f },
-    {1.0f,  1.0f,  1.0f },
-    {-1.0f, 1.0f,  1.0f },
-    {-1.0f, 1.0f,  -1.0f},
-
-    {-1.0f, -1.0f, -1.0f},
-    {-1.0f, -1.0f, 1.0f },
-    {1.0f,  -1.0f, -1.0f},
-    {1.0f,  -1.0f, -1.0f},
-    {-1.0f, -1.0f, 1.0f },
-    {1.0f,  -1.0f, 1.0f }
-};
 void init_sky_box(VkBackend* backend) {
 
     std::vector<PoolSizeRatio> mat_pool_sizes = {
@@ -684,15 +574,15 @@ void upload_sky_box_shaders(VkBackend* backend, const std::filesystem::path& ver
     Due to this, I'll just create unlinked shaders for now, but I can improve this in the future
     by conditionally using linked shaders during release builds
    */
-    std::array set_layouts_bruh{backend->global_desc_set_layout, backend->sky_box_desc_set_layout};
+    std::array set_layouts{backend->global_desc_set_layout, backend->sky_box_desc_set_layout};
 
-    stage_shader(&backend->shader_ctx, vert_path, name, set_layouts_bruh, {},
-                 VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_FRAGMENT_BIT);
+    stage_shader(&backend->shader_ctx, vert_path, name, set_layouts, {}, VK_SHADER_STAGE_VERTEX_BIT,
+                 VK_SHADER_STAGE_FRAGMENT_BIT);
 
     commit_shaders(&backend->shader_ctx, &backend->ext_ctx, backend->device_ctx.logical_device,
                    ShaderType::unlinked);
 
-    stage_shader(&backend->shader_ctx, frag_path, name, set_layouts_bruh, {},
+    stage_shader(&backend->shader_ctx, frag_path, name, set_layouts, {},
                  VK_SHADER_STAGE_FRAGMENT_BIT, 0);
 
     commit_shaders(&backend->shader_ctx, &backend->ext_ctx, backend->device_ctx.logical_device,
@@ -972,52 +862,6 @@ void render_grid(VkBackend* backend, VkCommandBuffer cmd_buf) {
     vkCmdDraw(cmd_buf, 6, 1, 0, 0);
 }
 
-/*static void create_skybox_pipeline(VkBackend* backend) {
-    PipelineBuilder pb;
-
-    std::ifstream v_file("../shaders/vertex/triangle.vert.spv", std::ios::ate | std::ios::binary);
-    size_t        v_file_size = v_file.tellg();
-    std::vector<uint32_t> v_buf(v_file_size / sizeof(uint32_t));
-
-    v_file.seekg(0);
-    v_file.read(reinterpret_cast<char*>(v_buf.data()), v_file_size);
-    v_file.close();
-
-    std::ifstream f_file("../shaders/fragment/triangle.frag.spv", std::ios::ate | std::ios::binary);
-    size_t        f_file_size = f_file.tellg();
-    std::vector<uint32_t> f_buf(f_file_size / sizeof(uint32_t));
-
-    f_file.seekg(0);
-    f_file.read(reinterpret_cast<char*>(f_buf.data()), f_file_size);
-    f_file.close();
-
-    const VkShaderModule vert_shader = load_shader_module(backend, v_buf);
-    const VkShaderModule frag_shader = load_shader_module(backend, f_buf);
-
-    std::array set_layouts{backend->global_desc_set_layout};
-
-    set_pipeline_shaders(&pb, vert_shader, frag_shader);
-    set_pipeline_topology(&pb, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-    set_pipeline_raster_state(&pb, VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE,
-                              VK_POLYGON_MODE_FILL);
-    set_pipeline_multisampling(
-        &pb, static_cast<VkSampleCountFlagBits>(backend->device_ctx.raster_samples));
-    set_pipeline_depth_state(&pb, true, true, VK_COMPARE_OP_GREATER_OR_EQUAL);
-
-    set_pipeline_render_state(&pb, backend->color_image.image_format,
-                              backend->depth_image.image_format);
-    set_pipeline_blending(&pb, BlendMode::alpha);
-
-    std::array<VkPushConstantRange, 0> push_constant_ranges{{}};
-
-    set_pipeline_layout(&pb, set_layouts, push_constant_ranges, 0);
-    backend->sky_box_pipeline_info = build_pipeline(&pb, backend->device_ctx.logical_device);
-
-    backend->deletion_queue.push_persistant([=] {
-        vkDestroyShaderModule(backend->device_ctx.logical_device, vert_shader, nullptr);
-        vkDestroyShaderModule(backend->device_ctx.logical_device, frag_shader, nullptr);
-    });
-}*/
 void set_render_state(VkBackend* backend, VkCommandBuffer cmd_buf) {
 
     VkViewport viewport{};
@@ -1187,12 +1031,6 @@ void deinit_backend(VkBackend* backend) {
     vkDestroySampler(backend->device_ctx.logical_device, backend->default_nearest_sampler, nullptr);
     vkDestroySampler(backend->device_ctx.logical_device, backend->default_linear_sampler, nullptr);
 
-    /*
-    vkDestroyPipelineLayout(backend->device_ctx.logical_device,
-                            backend->opaque_pipeline_info.pipeline_layout, nullptr);
-    vkDestroyPipelineLayout(backend->device_ctx.logical_device,
-                            backend->transparent_pipeline_info.pipeline_layout, nullptr);
-    */
     vkDestroyPipelineLayout(backend->device_ctx.logical_device,
                             backend->grid_pipeline_info.pipeline_layout, nullptr);
     vkDestroyPipelineLayout(backend->device_ctx.logical_device, backend->geo_pipeline_layout,
@@ -1205,12 +1043,6 @@ void deinit_backend(VkBackend* backend) {
     vkDestroyDescriptorSetLayout(backend->device_ctx.logical_device,
                                  backend->draw_obj_desc_set_layout, nullptr);
 
-    /*
-    vkDestroyPipeline(backend->device_ctx.logical_device, backend->opaque_pipeline_info.pipeline,
-                      nullptr);
-    vkDestroyPipeline(backend->device_ctx.logical_device,
-                      backend->transparent_pipeline_info.pipeline, nullptr);
-    */
     vkDestroyPipeline(backend->device_ctx.logical_device, backend->grid_pipeline_info.pipeline,
                       nullptr);
 
