@@ -7,7 +7,6 @@
 #include <core/scene.h>
 #include <core/ui.h>
 #include <core/window.h>
-#include <glm/vec3.hpp>
 #include <stb_image.h>
 
 #include <vk_backend/vk_backend.h>
@@ -18,7 +17,7 @@ void init_engine(Engine* engine) {
     assert(active_engine == nullptr);
     active_engine = engine;
 
-    constexpr glm::vec3 init_cam_pos = {0, -1, -8};
+    constexpr glm::vec4 init_cam_pos = {0, -1, -8, 1};
 
     init_window(&engine->window, core_opts::initial_width, core_opts::initial_height,
                 "Triangle Machine");
@@ -30,9 +29,9 @@ void init_engine(Engine* engine) {
 
     init_backend(&engine->backend, instance, surface, engine->window.width, engine->window.height);
     init_ui(&engine->ui, &engine->backend, engine->window.glfw_window);
-    // create_pipeline(&engine->backend, vert_spv, frag_spv);
     upload_vert_shader(&engine->backend, "../shaders/vertex/indexed_draw.vert", "vert shader");
     upload_frag_shader(&engine->backend, "../shaders/fragment/simple_lighting.frag", "frag shader");
+
     upload_sky_box_shaders(&engine->backend, "../shaders/vertex/skybox.vert",
                            "../shaders/fragment/skybox.frag", "skybox shaders");
     std::array file_names = {
@@ -63,7 +62,7 @@ void init_engine(Engine* engine) {
         "../assets/gltf/main_sponza/Main.1_Sponza/NewSponza_Main_glTF_002.gltf"};
     */
 
-    std::array gltf_paths = {"../assets/glb/porsche.glb"};
+    std::array gltf_paths = {"../assets/glb/structure.glb"};
     load_scene(&engine->scene, &engine->backend, gltf_paths);
 
     register_key_callback(&engine->window, [=](int key, int scancode, int action, int mods) {

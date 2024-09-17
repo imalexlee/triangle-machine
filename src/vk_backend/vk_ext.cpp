@@ -27,4 +27,11 @@ void init_vk_ext_context(VkExtContext* ext_ctx, VkDevice device) {
         vkGetDeviceProcAddr(device, "vkCmdSetAlphaToOneEnableEXT"));
     ext_ctx->vkCmdSetVertexInputEXT = reinterpret_cast<PFN_vkCmdSetVertexInputEXT>(
         vkGetDeviceProcAddr(device, "vkCmdSetVertexInputEXT"));
+    ext_ctx->vkCmdSetLogicOpEnableEXT = reinterpret_cast<PFN_vkCmdSetLogicOpEnableEXT>(
+        vkGetDeviceProcAddr(device, "vkCmdSetLogicOpEnableEXT"));
+    ext_ctx->vkCmdSetTessellationDomainOriginEXT =
+        reinterpret_cast<PFN_vkCmdSetTessellationDomainOriginEXT>(
+            vkGetDeviceProcAddr(device, "vkCmdSetTessellationDomainOriginEXT"));
+    ext_ctx->vkCmdSetPatchControlPointsEXT = reinterpret_cast<PFN_vkCmdSetPatchControlPointsEXT>(
+        vkGetDeviceProcAddr(device, "vkCmdSetPatchControlPointsEXT"));
 }

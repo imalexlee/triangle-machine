@@ -159,26 +159,11 @@ AllocatedImage upload_texture(const VkBackend* backend, const uint8_t* data,
         backend->device_ctx.logical_device, backend->allocator,
         usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT, view_type, extent, VK_FORMAT_R8G8B8A8_UNORM);
 
-    /*
-    VkBufferImageCopy copy_region;
-    copy_region.bufferOffset      = 0;
-    copy_region.bufferRowLength   = 0;
-    copy_region.bufferImageHeight = 0;
-
-    copy_region.imageOffset = {.x = 0, .y = 0, .z = 0};
-    copy_region.imageExtent = {.width = extent.width, .height = extent.height, .depth = 1};
-
-    copy_region.imageSubresource.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
-    copy_region.imageSubresource.mipLevel       = 0;
-    copy_region.imageSubresource.baseArrayLayer = 0;
-    copy_region.imageSubresource.layerCount     = layer_count;
-    */
-
     std::vector<VkBufferImageCopy> copy_regions;
     copy_regions.reserve(layer_count);
 
     for (uint32_t face = 0; face < layer_count; face++) {
-        // Calculate offset into staging buffer for the current mip level and face
+        //  Calculate offset into staging buffer for the current mip level and face
         size_t offset = width * height * color_channels * face;
 
         VkBufferImageCopy bufferCopyRegion               = {};

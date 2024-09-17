@@ -1,5 +1,5 @@
 #include "vk_device.h"
-#include <algorith>
+#include <algorithm>
 #include <array>
 #include <iostream>
 #include <optional>
@@ -114,12 +114,13 @@ void create_logical_device(DeviceContext* device_ctx) {
         queue_infos.push_back(queue_ci);
     }
     constexpr std::array device_extensions{
-        VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
+        // VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
         VK_EXT_SHADER_OBJECT_EXTENSION_NAME,
         VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME,
-
+        VK_NV_INHERITED_VIEWPORT_SCISSOR_EXTENSION_NAME,
     };
+
     VkPhysicalDeviceVertexInputDynamicStateFeaturesEXT vertex_input_feature{};
     vertex_input_feature.sType =
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_INPUT_DYNAMIC_STATE_FEATURES_EXT;

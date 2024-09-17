@@ -5,11 +5,11 @@
 
 #include "../input_structures.glsl"
 
+
 layout (location = 0) out vec3 nearPoint;
 layout (location = 1) out vec3 farPoint;
-layout (location = 2) out mat4 view_proj;
-//layout (location = 6) out mat4 projection;
-
+layout (location = 2) out mat4 view;
+layout (location = 6) out mat4 projection;
 
 
 vec3 unprojectPoint(float x, float y, float z, mat4 viewProjectionInverse) {
@@ -25,17 +25,14 @@ vec3(-1, -1, 0), vec3(1, 1, 0), vec3(1, -1, 0)
 
 void main() {
     vec3 pos = gridPlane[gl_VertexIndex].xyz;
-    //    mat4 viewInv = inverse(scene_data.view);
-    //    mat4 projInv = inverse(scene_data.proj);
-    mat4 view_proj_inv = inverse(scene_data.view_proj);
+
+    mat4 view_proj_inv = inverse(scene_data.proj * scene_data.view);
+
     nearPoint = unprojectPoint(pos.x, pos.y, 0.0, view_proj_inv);
     farPoint = unprojectPoint(pos.x, pos.y, 1.0, view_proj_inv);
 
-    //view = scene_data.view;
-    //    projection = scene_data.proj;
-    view_proj = scene_data.view_proj;
-
-
+    view = scene_data.view;
+    projection = scene_data.proj;
 
     gl_Position = vec4(pos, 1.0);
 

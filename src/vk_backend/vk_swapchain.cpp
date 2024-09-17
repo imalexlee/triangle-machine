@@ -8,21 +8,21 @@
 #include <set>
 #include <vulkan/vulkan_core.h>
 
-SwapchainSupportDetails query_support_details(const SwapchainContext* swapchain_ctx,
-                                              VkPhysicalDevice        physical_device);
+[[nodiscard]] SwapchainSupportDetails query_support_details(const SwapchainContext* swapchain_ctx,
+                                                            VkPhysicalDevice physical_device);
 void create_swapchain(SwapchainContext* swapchain_ctx, const DeviceContext* device_ctx);
 void destroy_swapchain(SwapchainContext* swapchain_ctx, VkDevice device);
 
 void init_swapchain_context(SwapchainContext* swapchain_ctx, const DeviceContext* device_ctx,
                             VkSurfaceKHR surface, VkPresentModeKHR desired_present_mode) {
     swapchain_ctx->surface      = surface;
-    swapchain_ctx->present_mode = desired_present_mode;
+    swapchain_ctx->present_mode = VK_PRESENT_MODE_FIFO_KHR; // fifo is guaranteed
 
-    if (desired_present_mode != VK_PRESENT_MODE_FIFO_KHR) {
-        for (const auto& mode : swapchain_ctx->support_details.present_modes) {
-            if (mode == desired_present_mode) {
-                desired_present_mode = mode;
-            }
+    swapchain_ctx->support_details =
+        query_support_details(swapchain_ctx, device_ctx->physical_device);
+    for (const auto& mode : swapchain_ctx->support_details.present_modes) {
+        if (mode == desired_present_mode) {
+            swapchain_ctx->present_mode = mode;
         }
     }
     create_swapchain(swapchain_ctx, device_ctx);

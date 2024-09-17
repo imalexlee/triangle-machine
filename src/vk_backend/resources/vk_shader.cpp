@@ -36,13 +36,11 @@ void stage_shader(ShaderContext* shader_ctx, const std::filesystem::path& file_p
                   const std::string& name, std::span<VkDescriptorSetLayout> desc_set_layouts,
                   std::span<VkPushConstantRange> push_constant_ranges, VkShaderStageFlagBits stage,
                   VkShaderStageFlags next_stage) {
-    Shader new_shader{};
-    new_shader.name = name;
 
     std::vector<uint32_t> shader_spv =
         compile_shader_spv(shader_ctx->builder.compiler, file_path, stage);
 
-    VkShaderCreateInfoEXT vk_shader_ci;
+    VkShaderCreateInfoEXT vk_shader_ci{};
     vk_shader_ci.sType                  = VK_STRUCTURE_TYPE_SHADER_CREATE_INFO_EXT;
     vk_shader_ci.pNext                  = nullptr;
     vk_shader_ci.flags                  = 0;
@@ -61,52 +59,9 @@ void stage_shader(ShaderContext* shader_ctx, const std::filesystem::path& file_p
     shader_ctx->builder.spvs.push_back(shader_spv);
 }
 
-/*
-void commit_linked_shaders(ShaderContext* shader_ctx, const VkExtContext* ext_ctx,
-                           VkDevice device) {
-
-    for (size_t i = 0; i < shader_ctx->builder.create_infos.size(); i++) {
-        shader_ctx->builder.create_infos[i].flags |= VK_SHADER_CREATE_LINK_STAGE_BIT_EXT;
-        shader_ctx->builder.create_infos[i].pCode = shader_ctx->builder.spvs[i].data();
-        shader_ctx->builder.create_infos[i].codeSize =
-            shader_ctx->builder.spvs[i].size() * sizeof(uint32_t);
-    }
-
-    std::vector<VkShaderEXT> shader_exts;
-    shader_exts.resize(shader_ctx->builder.create_infos.size());
-
-    VK_CHECK(ext_ctx->vkCreateShadersEXT(device, shader_ctx->builder.create_infos.size(),
-                                         shader_ctx->builder.create_infos.data(), nullptr,
-                                         shader_exts.data()));
-
-    for (size_t i = 0; i < shader_exts.size(); i++) {
-        VkShaderEXT shader_ext = shader_exts[i];
-        std::string name       = shader_ctx->builder.names[i];
-
-        Shader new_shader;
-        new_shader.name   = name;
-        new_shader.shader = shader_ext;
-        new_shader.stage  = shader_ctx->builder.create_infos[i].stage;
-
-        switch (shader_ctx->builder.create_infos[i].stage) {
-        case VK_SHADER_STAGE_VERTEX_BIT:
-            shader_ctx->vert_shaders.push_back(new_shader);
-            break;
-        case VK_SHADER_STAGE_FRAGMENT_BIT:
-            shader_ctx->frag_shaders.push_back(new_shader);
-            break;
-        default:
-            std::cerr << "shader stage " << shader_ctx->builder.create_infos[i].stage
-                      << "not handled\n";
-        }
-    }
-    flush_builder_state(&shader_ctx->builder);
-}
-*/
-
 void commit_shaders(ShaderContext* shader_ctx, const VkExtContext* ext_ctx, VkDevice device,
                     ShaderType shader_type) {
-    std::vector<VkShaderEXT> shader_exts;
+    std::vector<VkShaderEXT> shader_exts{};
     shader_exts.resize(shader_ctx->builder.create_infos.size());
 
     for (size_t i = 0; i < shader_ctx->builder.create_infos.size(); i++) {
@@ -117,8 +72,9 @@ void commit_shaders(ShaderContext* shader_ctx, const VkExtContext* ext_ctx, VkDe
             shader_ctx->builder.spvs[i].size() * sizeof(uint32_t);
     }
 
-    VK_CHECK(ext_ctx->vkCreateShadersEXT(device, 1, shader_ctx->builder.create_infos.data(),
-                                         nullptr, shader_exts.data()));
+    VK_CHECK(ext_ctx->vkCreateShadersEXT(device, shader_ctx->builder.create_infos.size(),
+                                         shader_ctx->builder.create_infos.data(), nullptr,
+                                         shader_exts.data()));
 
     for (size_t i = 0; i < shader_exts.size(); i++) {
         VkShaderEXT shader_ext = shader_exts[i];

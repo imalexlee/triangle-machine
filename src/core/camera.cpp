@@ -5,7 +5,7 @@
 #include <iostream>
 #include <vk_backend/vk_frame.h>
 
-void init_camera(Camera* cam, const Window* window, glm::vec3 initial_pos, float init_pitch_theta,
+void init_camera(Camera* cam, const Window* window, glm::vec4 initial_pos, float init_pitch_theta,
                  float init_yaw_theta) {
 
     cam->position    = initial_pos;
@@ -63,8 +63,6 @@ void camera_cursor_callback(Camera* cam, double x_pos, double y_pos) {
 using namespace std::chrono;
 static auto start_time = high_resolution_clock::now();
 
-static uint32_t time_boi = 0;
-
 SceneData update_camera(Camera* cam, uint32_t window_width, uint32_t window_height) {
     auto  time_duration = duration_cast<duration<float>>(high_resolution_clock::now() - start_time);
     float time_elapsed  = time_duration.count();
@@ -76,10 +74,11 @@ SceneData update_camera(Camera* cam, uint32_t window_width, uint32_t window_heig
     glm::mat4 pitch_mat  = glm::toMat4(pitch_quat);
 
     glm::mat4 cam_rotation    = pitch_mat * yaw_mat;
-    glm::mat4 cam_translation = glm::translate(glm::mat4{1.f}, cam->position);
+    glm::mat4 cam_translation = glm::translate(glm::mat4{1.f}, glm::vec3(cam->position));
 
-    cam->position += glm::vec3(glm::vec4(cam->velocity * time_elapsed, 0.f) * cam_rotation);
-    cam->view      = cam_rotation * cam_translation;
+    cam->position += glm::vec4(cam->velocity * time_elapsed, 0.f) * cam_rotation;
+    cam->view = cam_rotation * cam_translation;
+    // cam->view      = glm::mat4(glm::mat3(cam->view));
     cam->direction = cam_rotation * glm::vec4{0, 0, -1.f, 0};
 
     glm::mat4 projection = glm::perspective(
@@ -89,16 +88,9 @@ SceneData update_camera(Camera* cam, uint32_t window_width, uint32_t window_heig
     projection[1][1] *= -1;
 
     SceneData scene_data;
-    scene_data.view_proj = projection * cam->view;
-    // scene_data.proj    = projection;
+    scene_data.view    = cam->view;
+    scene_data.proj    = projection;
     scene_data.cam_pos = cam->position;
-    scene_data.cam_dir = {cam->direction.x, cam->direction.y, cam->direction.z};
-
-    time_boi++;
-    if (time_boi % 500 == 0) {
-        std::cout << scene_data.cam_dir.x << " " << scene_data.cam_dir.y << " "
-                  << scene_data.cam_dir.z << '\n';
-    }
 
     // auto end_time = system_clock::now();
     // auto dur      = duration<float>(end_time - start_time);
