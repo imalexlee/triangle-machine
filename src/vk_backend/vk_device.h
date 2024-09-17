@@ -2,7 +2,6 @@
 
 #include <cstdint>
 #include <vk_backend/vk_types.h>
-#include <vulkan/vulkan_core.h>
 
 struct DeviceQueues {
     VkQueue  graphics;

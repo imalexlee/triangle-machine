@@ -1,4 +1,4 @@
-#version 450
+#version 460
 
 #extension GL_EXT_buffer_reference: require
 #extension GL_GOOGLE_include_directive: require
@@ -20,7 +20,7 @@ void main() {
     gl_Position = scene_data.proj * scene_data.view * (obj_data.local_transform * vec4(v.pos.xyz, 1.f) + vec4(constants.pos, 1.f));
     frag_color = (obj_data.local_transform * vec4(v.norm.xyz, 1.f)).xyz;
     surface_normal = v.norm.xyz;
-    eye_pos = scene_data.eye_pos;
+    eye_pos = scene_data.eye_pos.xyz;
     vert_pos = v.pos.xyz;
 
     color_uv = v.tex_coord[mat_data.color_tex_i];

@@ -21,7 +21,7 @@ VkBool32 debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT           message
 
     // only print info, warnings, and errors
     if (messageSeverity > VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) {
-        std::cerr << "\n";
+        std::cout << pCallbackData->pMessage << "\n\n";
     }
     return VK_FALSE;
 }

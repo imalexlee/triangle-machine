@@ -2,14 +2,16 @@
 #include <GLFW/glfw3.h>
 #include <chrono>
 #include <fmt/base.h>
+#include <iostream>
 #include <vk_backend/vk_frame.h>
 
-void init_camera(Camera* cam, const Window* window, glm::vec3 initial_pos, float init_pitch_theta,
+void init_camera(Camera* cam, const Window* window, glm::vec4 initial_pos, float init_pitch_theta,
                  float init_yaw_theta) {
 
     cam->position    = initial_pos;
     cam->pitch_theta = init_pitch_theta;
     cam->yaw_theta   = init_yaw_theta;
+    cam->direction   = {0, 0, -1.f, 0};
     cam->cursor_x    = window->width / 2.0;
     cam->cursor_y    = window->height / 2.0;
     update_camera(cam, window->width, window->height);
@@ -72,10 +74,12 @@ SceneData update_camera(Camera* cam, uint32_t window_width, uint32_t window_heig
     glm::mat4 pitch_mat  = glm::toMat4(pitch_quat);
 
     glm::mat4 cam_rotation    = pitch_mat * yaw_mat;
-    glm::mat4 cam_translation = glm::translate(glm::mat4{1.f}, cam->position);
+    glm::mat4 cam_translation = glm::translate(glm::mat4{1.f}, glm::vec3(cam->position));
 
-    cam->position += glm::vec3(glm::vec4(cam->velocity * time_elapsed, 0.f) * cam_rotation);
+    cam->position += glm::vec4(cam->velocity * time_elapsed, 0.f) * cam_rotation;
     cam->view = cam_rotation * cam_translation;
+    // cam->view      = glm::mat4(glm::mat3(cam->view));
+    cam->direction = cam_rotation * glm::vec4{0, 0, -1.f, 0};
 
     glm::mat4 projection = glm::perspective(
         glm::radians(60.f), static_cast<float>(window_width) / static_cast<float>(window_height),
@@ -86,7 +90,7 @@ SceneData update_camera(Camera* cam, uint32_t window_width, uint32_t window_heig
     SceneData scene_data;
     scene_data.view    = cam->view;
     scene_data.proj    = projection;
-    scene_data.eye_pos = cam->position;
+    scene_data.cam_pos = cam->position;
 
     // auto end_time = system_clock::now();
     // auto dur      = duration<float>(end_time - start_time);

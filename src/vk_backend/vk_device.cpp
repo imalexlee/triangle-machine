@@ -114,14 +114,29 @@ void create_logical_device(DeviceContext* device_ctx) {
         queue_infos.push_back(queue_ci);
     }
     constexpr std::array device_extensions{
-        "VK_KHR_dynamic_rendering",
+        // VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+        VK_EXT_SHADER_OBJECT_EXTENSION_NAME,
+        VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME,
+        VK_NV_INHERITED_VIEWPORT_SCISSOR_EXTENSION_NAME,
     };
+
+    VkPhysicalDeviceVertexInputDynamicStateFeaturesEXT vertex_input_feature{};
+    vertex_input_feature.sType =
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_INPUT_DYNAMIC_STATE_FEATURES_EXT;
+    vertex_input_feature.vertexInputDynamicState = VK_TRUE;
+
+    // Enable Shader Object
+    VkPhysicalDeviceShaderObjectFeaturesEXT shader_object_feature{};
+    shader_object_feature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_OBJECT_FEATURES_EXT;
+    shader_object_feature.shaderObject = VK_TRUE;
+    shader_object_feature.pNext        = &vertex_input_feature;
 
     VkPhysicalDeviceInheritedViewportScissorFeaturesNV inherited_scissor_feature{};
     inherited_scissor_feature.sType =
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INHERITED_VIEWPORT_SCISSOR_FEATURES_NV;
     inherited_scissor_feature.inheritedViewportScissor2D = VK_TRUE;
+    inherited_scissor_feature.pNext                      = &shader_object_feature;
 
     VkPhysicalDeviceVulkan13Features features_1_3{};
     features_1_3.sType            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;

@@ -1,6 +1,5 @@
 #include "engine.h"
 #include "core_options.h"
-#include "shader.h"
 
 #include <GLFW/glfw3.h>
 #include <array>
@@ -8,7 +7,7 @@
 #include <core/scene.h>
 #include <core/ui.h>
 #include <core/window.h>
-#include <glm/vec3.hpp>
+#include <stb_image.h>
 
 #include <vk_backend/vk_backend.h>
 
@@ -18,7 +17,7 @@ void init_engine(Engine* engine) {
     assert(active_engine == nullptr);
     active_engine = engine;
 
-    constexpr glm::vec3 init_cam_pos = {0, -1, -8};
+    constexpr glm::vec4 init_cam_pos = {0, -1, -8, 1};
 
     init_window(&engine->window, core_opts::initial_width, core_opts::initial_height,
                 "Triangle Machine");
@@ -30,14 +29,30 @@ void init_engine(Engine* engine) {
 
     init_backend(&engine->backend, instance, surface, engine->window.width, engine->window.height);
     init_ui(&engine->ui, &engine->backend, engine->window.glfw_window);
+    upload_vert_shader(&engine->backend, "../shaders/vertex/indexed_draw.vert", "vert shader");
+    upload_frag_shader(&engine->backend, "../shaders/fragment/simple_lighting.frag", "frag shader");
 
-    std::vector<uint32_t> vert_spv;
-    compile_shader("../shaders/vertex/indexed_draw.vert.glsl", GLSLANG_STAGE_VERTEX, &vert_spv);
-    std::vector<uint32_t> frag_spv;
-    compile_shader("../shaders/fragment/simple_lighting.frag.glsl", GLSLANG_STAGE_FRAGMENT,
-                   &frag_spv);
+    upload_sky_box_shaders(&engine->backend, "../shaders/vertex/skybox.vert",
+                           "../shaders/fragment/skybox.frag", "skybox shaders");
+    std::array file_names = {
+        "../assets/skybox/right.jpg",  "../assets/skybox/left.jpg",  "../assets/skybox/top.jpg",
+        "../assets/skybox/bottom.jpg", "../assets/skybox/front.jpg", "../assets/skybox/back.jpg",
+    };
 
-    create_pipeline(&engine->backend, vert_spv, frag_spv);
+    int width, height, nr_channels;
+    stbi_info(file_names[0], &width, &height, &nr_channels);
+
+    std::vector<uint8_t> skybox_data;
+    skybox_data.resize(width * height * 4 * 6); // 4 channels. 6 total images
+
+    for (size_t i = 0; i < 6; i++) {
+        uint8_t* data      = stbi_load(file_names[i], &width, &height, &nr_channels, 4);
+        size_t   data_size = width * height * 4;
+        size_t   offset    = data_size * i;
+        memcpy(skybox_data.data() + offset, data, data_size);
+    }
+
+    upload_sky_box(&engine->backend, skybox_data.data(), 4, width, height);
 
     /*
     std::array gltf_paths = {
@@ -47,7 +62,7 @@ void init_engine(Engine* engine) {
         "../assets/gltf/main_sponza/Main.1_Sponza/NewSponza_Main_glTF_002.gltf"};
     */
 
-    std::array gltf_paths = {"../assets/glb/porsche.glb"};
+    std::array gltf_paths = {"../assets/glb/structure.glb"};
     load_scene(&engine->scene, &engine->backend, gltf_paths);
 
     register_key_callback(&engine->window, [=](int key, int scancode, int action, int mods) {
@@ -70,7 +85,7 @@ void run_engine(Engine* engine) {
         update_scene(&engine->scene);
 
         update_ui(&engine->backend);
-        draw(&engine->backend, engine->scene.entities, &scene_data);
+        draw(&engine->backend, engine->scene.entities, &scene_data, 0, 0);
     }
 }
 

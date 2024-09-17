@@ -6,7 +6,8 @@
 
 // creates a 2D image along with its image_view
 AllocatedImage create_image(VkDevice device, VmaAllocator allocator, VkImageUsageFlags usage,
-                            VkExtent2D extent, VkFormat format, uint32_t samples) {
+                            VkImageViewType view_type, VkExtent2D extent, VkFormat format,
+                            uint32_t samples) {
 
     VkExtent3D extent_3D{
         .width  = extent.width,
@@ -26,8 +27,9 @@ AllocatedImage create_image(VkDevice device, VmaAllocator allocator, VkImageUsag
     image_ci.samples       = static_cast<VkSampleCountFlagBits>(samples);
     image_ci.mipLevels     = 1;
     image_ci.imageType     = VK_IMAGE_TYPE_2D;
-    image_ci.arrayLayers   = 1;
+    image_ci.arrayLayers   = view_type == VK_IMAGE_VIEW_TYPE_CUBE ? 6 : 1;
     image_ci.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    image_ci.flags = view_type == VK_IMAGE_VIEW_TYPE_CUBE ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0;
 
     VmaAllocationCreateInfo allocation_ci{};
     allocation_ci.usage         = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
@@ -44,13 +46,14 @@ AllocatedImage create_image(VkDevice device, VmaAllocator allocator, VkImageUsag
     }
 
     allocated_image.image_view =
-        create_image_view(device, allocated_image.image, format, aspect_flag);
+        create_image_view(device, allocated_image.image, view_type, format, aspect_flag);
 
     return allocated_image;
 }
 
-VkImageView create_image_view(VkDevice device, VkImage image, VkFormat format,
-                              VkImageAspectFlags aspect_flags, uint32_t mip_levels) {
+VkImageView create_image_view(VkDevice device, VkImage image, VkImageViewType view_type,
+                              VkFormat format, VkImageAspectFlags aspect_flags,
+                              uint32_t mip_levels) {
 
     VkImageView           image_view;
     VkImageViewCreateInfo image_view_ci{};
@@ -59,10 +62,12 @@ VkImageView create_image_view(VkDevice device, VkImage image, VkFormat format,
     image_view_ci.pNext    = nullptr;
     image_view_ci.format   = format;
     image_view_ci.image    = image;
-    image_view_ci.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    image_view_ci.viewType = view_type;
+
+    uint32_t layer_count = view_type == VK_IMAGE_VIEW_TYPE_CUBE ? 6 : 1;
 
     VkImageSubresourceRange subresource_range =
-        create_image_subresource_range(aspect_flags, mip_levels);
+        create_image_subresource_range(aspect_flags, layer_count, mip_levels);
 
     image_view_ci.subresourceRange = subresource_range;
 
@@ -71,8 +76,23 @@ VkImageView create_image_view(VkDevice device, VkImage image, VkFormat format,
     return image_view;
 }
 
+VkSampler create_sampler(VkDevice device, VkFilter min_filter, VkFilter mag_filter,
+                         VkSamplerAddressMode address_mode_u, VkSamplerAddressMode address_mode_v) {
+    VkSamplerCreateInfo sampler_ci{};
+    sampler_ci.sType        = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    sampler_ci.minFilter    = min_filter;
+    sampler_ci.magFilter    = mag_filter;
+    sampler_ci.addressModeU = address_mode_u;
+    sampler_ci.addressModeV = address_mode_v;
+
+    VkSampler sampler;
+    VK_CHECK(vkCreateSampler(device, &sampler_ci, nullptr, &sampler));
+
+    return sampler;
+};
+
 void blit_image(VkCommandBuffer cmd, VkImage src, VkImage dest, VkExtent2D src_extent,
-                VkExtent2D dst_extent) {
+                VkExtent2D dst_extent, uint32_t src_layer_count, uint32_t dst_layer_count) {
     VkImageBlit2 blit_region{.sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2, .pNext = nullptr};
     blit_region.srcOffsets[1].x = src_extent.width;
     blit_region.srcOffsets[1].y = src_extent.height;
@@ -84,12 +104,12 @@ void blit_image(VkCommandBuffer cmd, VkImage src, VkImage dest, VkExtent2D src_e
 
     blit_region.srcSubresource.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
     blit_region.srcSubresource.baseArrayLayer = 0;
-    blit_region.srcSubresource.layerCount     = 1;
+    blit_region.srcSubresource.layerCount     = src_layer_count;
     blit_region.srcSubresource.mipLevel       = 0;
 
     blit_region.dstSubresource.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
     blit_region.dstSubresource.baseArrayLayer = 0;
-    blit_region.dstSubresource.layerCount     = 1;
+    blit_region.dstSubresource.layerCount     = dst_layer_count;
     blit_region.dstSubresource.mipLevel       = 0;
 
     VkBlitImageInfo2 blit_info{.sType = VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2, .pNext = nullptr};
@@ -111,22 +131,23 @@ void destroy_image(VkDevice device, VmaAllocator allocator, const AllocatedImage
 }
 
 VkImageSubresourceRange create_image_subresource_range(VkImageAspectFlags aspect_flags,
-                                                       uint32_t           mip_levels) {
+                                                       uint32_t layer_count, uint32_t mip_levels) {
     VkImageSubresourceRange subresource_range{};
     subresource_range.aspectMask     = aspect_flags;
     subresource_range.baseMipLevel   = 0;
     subresource_range.levelCount     = mip_levels;
     subresource_range.baseArrayLayer = 0;
-    subresource_range.layerCount     = 1;
+    subresource_range.layerCount     = layer_count;
     return subresource_range;
 }
 
 AllocatedImage upload_texture(const VkBackend* backend, const uint8_t* data,
-                              VkImageUsageFlags usage, uint32_t color_channels, uint32_t width,
+                              VkImageUsageFlags usage, VkImageViewType view_type,
+                              uint32_t layer_count, uint32_t color_channels, uint32_t width,
                               uint32_t height) {
     const VkExtent2D extent{.width = width, .height = height};
 
-    const uint32_t byte_size = width * height * color_channels;
+    const uint32_t byte_size = width * height * color_channels * layer_count;
 
     AllocatedBuffer staging_buf = create_buffer(
         byte_size, backend->allocator, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
@@ -134,32 +155,39 @@ AllocatedImage upload_texture(const VkBackend* backend, const uint8_t* data,
 
     vmaCopyMemoryToAllocation(backend->allocator, data, staging_buf.allocation, 0, byte_size);
 
-    const AllocatedImage new_texture =
-        create_image(backend->device_ctx.logical_device, backend->allocator,
-                     usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT, extent, VK_FORMAT_R8G8B8A8_UNORM);
+    const AllocatedImage new_texture = create_image(
+        backend->device_ctx.logical_device, backend->allocator,
+        usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT, view_type, extent, VK_FORMAT_R8G8B8A8_UNORM);
 
-    VkBufferImageCopy copy_region;
-    copy_region.bufferOffset      = 0;
-    copy_region.bufferRowLength   = 0;
-    copy_region.bufferImageHeight = 0;
+    std::vector<VkBufferImageCopy> copy_regions;
+    copy_regions.reserve(layer_count);
 
-    copy_region.imageOffset = {.x = 0, .y = 0, .z = 0};
-    copy_region.imageExtent = {.width = extent.width, .height = extent.height, .depth = 1};
+    for (uint32_t face = 0; face < layer_count; face++) {
+        //  Calculate offset into staging buffer for the current mip level and face
+        size_t offset = width * height * color_channels * face;
 
-    copy_region.imageSubresource.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
-    copy_region.imageSubresource.mipLevel       = 0;
-    copy_region.imageSubresource.baseArrayLayer = 0;
-    copy_region.imageSubresource.layerCount     = 1;
+        VkBufferImageCopy bufferCopyRegion               = {};
+        bufferCopyRegion.imageSubresource.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+        bufferCopyRegion.imageSubresource.mipLevel       = 0;
+        bufferCopyRegion.imageSubresource.baseArrayLayer = face;
+        bufferCopyRegion.imageSubresource.layerCount     = 1;
+        bufferCopyRegion.imageExtent.width               = width;
+        bufferCopyRegion.imageExtent.height              = height;
+        bufferCopyRegion.imageExtent.depth               = 1;
+        bufferCopyRegion.bufferOffset                    = offset;
+        copy_regions.push_back(bufferCopyRegion);
+    }
 
     immediate_submit(backend, [&](VkCommandBuffer cmd) {
         insert_image_memory_barrier(cmd, new_texture.image, VK_IMAGE_LAYOUT_UNDEFINED,
-                                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+                                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, layer_count);
 
         vkCmdCopyBufferToImage(cmd, staging_buf.buffer, new_texture.image,
-                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy_region);
+                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, copy_regions.size(),
+                               copy_regions.data());
 
         insert_image_memory_barrier(cmd, new_texture.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+                                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, layer_count);
     });
 
     destroy_buffer(backend->allocator, &staging_buf);

@@ -5,11 +5,12 @@
 #define GLM_ENABLE_EXPERIMENTAL
 
 #include <core/window.h>
-#include <glm/gtx/quaternion.hpp>
+// #include <glm/gtx/quaternion.hpp>
 #include <glm/gtx/transform.hpp>
 
 struct Camera {
-    glm::vec3 position;
+    glm::vec4 position;
+    glm::vec4 direction;
     glm::vec3 velocity;
     glm::mat4 view;
 
@@ -21,7 +22,7 @@ struct Camera {
     double cursor_y;
 };
 
-void init_camera(Camera* cam, const Window* window, glm::vec3 initial_pos,
+void init_camera(Camera* cam, const Window* window, glm::vec4 initial_pos,
                  float init_pitch_theta = 0.f, float init_yaw_theta = 0.f);
 
 SceneData update_camera(Camera* cam, uint32_t window_width, uint32_t window_height);

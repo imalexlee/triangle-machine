@@ -3,6 +3,7 @@
 #extension GL_GOOGLE_include_directive: require
 #include "../input_structures.glsl"
 
+
 layout (location = 1) in vec2 color_uv;
 layout (location = 2) in vec3 surface_normal;
 
