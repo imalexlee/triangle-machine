@@ -6,8 +6,10 @@
 struct DeviceQueues {
     VkQueue  graphics;
     VkQueue  present;
+    VkQueue  compute;
     uint32_t graphics_family_index;
     uint32_t present_family_index;
+    uint32_t compute_family_index;
 };
 
 struct DeviceContext {

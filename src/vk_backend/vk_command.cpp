@@ -9,8 +9,6 @@
 
 void init_cmd_context(CommandContext* cmd_ctx, VkDevice device, uint32_t queue_index,
                       VkCommandPoolCreateFlags flags) {
-    uint32_t thread_count = std::thread::hardware_concurrency();
-    cmd_ctx->secondary_pools.resize(thread_count);
 
     VkCommandPoolCreateInfo command_pool_ci{};
     command_pool_ci.sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -20,13 +18,6 @@ void init_cmd_context(CommandContext* cmd_ctx, VkDevice device, uint32_t queue_i
 
     VK_CHECK(vkCreateCommandPool(device, &command_pool_ci, nullptr, &cmd_ctx->primary_pool));
 
-    assert(thread_count < 256 && "Thread count should currently stay under 256");
-    for (uint8_t i = 0; i < thread_count; i++) {
-        cmd_ctx->secondary_pools[i].thread_idx = i;
-        VK_CHECK(vkCreateCommandPool(device, &command_pool_ci, nullptr,
-                                     &cmd_ctx->secondary_pools[i].vk_pool));
-    }
-
     VkCommandBufferAllocateInfo primary_buffer_ai{};
     primary_buffer_ai.sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     primary_buffer_ai.pNext              = nullptr;
@@ -35,27 +26,10 @@ void init_cmd_context(CommandContext* cmd_ctx, VkDevice device, uint32_t queue_i
     primary_buffer_ai.commandPool        = cmd_ctx->primary_pool;
 
     VK_CHECK(vkAllocateCommandBuffers(device, &primary_buffer_ai, &cmd_ctx->primary_buffer));
-
-    cmd_ctx->secondary_buffers.resize(thread_count);
-
-    for (uint32_t i = 0; i < thread_count; i++) {
-        VkCommandBufferAllocateInfo secondary_buffer_ai{};
-        secondary_buffer_ai.sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        secondary_buffer_ai.pNext              = nullptr;
-        secondary_buffer_ai.level              = VK_COMMAND_BUFFER_LEVEL_SECONDARY;
-        secondary_buffer_ai.commandBufferCount = 1;
-        secondary_buffer_ai.commandPool        = cmd_ctx->secondary_pools[i].vk_pool;
-
-        VK_CHECK(
-            vkAllocateCommandBuffers(device, &secondary_buffer_ai, &cmd_ctx->secondary_buffers[i]));
-    }
 }
 
 void deinit_cmd_context(const CommandContext* cmd_ctx, VkDevice device) {
     vkDestroyCommandPool(device, cmd_ctx->primary_pool, nullptr);
-    for (const auto pool : cmd_ctx->secondary_pools) {
-        vkDestroyCommandPool(device, pool.vk_pool, nullptr);
-    }
 }
 
 void begin_primary_buffer(const CommandContext* cmd_ctx, VkCommandBufferUsageFlags flags) {

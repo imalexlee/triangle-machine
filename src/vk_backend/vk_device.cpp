@@ -70,6 +70,7 @@ void get_queue_family_indices(DeviceContext* device_ctx, VkSurfaceKHR surface) {
     std::optional<uint32_t> graphics_index;
     std::optional<uint32_t> present_index;
 
+    // find graphics and presentation queues. prefer the same queue
     for (uint32_t i = 0; i < queue_family_properties.size(); i++) {
         VkBool32 present_supported = VK_FALSE;
         vkGetPhysicalDeviceSurfaceSupportKHR(device_ctx->physical_device, i, surface,
@@ -94,13 +95,32 @@ void get_queue_family_indices(DeviceContext* device_ctx, VkSurfaceKHR surface) {
         exit(EXIT_FAILURE);
     }
 
+    std::optional<uint32_t> compute_index;
+
+    // grab a compute queue index. prefer a different index than the graphics queue
+    for (uint32_t i = 0; i < queue_family_properties.size(); i++) {
+        bool compute_supported = queue_family_properties[i].queueFlags & VK_QUEUE_COMPUTE_BIT;
+        if (!compute_supported) {
+            continue;
+        }
+        if (!compute_index.has_value()) {
+            compute_index = i;
+        }
+        if (i != graphics_index.value()) {
+            compute_index = i;
+            break;
+        }
+    }
+
     device_ctx->queues.graphics_family_index = graphics_index.value();
     device_ctx->queues.present_family_index  = present_index.value();
+    device_ctx->queues.compute_family_index  = compute_index.value();
 }
 
 void create_logical_device(DeviceContext* device_ctx) {
     std::set unique_family_indices{device_ctx->queues.graphics_family_index,
-                                   device_ctx->queues.present_family_index};
+                                   device_ctx->queues.present_family_index,
+                                   device_ctx->queues.compute_family_index};
     std::vector<VkDeviceQueueCreateInfo> queue_infos;
     constexpr float                      priority = 1.f;
 
@@ -113,7 +133,7 @@ void create_logical_device(DeviceContext* device_ctx) {
         queue_ci.pQueuePriorities = &priority;
         queue_infos.push_back(queue_ci);
     }
-    constexpr std::array device_extensions{
+    constexpr std::array device_extensions = {
         VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
         VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
@@ -169,4 +189,6 @@ void create_logical_device(DeviceContext* device_ctx) {
                      &device_ctx->queues.graphics);
     vkGetDeviceQueue(device_ctx->logical_device, device_ctx->queues.present_family_index, 0,
                      &device_ctx->queues.present);
+    vkGetDeviceQueue(device_ctx->logical_device, device_ctx->queues.compute_family_index, 0,
+                     &device_ctx->queues.compute);
 }

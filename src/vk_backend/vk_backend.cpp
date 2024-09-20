@@ -32,15 +32,18 @@
 #include "vk_backend/vk_sync.h"
 #include "vk_options.h"
 
+#include <set>
+
 // initialization
 static void create_allocator(VkBackend* backend);
 static void create_default_data(VkBackend* backend);
 static void create_desc_layouts(VkBackend* backend);
-static void configure_debugger(VkBackend* backend);
-static void configure_render_resources(VkBackend* backend);
 static void create_grid_pipeline(VkBackend* backend);
 static void create_pipeline_layouts(VkBackend* backend);
-void        init_sky_box(VkBackend* backend);
+static void create_sky_box(VkBackend* backend);
+static void create_compute_resources(VkBackend* backend);
+static void configure_debugger(VkBackend* backend);
+static void configure_render_resources(VkBackend* backend);
 
 static VkShaderModule load_shader_module(const VkBackend* backend, std::span<uint32_t> shader_spv);
 // state update
@@ -78,7 +81,7 @@ void init_backend(VkBackend* backend, VkInstance instance, VkSurfaceKHR surface,
 
     create_allocator(backend);
     create_desc_layouts(backend);
-    init_sky_box(backend);
+    create_sky_box(backend);
 
     for (Frame& frame : backend->frames) {
         init_frame(&frame, backend->device_ctx.logical_device, backend->allocator,
@@ -111,8 +114,12 @@ void init_backend(VkBackend* backend, VkInstance instance, VkSurfaceKHR surface,
     backend->imm_fence =
         create_fence(backend->device_ctx.logical_device, VK_FENCE_CREATE_SIGNALED_BIT);
 
-    init_cmd_context(&backend->imm_cmd_context, backend->device_ctx.logical_device,
+    init_cmd_context(&backend->immediate_cmd_ctx, backend->device_ctx.logical_device,
                      backend->device_ctx.queues.graphics_family_index,
+                     VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+
+    init_cmd_context(&backend->compute_cmd_ctx, backend->device_ctx.logical_device,
+                     backend->device_ctx.queues.compute_family_index,
                      VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 
     create_default_data(backend);
@@ -121,6 +128,8 @@ void init_backend(VkBackend* backend, VkInstance instance, VkSurfaceKHR surface,
 
     create_pipeline_layouts(backend);
 
+    create_compute_resources(backend);
+
     init_shader_ctx(&backend->shader_ctx);
 
     init_vk_ext_context(&backend->ext_ctx, backend->device_ctx.logical_device);
@@ -128,6 +137,10 @@ void init_backend(VkBackend* backend, VkInstance instance, VkSurfaceKHR surface,
     if constexpr (vk_opts::validation_enabled) {
         configure_debugger(backend);
     }
+}
+
+static void create_compute_resources(VkBackend* backend) {
+    // TODO: create resources
 }
 
 static constexpr std::array skybox_vertices = {
@@ -143,17 +156,15 @@ static constexpr std::array skybox_vertices = {
     1.0f,  -1.0f, -1.0f, 1.0f,  -1.0f, -1.0f, -1.0f, -1.0f, 1.0f,  1.0f,  -1.0f, 1.0f,
 };
 
-void init_sky_box(VkBackend* backend) {
+void create_sky_box(VkBackend* backend) {
 
     std::vector<PoolSizeRatio> mat_pool_sizes = {
-        //   {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         1},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1},
     };
     init_desc_allocator(&backend->sky_box_desc_allocator, backend->device_ctx.logical_device, 1,
                         mat_pool_sizes);
 
     DescriptorLayoutBuilder layout_builder;
-    // add_layout_binding(&layout_builder, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
     add_layout_binding(&layout_builder, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
     backend->sky_box_desc_set_layout =
@@ -174,6 +185,7 @@ void init_sky_box(VkBackend* backend) {
                               backend->sky_box_buffer.info.size);
 
     backend->deletion_queue.push_persistant([=] {
+        destroy_buffer(backend->allocator, &backend->sky_box_buffer);
         deinit_desc_allocator(&backend->sky_box_desc_allocator, backend->device_ctx.logical_device);
     });
 };
@@ -193,7 +205,7 @@ void upload_sky_box(VkBackend* backend, const uint8_t* texture_data, uint32_t co
     update_desc_set(&desc_writer, backend->device_ctx.logical_device, backend->sky_box_desc_set);
 
     backend->deletion_queue.push_persistant(
-        [=] { vmaDestroyImage(backend->allocator, cube_tex.image, cube_tex.allocation); });
+        [=] { destroy_image(backend->device_ctx.logical_device, backend->allocator, &cube_tex); });
 }
 
 void create_pipeline_layouts(VkBackend* backend) {
@@ -286,7 +298,7 @@ void configure_debugger(VkBackend* backend) {
     set_handle_name(&backend->debugger, backend->color_resolve_image.image_view,
                     VK_OBJECT_TYPE_IMAGE_VIEW, "color resolve image view");
 
-    set_handle_name(&backend->debugger, backend->imm_cmd_context.primary_buffer,
+    set_handle_name(&backend->debugger, backend->immediate_cmd_ctx.primary_buffer,
                     VK_OBJECT_TYPE_COMMAND_BUFFER, "imm cmd_buf buf");
 
     set_handle_name(&backend->debugger, backend->sky_box_buffer.buffer, VK_OBJECT_TYPE_BUFFER,
@@ -408,11 +420,11 @@ void immediate_submit(const VkBackend*                               backend,
                       std::function<void(VkCommandBuffer cmd_buf)>&& function) {
     VK_CHECK(vkResetFences(backend->device_ctx.logical_device, 1, &backend->imm_fence));
 
-    begin_primary_buffer(&backend->imm_cmd_context, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+    begin_primary_buffer(&backend->immediate_cmd_ctx, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
-    function(backend->imm_cmd_context.primary_buffer);
+    function(backend->immediate_cmd_ctx.primary_buffer);
 
-    submit_primary_buffer(&backend->imm_cmd_context, backend->device_ctx.queues.graphics, nullptr,
+    submit_primary_buffer(&backend->immediate_cmd_ctx, backend->device_ctx.queues.graphics, nullptr,
                           nullptr, backend->imm_fence);
 
     VK_CHECK(vkWaitForFences(backend->device_ctx.logical_device, 1, &backend->imm_fence, VK_TRUE,
@@ -1016,8 +1028,11 @@ void deinit_backend(VkBackend* backend) {
         destroy_buffer(backend->allocator, &frame.frame_data_buf);
     }
 
-    vkDestroyDescriptorPool(backend->device_ctx.logical_device, backend->imm_descriptor_pool,
-                            nullptr);
+    deinit_cmd_context(&backend->immediate_cmd_ctx, backend->device_ctx.logical_device);
+    deinit_cmd_context(&backend->compute_cmd_ctx, backend->device_ctx.logical_device);
+    deinit_shader_ctx(&backend->shader_ctx, &backend->ext_ctx, backend->device_ctx.logical_device);
+    deinit_swapchain_context(&backend->swapchain_context, backend->device_ctx.logical_device,
+                             backend->instance);
 
     destroy_image(backend->device_ctx.logical_device, backend->allocator, &backend->color_image);
     destroy_image(backend->device_ctx.logical_device, backend->allocator, &backend->depth_image);
@@ -1026,14 +1041,20 @@ void deinit_backend(VkBackend* backend) {
     destroy_image(backend->device_ctx.logical_device, backend->allocator,
                   &backend->color_resolve_image);
 
-    deinit_shader_ctx(&backend->shader_ctx, &backend->ext_ctx, backend->device_ctx.logical_device);
-
     vkDestroySampler(backend->device_ctx.logical_device, backend->default_nearest_sampler, nullptr);
     vkDestroySampler(backend->device_ctx.logical_device, backend->default_linear_sampler, nullptr);
+
+    vkDestroyPipeline(backend->device_ctx.logical_device, backend->grid_pipeline_info.pipeline,
+                      nullptr);
 
     vkDestroyPipelineLayout(backend->device_ctx.logical_device,
                             backend->grid_pipeline_info.pipeline_layout, nullptr);
     vkDestroyPipelineLayout(backend->device_ctx.logical_device, backend->geo_pipeline_layout,
+                            nullptr);
+    vkDestroyPipelineLayout(backend->device_ctx.logical_device, backend->sky_box_pipeline_layout,
+                            nullptr);
+
+    vkDestroyDescriptorPool(backend->device_ctx.logical_device, backend->imm_descriptor_pool,
                             nullptr);
 
     vkDestroyDescriptorSetLayout(backend->device_ctx.logical_device,
@@ -1042,18 +1063,12 @@ void deinit_backend(VkBackend* backend) {
                                  nullptr);
     vkDestroyDescriptorSetLayout(backend->device_ctx.logical_device,
                                  backend->draw_obj_desc_set_layout, nullptr);
-
-    vkDestroyPipeline(backend->device_ctx.logical_device, backend->grid_pipeline_info.pipeline,
-                      nullptr);
+    vkDestroyDescriptorSetLayout(backend->device_ctx.logical_device,
+                                 backend->sky_box_desc_set_layout, nullptr);
 
     vkDestroyFence(backend->device_ctx.logical_device, backend->imm_fence, nullptr);
 
     vmaDestroyAllocator(backend->allocator);
-
-    deinit_cmd_context(&backend->imm_cmd_context, backend->device_ctx.logical_device);
-
-    deinit_swapchain_context(&backend->swapchain_context, backend->device_ctx.logical_device,
-                             backend->instance);
 
     deinit_device_context(&backend->device_ctx);
 
