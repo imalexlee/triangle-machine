@@ -8,7 +8,7 @@ namespace vk_opts {
     inline constexpr uint64_t timeout_dur          = 1'000'000'000;
 
     // will default to VK_PRESENT_MODE_FIFO_KHR if desired cannot be found
-    inline constexpr VkPresentModeKHR desired_present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
+    inline constexpr VkPresentModeKHR desired_present_mode = VK_PRESENT_MODE_FIFO_RELAXED_KHR;
 
 #ifdef NDEBUG
     inline constexpr bool validation_enabled = false;

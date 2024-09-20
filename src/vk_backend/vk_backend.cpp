@@ -44,16 +44,16 @@ void        init_sky_box(VkBackend* backend);
 
 static VkShaderModule load_shader_module(const VkBackend* backend, std::span<uint32_t> shader_spv);
 // state update
-static void           resize(VkBackend* backend);
-void                  set_render_state(VkBackend* backend, VkCommandBuffer cmd_buf);
+static void resize(VkBackend* backend);
+void        set_render_state(VkBackend* backend, VkCommandBuffer cmd_buf);
 // rendering
-static void           render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf,
-                                      std::span<const Entity> entities, size_t vert_shader,
-                                      size_t frag_shader);
-static void           render_ui(VkCommandBuffer cmd_buf);
-static void           render_grid(VkBackend* backend, VkCommandBuffer cmd_buf);
-static void   render_sky_box(VkBackend* backend, VkCommandBuffer cmd_buf, uint32_t vert_shader_i,
-                             uint32_t frag_shader_i);
+static void render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf,
+                            std::span<const Entity> entities, size_t vert_shader,
+                            size_t frag_shader);
+static void render_ui(VkCommandBuffer cmd_buf);
+static void render_grid(VkBackend* backend, VkCommandBuffer cmd_buf);
+static void render_sky_box(VkBackend* backend, VkCommandBuffer cmd_buf, uint32_t vert_shader_i,
+                           uint32_t frag_shader_i);
 // utils
 static Frame* get_current_frame(VkBackend* backend) {
     return &backend->frames[backend->frame_num % backend->frames.size()];
@@ -146,7 +146,7 @@ static constexpr std::array skybox_vertices = {
 void init_sky_box(VkBackend* backend) {
 
     std::vector<PoolSizeRatio> mat_pool_sizes = {
-  //   {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         1},
+        //   {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         1},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1},
     };
     init_desc_allocator(&backend->sky_box_desc_allocator, backend->device_ctx.logical_device, 1,

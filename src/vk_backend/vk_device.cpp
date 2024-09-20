@@ -114,8 +114,9 @@ void create_logical_device(DeviceContext* device_ctx) {
         queue_infos.push_back(queue_ci);
     }
     constexpr std::array device_extensions{
-        // VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
+        VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+        VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
         VK_EXT_SHADER_OBJECT_EXTENSION_NAME,
         VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME,
         VK_NV_INHERITED_VIEWPORT_SCISSOR_EXTENSION_NAME,
@@ -145,10 +146,13 @@ void create_logical_device(DeviceContext* device_ctx) {
     features_1_3.pNext            = &inherited_scissor_feature;
 
     VkPhysicalDeviceVulkan12Features features_1_2{};
-    features_1_2.sType               = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
-    features_1_2.bufferDeviceAddress = VK_TRUE;
-    features_1_2.descriptorIndexing  = VK_TRUE;
-    features_1_2.pNext               = &features_1_3;
+    features_1_2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+    features_1_2.descriptorBindingVariableDescriptorCount  = VK_TRUE;
+    features_1_2.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
+    features_1_2.bufferDeviceAddress                       = VK_TRUE;
+    features_1_2.descriptorIndexing                        = VK_TRUE;
+    features_1_2.runtimeDescriptorArray                    = VK_TRUE;
+    features_1_2.pNext                                     = &features_1_3;
 
     VkDeviceCreateInfo device_ci{};
     device_ci.sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
