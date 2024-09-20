@@ -1,20 +1,12 @@
 #pragma once
 
 #include <cstdint>
-#include <vector>
 #include <vk_backend/vk_types.h>
 #include <vulkan/vulkan_core.h>
 
-struct CommandPool {
-    VkCommandPool vk_pool;
-    uint8_t       thread_idx;
-};
-
 struct CommandContext {
-    VkCommandBuffer              primary_buffer;
-    VkCommandPool                primary_pool;
-    std::vector<VkCommandBuffer> secondary_buffers;
-    std::vector<CommandPool>     secondary_pools;
+    VkCommandBuffer primary_buffer;
+    VkCommandPool   primary_pool;
 };
 
 /**

@@ -49,7 +49,8 @@ struct VkBackend {
     PipelineInfo              grid_pipeline_info;
     ShaderContext             shader_ctx;
     Stats                     stats;
-    CommandContext            imm_cmd_context;
+    CommandContext            immediate_cmd_ctx;
+    CommandContext            compute_cmd_ctx;
     AllocatedImage            color_image;
     AllocatedImage            color_resolve_image;
     AllocatedImage            depth_image;
