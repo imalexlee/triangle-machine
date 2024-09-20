@@ -332,8 +332,8 @@ create_mesh_desc_sets(VkBackend* backend, DescriptorAllocator* desc_allocator,
 }
 static int times_entered = 0;
 // Adds draw objects to entity from a given root node
-void       create_node_tree(const fastgltf::Asset* asset, const glm::mat4x4* transform,
-                            const size_t node_i, std::vector<GLTFNode>* gltf_nodes) {
+void create_node_tree(const fastgltf::Asset* asset, const glm::mat4x4* transform,
+                      const size_t node_i, std::vector<GLTFNode>* gltf_nodes) {
 
     times_entered++;
     const fastgltf::Node* node = &asset->nodes[node_i];

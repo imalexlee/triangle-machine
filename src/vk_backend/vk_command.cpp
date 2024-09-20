@@ -7,9 +7,7 @@
 #include <vk_backend/vk_backend.h>
 #include <vulkan/vulkan_core.h>
 
-void init_cmd_context(CommandContext*          cmd_ctx,
-                      VkDevice                 device,
-                      uint32_t                 queue_index,
+void init_cmd_context(CommandContext* cmd_ctx, VkDevice device, uint32_t queue_index,
                       VkCommandPoolCreateFlags flags) {
     uint32_t thread_count = std::thread::hardware_concurrency();
     cmd_ctx->secondary_pools.resize(thread_count);
@@ -69,8 +67,7 @@ void begin_primary_buffer(const CommandContext* cmd_ctx, VkCommandBufferUsageFla
     VK_CHECK(vkBeginCommandBuffer(cmd_ctx->primary_buffer, &command_buffer_bi));
 }
 
-void submit_primary_buffer(const CommandContext*        cmd_ctx,
-                           const VkQueue                queue,
+void submit_primary_buffer(const CommandContext* cmd_ctx, const VkQueue queue,
                            const VkSemaphoreSubmitInfo* wait_semaphore_info,
                            const VkSemaphoreSubmitInfo* signal_semaphore_info,
                            const VkFence                fence) {
