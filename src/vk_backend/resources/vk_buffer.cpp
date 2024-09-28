@@ -1,8 +1,8 @@
 #include "vk_buffer.h"
 #include "vk_backend/vk_backend.h"
 
-AllocatedBuffer create_buffer(VkDeviceSize byte_size, VmaAllocator allocator, VkBufferUsageFlags buffer_usage, VmaMemoryUsage memory_usage,
-                              VmaAllocationCreateFlags flags, std::span<uint32_t> queue_family_indices) {
+AllocatedBuffer allocated_buffer_create(VmaAllocator allocator, VkDeviceSize byte_size, VkBufferUsageFlags buffer_usage, VmaMemoryUsage memory_usage,
+                                        VmaAllocationCreateFlags flags, std::span<uint32_t> queue_family_indices) {
 
     VkBufferCreateInfo buffer_ci{};
     buffer_ci.sType                 = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -22,11 +22,11 @@ AllocatedBuffer create_buffer(VkDeviceSize byte_size, VmaAllocator allocator, Vk
     return allocated_buffer;
 }
 
-void destroy_buffer(VmaAllocator allocator, const AllocatedBuffer* allocated_buffer) {
+void allocated_buffer_destroy(VmaAllocator allocator, const AllocatedBuffer* allocated_buffer) {
     vmaDestroyBuffer(allocator, allocated_buffer->buffer, allocated_buffer->allocation);
 }
 
-VkDeviceAddress get_buffer_device_address(VkDevice device, const AllocatedBuffer* buffer) {
+VkDeviceAddress vk_buffer_device_address_get(VkDevice device, const AllocatedBuffer* buffer) {
     VkBufferDeviceAddressInfo device_address_info{};
     device_address_info.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
     device_address_info.buffer = buffer->buffer;

@@ -11,7 +11,7 @@ static void cursor_callback(GLFWwindow* window, double x_pos, double y_pos);
 static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
 static void error_callback(int error, const char* description);
 
-void init_window(Window* window, uint32_t width, uint32_t height, const char* title) {
+void window_init(Window* window, uint32_t width, uint32_t height, const char* title) {
 
     if (!glfwInit()) {
         exit(EXIT_FAILURE);
@@ -44,21 +44,21 @@ void init_window(Window* window, uint32_t width, uint32_t height, const char* ti
     glfwSetCursorPosCallback(window->glfw_window, cursor_callback);
 }
 
-void deinit_window(const Window* window) {
+void window_deinit(const Window* window) {
     DEBUG_PRINT("destroying GLFW window");
     glfwDestroyWindow(window->glfw_window);
     glfwTerminate();
 }
 
-VkSurfaceKHR get_vulkan_surface(const Window* window, VkInstance instance) {
+VkSurfaceKHR vk_surface_get(const Window* window, VkInstance instance) {
     VkSurfaceKHR surface;
     VK_CHECK(glfwCreateWindowSurface(instance, window->glfw_window, nullptr, &surface));
     return surface;
 }
 
-void register_key_callback(Window* window, std::function<void(int, int, int, int)>&& fn_ptr) { window->key_callbacks.push_back(fn_ptr); }
+void window_register_key_callback(Window* window, std::function<void(int, int, int, int)>&& fn_ptr) { window->key_callbacks.push_back(fn_ptr); }
 
-void register_cursor_callback(Window* window, std::function<void(double, double)>&& fn_ptr) { window->cursor_callbacks.push_back(fn_ptr); }
+void window_register_cursor_callback(Window* window, std::function<void(double, double)>&& fn_ptr) { window->cursor_callbacks.push_back(fn_ptr); }
 
 void key_callback(GLFWwindow* window, int key, [[maybe_unused]] int scancode, int action, [[maybe_unused]] int mods) {
 

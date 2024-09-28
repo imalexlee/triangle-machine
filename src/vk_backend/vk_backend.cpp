@@ -66,15 +66,15 @@ using namespace std::chrono;
 
 static VkBackend* active_backend = nullptr;
 
-void init_backend(VkBackend* backend, VkInstance instance, VkSurfaceKHR surface, uint32_t width, uint32_t height) {
+void backend_init(VkBackend* backend, VkInstance instance, VkSurfaceKHR surface, uint32_t width, uint32_t height) {
 
     assert(active_backend == nullptr);
     active_backend = backend;
 
     backend->instance = instance;
 
-    init_device_context(&backend->device_ctx, backend->instance, surface);
-    init_swapchain_context(&backend->swapchain_context, &backend->device_ctx, surface, vk_opts::desired_present_mode);
+    device_ctx_init(&backend->device_ctx, backend->instance, surface);
+    swapchain_ctx_init(&backend->swapchain_context, &backend->device_ctx, surface, vk_opts::desired_present_mode);
 
     create_allocator(backend);
     create_desc_layouts(backend);
@@ -85,35 +85,36 @@ void init_backend(VkBackend* backend, VkInstance instance, VkSurfaceKHR surface,
 
     for (size_t i = 0; i < backend->frames.size(); i++) {
         Frame* frame = &backend->frames[i];
-        init_frame(frame, backend->device_ctx.logical_device, backend->allocator, backend->device_ctx.queues.graphics_family_index);
+        frame_init(frame, backend->device_ctx.logical_device, backend->allocator, backend->device_ctx.queues.graphics_family_index);
         backend->scene_data_buffers[i] =
-            create_buffer(sizeof(SceneData), backend->allocator, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
-                          VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
+            allocated_buffer_create(backend->allocator, sizeof(SceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+                                    VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
     }
 
     backend->image_extent.width  = width;
     backend->image_extent.height = height;
 
-    backend->color_resolve_image =
-        create_image(backend->device_ctx.logical_device, backend->allocator, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                     VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
+    backend->color_resolve_image = allocated_image_create(backend->device_ctx.logical_device, backend->allocator,
+                                                          VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                                                          VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
 
-    backend->color_image = create_image(backend->device_ctx.logical_device, backend->allocator,
-                                        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT, VK_IMAGE_VIEW_TYPE_2D,
-                                        backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, backend->device_ctx.raster_samples);
+    backend->color_image = allocated_image_create(
+        backend->device_ctx.logical_device, backend->allocator, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
+        VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, backend->device_ctx.raster_samples);
 
-    backend->depth_image = create_image(backend->device_ctx.logical_device, backend->allocator, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                                        VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_D32_SFLOAT, backend->device_ctx.raster_samples);
+    backend->depth_image =
+        allocated_image_create(backend->device_ctx.logical_device, backend->allocator, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                               VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_D32_SFLOAT, backend->device_ctx.raster_samples);
 
     // create color attachments and  rendering information from our allocated images
     configure_render_resources(backend);
 
-    backend->imm_fence = create_fence(backend->device_ctx.logical_device, VK_FENCE_CREATE_SIGNALED_BIT);
+    backend->imm_fence = vk_fence_create(backend->device_ctx.logical_device, VK_FENCE_CREATE_SIGNALED_BIT);
 
-    init_cmd_context(&backend->immediate_cmd_ctx, backend->device_ctx.logical_device, backend->device_ctx.queues.graphics_family_index,
+    command_ctx_init(&backend->immediate_cmd_ctx, backend->device_ctx.logical_device, backend->device_ctx.queues.graphics_family_index,
                      VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 
-    init_cmd_context(&backend->compute_cmd_ctx, backend->device_ctx.logical_device, backend->device_ctx.queues.compute_family_index,
+    command_ctx_init(&backend->compute_cmd_ctx, backend->device_ctx.logical_device, backend->device_ctx.queues.compute_family_index,
                      VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 
     create_grid_pipeline(backend);
@@ -124,9 +125,9 @@ void init_backend(VkBackend* backend, VkInstance instance, VkSurfaceKHR surface,
 
     create_default_data(backend);
 
-    init_shader_ctx(&backend->shader_ctx);
+    shader_ctx_init(&backend->shader_ctx);
 
-    init_vk_ext_context(&backend->ext_ctx, backend->device_ctx.logical_device);
+    ext_context_init(&backend->ext_ctx, backend->device_ctx.logical_device);
 
     if constexpr (vk_opts::validation_enabled) {
         configure_debugger(backend);
@@ -145,8 +146,8 @@ void set_scene_data(const VkBackend* backend, const SceneData* scene_data) {
     vmaCopyMemoryToAllocation(backend->allocator, scene_data, curr_scene_buf->allocation, 0, sizeof(SceneData));
 
     DescriptorWriter desc_writer;
-    write_buffer_desc(&desc_writer, 0, curr_scene_buf->buffer, sizeof(SceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-    update_desc_set(&desc_writer, backend->device_ctx.logical_device, curr_scene_desc_set);
+    desc_writer_write_buffer_desc(&desc_writer, 0, curr_scene_buf->buffer, sizeof(SceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    desc_writer_update_desc_set(&desc_writer, backend->device_ctx.logical_device, curr_scene_desc_set);
 }
 
 static constexpr std::array skybox_vertices = {
@@ -159,16 +160,17 @@ static constexpr std::array skybox_vertices = {
 };
 
 void create_sky_box(VkBackend* backend) {
-    backend->sky_box_vert_buffer = create_buffer(36 * sizeof(glm::vec3), backend->allocator, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                                                 VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
+    backend->sky_box_vert_buffer =
+        allocated_buffer_create(backend->allocator, 36 * sizeof(glm::vec3), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+                                VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
 
     vmaCopyMemoryToAllocation(backend->allocator, skybox_vertices.data(), backend->sky_box_vert_buffer.allocation, 0,
                               backend->sky_box_vert_buffer.info.size);
 
-    backend->deletion_queue.push_persistent([=] { destroy_buffer(backend->allocator, &backend->sky_box_vert_buffer); });
+    backend->deletion_queue.push_persistent([=] { allocated_buffer_destroy(backend->allocator, &backend->sky_box_vert_buffer); });
 };
 
-void upload_sky_box(VkBackend* backend, const uint8_t* texture_data, uint32_t color_channels, uint32_t width, uint32_t height) {
+void backend_upload_sky_box(VkBackend* backend, const uint8_t* texture_data, uint32_t color_channels, uint32_t width, uint32_t height) {
     TextureSampler sky_box_tex_sampler{};
     sky_box_tex_sampler.data      = texture_data;
     sky_box_tex_sampler.sampler   = backend->default_linear_sampler;
@@ -192,9 +194,9 @@ void create_pipeline_layouts(VkBackend* backend) {
         .size       = sizeof(MeshData),
     }}};
 
-    backend->geometry_pipeline_layout = create_pipeline_layout(backend->device_ctx.logical_device, set_layouts, push_constant_ranges, 0);
+    backend->geometry_pipeline_layout = vk_pipeline_layout_create(backend->device_ctx.logical_device, set_layouts, push_constant_ranges, 0);
 
-    backend->sky_box_pipeline_layout = create_pipeline_layout(backend->device_ctx.logical_device, set_layouts, {}, 0);
+    backend->sky_box_pipeline_layout = vk_pipeline_layout_create(backend->device_ctx.logical_device, set_layouts, {}, 0);
 }
 
 static void create_grid_pipeline(VkBackend* backend) {
@@ -219,21 +221,19 @@ static void create_grid_pipeline(VkBackend* backend) {
     const VkShaderModule vert_shader = load_shader_module(backend, v_buf);
     const VkShaderModule frag_shader = load_shader_module(backend, f_buf);
 
-    std::array set_layouts{backend->scene_desc_set_layout};
-
-    set_pipeline_shaders(&pb, vert_shader, frag_shader);
-    set_pipeline_topology(&pb, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-    set_pipeline_raster_state(&pb, VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE, VK_POLYGON_MODE_FILL);
-    set_pipeline_multisampling(&pb, static_cast<VkSampleCountFlagBits>(backend->device_ctx.raster_samples));
-    set_pipeline_depth_state(&pb, true, true, VK_COMPARE_OP_GREATER_OR_EQUAL);
-
-    set_pipeline_render_state(&pb, backend->color_image.image_format, backend->depth_image.image_format);
-    set_pipeline_blending(&pb, BlendMode::alpha);
-
+    std::array                         set_layouts{backend->scene_desc_set_layout};
     std::array<VkPushConstantRange, 0> push_constant_ranges{{}};
 
-    set_pipeline_layout(&pb, set_layouts, push_constant_ranges, 0);
-    backend->grid_pipeline_info = build_pipeline(&pb, backend->device_ctx.logical_device);
+    pipeline_builder_set_shaders(&pb, vert_shader, frag_shader);
+    pipeline_builder_set_topology(&pb, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+    pipeline_builder_set_raster_state(&pb, VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE, VK_POLYGON_MODE_FILL);
+    pipeline_builder_set_multisampling(&pb, static_cast<VkSampleCountFlagBits>(backend->device_ctx.raster_samples));
+    pipeline_builder_set_depth_state(&pb, true, true, VK_COMPARE_OP_GREATER_OR_EQUAL);
+    pipeline_builder_set_render_state(&pb, backend->color_image.image_format, backend->depth_image.image_format);
+    pipeline_builder_set_blending(&pb, BlendMode::alpha);
+    pipeline_builder_set_layout(&pb, set_layouts, push_constant_ranges, 0);
+
+    backend->grid_pipeline_info = pipeline_builder_create_pipeline(&pb, backend->device_ctx.logical_device);
 
     backend->deletion_queue.push_persistent([=] {
         vkDestroyShaderModule(backend->device_ctx.logical_device, vert_shader, nullptr);
@@ -243,58 +243,53 @@ static void create_grid_pipeline(VkBackend* backend) {
 
 // adding names to these 64 bit handles helps a lot when reading validation errors
 void configure_debugger(VkBackend* backend) {
-    init_debugger(&backend->debugger, backend->instance, backend->device_ctx.logical_device);
-    set_handle_name(&backend->debugger, backend->color_image.image, VK_OBJECT_TYPE_IMAGE, "color image");
-
-    set_handle_name(&backend->debugger, backend->depth_image.image, VK_OBJECT_TYPE_IMAGE, "depth image");
-
-    set_handle_name(&backend->debugger, backend->color_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW, "color image view");
-    set_handle_name(&backend->debugger, backend->depth_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW, "depth image view");
-
-    set_handle_name(&backend->debugger, backend->color_resolve_image.image, VK_OBJECT_TYPE_IMAGE, "color resolve image");
-
-    set_handle_name(&backend->debugger, backend->color_resolve_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW, "color resolve image view");
-
-    set_handle_name(&backend->debugger, backend->immediate_cmd_ctx.primary_buffer, VK_OBJECT_TYPE_COMMAND_BUFFER, "imm cmd_buf buf");
-
-    set_handle_name(&backend->debugger, backend->sky_box_vert_buffer.buffer, VK_OBJECT_TYPE_BUFFER, "skybox buffer");
+    debugger_init(&backend->debugger, backend->instance, backend->device_ctx.logical_device);
+    debugger_set_handle_name(&backend->debugger, backend->color_image.image, VK_OBJECT_TYPE_IMAGE, "color image");
+    debugger_set_handle_name(&backend->debugger, backend->depth_image.image, VK_OBJECT_TYPE_IMAGE, "depth image");
+    debugger_set_handle_name(&backend->debugger, backend->color_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW, "color image view");
+    debugger_set_handle_name(&backend->debugger, backend->depth_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW, "depth image view");
+    debugger_set_handle_name(&backend->debugger, backend->color_resolve_image.image, VK_OBJECT_TYPE_IMAGE, "color resolve image");
+    debugger_set_handle_name(&backend->debugger, backend->color_resolve_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW, "color resolve image view");
+    debugger_set_handle_name(&backend->debugger, backend->immediate_cmd_ctx.primary_buffer, VK_OBJECT_TYPE_COMMAND_BUFFER, "imm cmd_buf buf");
+    debugger_set_handle_name(&backend->debugger, backend->sky_box_vert_buffer.buffer, VK_OBJECT_TYPE_BUFFER, "skybox buffer");
 
     for (size_t i = 0; i < backend->frames.size(); i++) {
         const Frame& frame = backend->frames[i];
-        set_handle_name(&backend->debugger, frame.command_context.primary_buffer, VK_OBJECT_TYPE_COMMAND_BUFFER,
-                        "frame " + std::to_string(i) + " cmd_buf buf");
+        debugger_set_handle_name(&backend->debugger, frame.command_context.primary_buffer, VK_OBJECT_TYPE_COMMAND_BUFFER,
+                                 "frame " + std::to_string(i) + " cmd_buf buf");
     }
 
     for (size_t i = 0; i < backend->swapchain_context.images.size(); i++) {
-        set_handle_name(&backend->debugger, backend->swapchain_context.images[i], VK_OBJECT_TYPE_IMAGE, "swapchain image " + std::to_string(i));
-        set_handle_name(&backend->debugger, backend->swapchain_context.image_views[i], VK_OBJECT_TYPE_IMAGE_VIEW,
-                        "swapchain image view " + std::to_string(i));
+        debugger_set_handle_name(&backend->debugger, backend->swapchain_context.images[i], VK_OBJECT_TYPE_IMAGE,
+                                 "swapchain image " + std::to_string(i));
+        debugger_set_handle_name(&backend->debugger, backend->swapchain_context.image_views[i], VK_OBJECT_TYPE_IMAGE_VIEW,
+                                 "swapchain image view " + std::to_string(i));
     }
 }
 
 void create_desc_layouts(VkBackend* backend) {
     DescriptorLayoutBuilder layout_builder;
     // scene data
-    add_layout_binding(&layout_builder, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
-    backend->scene_desc_set_layout = build_set_layout(&layout_builder, backend->device_ctx.logical_device);
+    desc_layout_builder_add_binding(&layout_builder, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+    backend->scene_desc_set_layout = desc_layout_builder_create_layout(&layout_builder, backend->device_ctx.logical_device);
 
-    clear_layout_bindings(&layout_builder);
+    desc_layout_builder_clear(&layout_builder);
 
     // materials
-    add_layout_binding(&layout_builder, backend->material_desc_binding, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                       VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+    desc_layout_builder_add_binding(&layout_builder, backend->material_desc_binding, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                                    VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
     // sky box
-    add_layout_binding(&layout_builder, backend->sky_box_desc_binding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                       VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+    desc_layout_builder_add_binding(&layout_builder, backend->sky_box_desc_binding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                                    VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
     // textures
     constexpr VkDescriptorBindingFlags binding_flags = VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT |
                                                        VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT |
                                                        VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT;
 
-    add_layout_binding(&layout_builder, backend->texture_desc_binding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT,
-                       binding_flags, 300);
+    desc_layout_builder_add_binding(&layout_builder, backend->texture_desc_binding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                                    VK_SHADER_STAGE_FRAGMENT_BIT, binding_flags, 300);
 
-    backend->graphics_desc_set_layout = build_set_layout(&layout_builder, backend->device_ctx.logical_device);
+    backend->graphics_desc_set_layout = desc_layout_builder_create_layout(&layout_builder, backend->device_ctx.logical_device);
 }
 
 // creates a scene desc set per frame
@@ -302,11 +297,11 @@ void create_scene_desc_sets(VkBackend* backend) {
     std::array<PoolSizeRatio, 1> pool_sizes = {
         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1},
     };
-    init_desc_allocator(&backend->scene_desc_allocator, backend->device_ctx.logical_device, 3, pool_sizes);
+    desc_allocator_init(&backend->scene_desc_allocator, backend->device_ctx.logical_device, 3, pool_sizes);
 
     for (size_t i = 0; i < backend->scene_desc_sets.size(); i++) {
         backend->scene_desc_sets[i] =
-            allocate_desc_set(&backend->scene_desc_allocator, backend->device_ctx.logical_device, backend->scene_desc_set_layout);
+            desc_allocator_allocate_desc_set(&backend->scene_desc_allocator, backend->device_ctx.logical_device, backend->scene_desc_set_layout);
     }
 }
 
@@ -314,10 +309,10 @@ void create_graphics_desc_set(VkBackend* backend) {
     std::array<PoolSizeRatio, 3> pool_sizes = {
         {{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1}, {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1}, {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 300}}
     };
-    init_desc_allocator(&backend->graphics_desc_allocator, backend->device_ctx.logical_device, 1, pool_sizes);
+    desc_allocator_init(&backend->graphics_desc_allocator, backend->device_ctx.logical_device, 1, pool_sizes);
 
-    backend->graphics_desc_set =
-        allocate_desc_set(&backend->graphics_desc_allocator, backend->device_ctx.logical_device, backend->graphics_desc_set_layout, 300);
+    backend->graphics_desc_set = desc_allocator_allocate_desc_set(&backend->graphics_desc_allocator, backend->device_ctx.logical_device,
+                                                                  backend->graphics_desc_set_layout, 300);
 }
 
 void configure_render_resources(VkBackend* backend) {
@@ -325,13 +320,14 @@ void configure_render_resources(VkBackend* backend) {
     backend->scene_clear_value = {.color = {{0.1f, 0.1f, 0.1f, 0.2f}}};
 
     backend->scene_color_attachment =
-        create_color_attachment_info(backend->color_image.image_view, &backend->scene_clear_value, VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                                     VK_ATTACHMENT_STORE_OP_DONT_CARE, backend->color_resolve_image.image_view);
+        vk_color_attachment_info_create(backend->color_image.image_view, &backend->scene_clear_value, VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                                        VK_ATTACHMENT_STORE_OP_DONT_CARE, backend->color_resolve_image.image_view);
 
     backend->scene_depth_attachment =
-        create_depth_attachment_info(backend->depth_image.image_view, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE);
+        vk_depth_attachment_info_create(backend->depth_image.image_view, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE);
 
-    backend->scene_rendering_info = create_rendering_info(&backend->scene_color_attachment, &backend->scene_depth_attachment, backend->image_extent);
+    backend->scene_rendering_info =
+        vk_rendering_info_create(&backend->scene_color_attachment, &backend->scene_depth_attachment, backend->image_extent);
 }
 
 void create_default_data(VkBackend* backend) {
@@ -340,9 +336,9 @@ void create_default_data(VkBackend* backend) {
     backend->stats.total_frame_time = 0;
     backend->stats.total_draw_time  = 0;
 
-    backend->default_linear_sampler = create_sampler(backend->device_ctx.logical_device, VK_FILTER_LINEAR, VK_FILTER_LINEAR);
+    backend->default_linear_sampler = vk_sampler_create(backend->device_ctx.logical_device, VK_FILTER_LINEAR, VK_FILTER_LINEAR);
 
-    backend->default_nearest_sampler = create_sampler(backend->device_ctx.logical_device, VK_FILTER_NEAREST, VK_FILTER_NEAREST);
+    backend->default_nearest_sampler = vk_sampler_create(backend->device_ctx.logical_device, VK_FILTER_NEAREST, VK_FILTER_NEAREST);
 
     uint32_t       white = 0xFFFFFFFF;
     TextureSampler default_tex_sampler{};
@@ -357,10 +353,10 @@ void create_default_data(VkBackend* backend) {
     TextureSampler tex_samplers[1] = {default_tex_sampler};
 
     // default texture will always be assumed to be at index 0
-    std::ignore = upload_2d_texture(backend, tex_samplers);
+    std::ignore = backend_upload_2d_texture(backend, tex_samplers);
 }
 
-void create_imgui_vk_resources(VkBackend* backend) {
+void backend_create_imgui_resources(VkBackend* backend) {
 
     std::array<VkDescriptorPoolSize, 1> pool_sizes = {
         {{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1}},
@@ -396,14 +392,14 @@ void create_imgui_vk_resources(VkBackend* backend) {
     ImGui_ImplVulkan_Init(&init_info);
 }
 
-void immediate_submit(const VkBackend* backend, std::function<void(VkCommandBuffer cmd_buf)>&& function) {
+void backend_immediate_submit(const VkBackend* backend, std::function<void(VkCommandBuffer cmd_buf)>&& function) {
     VK_CHECK(vkResetFences(backend->device_ctx.logical_device, 1, &backend->imm_fence));
 
-    begin_primary_buffer(&backend->immediate_cmd_ctx, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+    command_ctx_begin_primary_buffer(&backend->immediate_cmd_ctx, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
     function(backend->immediate_cmd_ctx.primary_buffer);
 
-    submit_primary_buffer(&backend->immediate_cmd_ctx, backend->device_ctx.queues.graphics, nullptr, nullptr, backend->imm_fence);
+    command_ctx_submit_primary_buffer(&backend->immediate_cmd_ctx, backend->device_ctx.queues.graphics, nullptr, nullptr, backend->imm_fence);
 
     VK_CHECK(vkWaitForFences(backend->device_ctx.logical_device, 1, &backend->imm_fence, VK_TRUE, vk_opts::timeout_dur));
 }
@@ -418,7 +414,7 @@ void create_allocator(VkBackend* backend) {
     VK_CHECK(vmaCreateAllocator(&allocator_info, &backend->allocator));
 }
 
-VkInstance create_vk_instance(const char* app_name, const char* engine_name) {
+VkInstance vk_instance_create(const char* app_name, const char* engine_name) {
 
     VkApplicationInfo app_info{};
     app_info.sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -443,9 +439,9 @@ VkInstance create_vk_instance(const char* app_name, const char* engine_name) {
     std::array<const char*, 1>         validation_layers;
 
     if constexpr (vk_opts::validation_enabled) {
-        debug_ci            = create_messenger_info();
-        validation_features = create_validation_features();
-        validation_layers   = create_validation_layers();
+        debug_ci            = vk_messenger_info_create();
+        validation_features = vk_validation_features_create();
+        validation_layers   = vk_validation_layers_create();
 
         validation_features.pNext       = &debug_ci;
         instance_ci.pNext               = &validation_features;
@@ -458,7 +454,7 @@ VkInstance create_vk_instance(const char* app_name, const char* engine_name) {
     return instance;
 }
 
-void upload_vert_shader(VkBackend* backend, const std::filesystem::path& file_path, const std::string& name) {
+void backend_upload_vert_shader(VkBackend* backend, const std::filesystem::path& file_path, const std::string& name) {
     ShaderBuilder builder;
 
     std::array<VkPushConstantRange, 1> push_constant_ranges{{{
@@ -472,12 +468,13 @@ void upload_vert_shader(VkBackend* backend, const std::filesystem::path& file_pa
         backend->graphics_desc_set_layout,
     };
 
-    stage_shader(&backend->shader_ctx, file_path, name, set_layouts, push_constant_ranges, VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_FRAGMENT_BIT);
+    shader_ctx_stage_shader(&backend->shader_ctx, file_path, name, set_layouts, push_constant_ranges, VK_SHADER_STAGE_VERTEX_BIT,
+                            VK_SHADER_STAGE_FRAGMENT_BIT);
 
-    commit_shaders(&backend->shader_ctx, &backend->ext_ctx, backend->device_ctx.logical_device, ShaderType::unlinked);
+    shader_ctx_commit_shaders(&backend->shader_ctx, &backend->ext_ctx, backend->device_ctx.logical_device, ShaderType::unlinked);
 }
 
-void upload_frag_shader(VkBackend* backend, const std::filesystem::path& file_path, const std::string& name) {
+void backend_upload_frag_shader(VkBackend* backend, const std::filesystem::path& file_path, const std::string& name) {
     ShaderBuilder builder;
 
     std::array<VkPushConstantRange, 1> push_constant_ranges{{{
@@ -491,13 +488,13 @@ void upload_frag_shader(VkBackend* backend, const std::filesystem::path& file_pa
         backend->graphics_desc_set_layout,
     };
 
-    stage_shader(&backend->shader_ctx, file_path, name, set_layouts, push_constant_ranges, VK_SHADER_STAGE_FRAGMENT_BIT, 0);
+    shader_ctx_stage_shader(&backend->shader_ctx, file_path, name, set_layouts, push_constant_ranges, VK_SHADER_STAGE_FRAGMENT_BIT, 0);
 
-    commit_shaders(&backend->shader_ctx, &backend->ext_ctx, backend->device_ctx.logical_device, ShaderType::unlinked);
+    shader_ctx_commit_shaders(&backend->shader_ctx, &backend->ext_ctx, backend->device_ctx.logical_device, ShaderType::unlinked);
 }
 
-void upload_sky_box_shaders(VkBackend* backend, const std::filesystem::path& vert_path, const std::filesystem::path& frag_path,
-                            const std::string& name) {
+void backend_upload_sky_box_shaders(VkBackend* backend, const std::filesystem::path& vert_path, const std::filesystem::path& frag_path,
+                                    const std::string& name) {
 
     /*
     Due to error in validation layers, creating linked shaders doesn't work during DEBUG.
@@ -509,13 +506,13 @@ void upload_sky_box_shaders(VkBackend* backend, const std::filesystem::path& ver
         backend->graphics_desc_set_layout,
     };
 
-    stage_shader(&backend->shader_ctx, vert_path, name, set_layouts, {}, VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_FRAGMENT_BIT);
+    shader_ctx_stage_shader(&backend->shader_ctx, vert_path, name, set_layouts, {}, VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_FRAGMENT_BIT);
 
-    commit_shaders(&backend->shader_ctx, &backend->ext_ctx, backend->device_ctx.logical_device, ShaderType::unlinked);
+    shader_ctx_commit_shaders(&backend->shader_ctx, &backend->ext_ctx, backend->device_ctx.logical_device, ShaderType::unlinked);
 
-    stage_shader(&backend->shader_ctx, frag_path, name, set_layouts, {}, VK_SHADER_STAGE_FRAGMENT_BIT, 0);
+    shader_ctx_stage_shader(&backend->shader_ctx, frag_path, name, set_layouts, {}, VK_SHADER_STAGE_FRAGMENT_BIT, 0);
 
-    commit_shaders(&backend->shader_ctx, &backend->ext_ctx, backend->device_ctx.logical_device, ShaderType::linked);
+    shader_ctx_commit_shaders(&backend->shader_ctx, &backend->ext_ctx, backend->device_ctx.logical_device, ShaderType::linked);
 }
 
 std::vector<const char*> get_instance_extensions() {
@@ -531,7 +528,7 @@ std::vector<const char*> get_instance_extensions() {
     return extensions;
 }
 
-void draw(VkBackend* backend, std::span<const Entity> entities, const SceneData* scene_data, size_t vert_shader, size_t frag_shader) {
+void backend_draw(VkBackend* backend, std::span<const Entity> entities, const SceneData* scene_data, size_t vert_shader, size_t frag_shader) {
     auto start_frame_time = system_clock::now();
 
     Frame*          current_frame = &backend->frames[get_curr_frame_idx(backend)];
@@ -554,13 +551,14 @@ void draw(VkBackend* backend, std::span<const Entity> entities, const SceneData*
 
     VkImage swapchain_image = backend->swapchain_context.images[swapchain_image_index];
 
-    begin_primary_buffer(&current_frame->command_context, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+    command_ctx_begin_primary_buffer(&current_frame->command_context, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
-    insert_image_memory_barrier(cmd_buffer, backend->color_image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    vk_image_memory_barrier_insert(cmd_buffer, backend->color_image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-    insert_image_memory_barrier(cmd_buffer, backend->color_resolve_image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    vk_image_memory_barrier_insert(cmd_buffer, backend->color_resolve_image.image, VK_IMAGE_LAYOUT_UNDEFINED,
+                                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-    insert_image_memory_barrier(cmd_buffer, backend->depth_image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+    vk_image_memory_barrier_insert(cmd_buffer, backend->depth_image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
     vkCmdBeginRendering(cmd_buffer, &backend->scene_rendering_info);
 
@@ -576,22 +574,23 @@ void draw(VkBackend* backend, std::span<const Entity> entities, const SceneData*
 
     vkCmdEndRendering(cmd_buffer);
 
-    insert_image_memory_barrier(cmd_buffer, backend->color_resolve_image.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+    vk_image_memory_barrier_insert(cmd_buffer, backend->color_resolve_image.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
-    insert_image_memory_barrier(cmd_buffer, swapchain_image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    vk_image_memory_barrier_insert(cmd_buffer, swapchain_image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-    blit_image(cmd_buffer, backend->color_resolve_image.image, swapchain_image, backend->swapchain_context.extent, backend->image_extent, 1, 1);
+    vk_image_blit(cmd_buffer, backend->color_resolve_image.image, swapchain_image, backend->swapchain_context.extent, backend->image_extent, 1, 1);
 
-    insert_image_memory_barrier(cmd_buffer, swapchain_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+    vk_image_memory_barrier_insert(cmd_buffer, swapchain_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
     VkSemaphoreSubmitInfo wait_semaphore_si =
-        create_semaphore_submit_info(current_frame->present_semaphore, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
+        vk_semaphore_submit_info_create(current_frame->present_semaphore, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
 
-    VkSemaphoreSubmitInfo signal_semaphore_si = create_semaphore_submit_info(current_frame->render_semaphore, VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT);
+    VkSemaphoreSubmitInfo signal_semaphore_si =
+        vk_semaphore_submit_info_create(current_frame->render_semaphore, VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT);
 
-    submit_primary_buffer(&current_frame->command_context, backend->device_ctx.queues.graphics, &wait_semaphore_si, &signal_semaphore_si,
-                          current_frame->render_fence);
+    command_ctx_submit_primary_buffer(&current_frame->command_context, backend->device_ctx.queues.graphics, &wait_semaphore_si, &signal_semaphore_si,
+                                      current_frame->render_fence);
 
     VkPresentInfoKHR present_info{};
     present_info.sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -623,30 +622,31 @@ void draw(VkBackend* backend, std::span<const Entity> entities, const SceneData*
 void resize(VkBackend* backend) {
     vkDeviceWaitIdle(backend->device_ctx.logical_device);
 
-    reset_swapchain_context(&backend->swapchain_context, &backend->device_ctx);
+    swapchain_ctx_reset(&backend->swapchain_context, &backend->device_ctx);
 
-    destroy_image(backend->device_ctx.logical_device, backend->allocator, &backend->depth_image);
-    destroy_image(backend->device_ctx.logical_device, backend->allocator, &backend->color_image);
+    allocated_image_destroy(backend->device_ctx.logical_device, backend->allocator, &backend->depth_image);
+    allocated_image_destroy(backend->device_ctx.logical_device, backend->allocator, &backend->color_image);
 
     backend->image_extent.width  = backend->swapchain_context.extent.width;
     backend->image_extent.height = backend->swapchain_context.extent.height;
 
-    destroy_image(backend->device_ctx.logical_device, backend->allocator, &backend->color_resolve_image);
-    backend->color_resolve_image =
-        create_image(backend->device_ctx.logical_device, backend->allocator, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                     VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
+    allocated_image_destroy(backend->device_ctx.logical_device, backend->allocator, &backend->color_resolve_image);
+    backend->color_resolve_image = allocated_image_create(backend->device_ctx.logical_device, backend->allocator,
+                                                          VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                                                          VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
 
-    backend->color_image = create_image(backend->device_ctx.logical_device, backend->allocator,
-                                        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT, VK_IMAGE_VIEW_TYPE_2D,
-                                        backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, backend->device_ctx.raster_samples);
+    backend->color_image = allocated_image_create(
+        backend->device_ctx.logical_device, backend->allocator, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
+        VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, backend->device_ctx.raster_samples);
 
-    backend->depth_image = create_image(backend->device_ctx.logical_device, backend->allocator, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                                        VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_D32_SFLOAT, backend->device_ctx.raster_samples);
+    backend->depth_image =
+        allocated_image_create(backend->device_ctx.logical_device, backend->allocator, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                               VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_D32_SFLOAT, backend->device_ctx.raster_samples);
 
     configure_render_resources(backend);
 
     for (Frame& frame : backend->frames) {
-        reset_frame_sync(&frame, backend->device_ctx.logical_device);
+        frame_reset_synchronization(&frame, backend->device_ctx.logical_device);
     }
 }
 
@@ -811,14 +811,14 @@ void upload_sky_box_texture(VkBackend* backend, const TextureSampler* tex_sample
 
     const uint32_t byte_size = tex_sampler->width * tex_sampler->height * tex_sampler->color_channels * tex_sampler->layer_count;
 
-    AllocatedBuffer staging_buf = create_buffer(byte_size, backend->allocator, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_AUTO_PREFER_HOST,
-                                                VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
+    AllocatedBuffer staging_buf = allocated_buffer_create(backend->allocator, byte_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                                                          VMA_MEMORY_USAGE_AUTO_PREFER_HOST, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
 
     vmaCopyMemoryToAllocation(backend->allocator, tex_sampler->data, staging_buf.allocation, 0, byte_size);
 
     const AllocatedImage new_texture =
-        create_image(backend->device_ctx.logical_device, backend->allocator, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-                     tex_sampler->view_type, extent, VK_FORMAT_R8G8B8A8_UNORM);
+        allocated_image_create(backend->device_ctx.logical_device, backend->allocator, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                               tex_sampler->view_type, extent, VK_FORMAT_R8G8B8A8_UNORM);
 
     std::vector<VkBufferImageCopy> copy_regions;
     copy_regions.reserve(tex_sampler->layer_count);
@@ -839,30 +839,31 @@ void upload_sky_box_texture(VkBackend* backend, const TextureSampler* tex_sample
         copy_regions.push_back(bufferCopyRegion);
     }
 
-    immediate_submit(backend, [&](VkCommandBuffer cmd) {
-        insert_image_memory_barrier(cmd, new_texture.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                    tex_sampler->layer_count);
+    backend_immediate_submit(backend, [&](VkCommandBuffer cmd) {
+        vk_image_memory_barrier_insert(cmd, new_texture.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                       tex_sampler->layer_count);
 
         vkCmdCopyBufferToImage(cmd, staging_buf.buffer, new_texture.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, copy_regions.size(),
                                copy_regions.data());
 
-        insert_image_memory_barrier(cmd, new_texture.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                                    tex_sampler->layer_count);
+        vk_image_memory_barrier_insert(cmd, new_texture.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                       tex_sampler->layer_count);
     });
 
     DescriptorWriter descriptor_writer;
-    write_image_desc(&descriptor_writer, backend->sky_box_desc_binding, new_texture.image_view, tex_sampler->sampler,
-                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+    desc_writer_write_image_desc(&descriptor_writer, backend->sky_box_desc_binding, new_texture.image_view, tex_sampler->sampler,
+                                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
-    update_desc_set(&descriptor_writer, backend->device_ctx.logical_device, backend->graphics_desc_set);
+    desc_writer_update_desc_set(&descriptor_writer, backend->device_ctx.logical_device, backend->graphics_desc_set);
 
-    destroy_buffer(backend->allocator, &staging_buf);
+    allocated_buffer_destroy(backend->allocator, &staging_buf);
     backend->sky_box_image = new_texture;
 
-    backend->deletion_queue.push_persistent([=] { destroy_image(backend->device_ctx.logical_device, backend->allocator, &backend->sky_box_image); });
+    backend->deletion_queue.push_persistent(
+        [=] { allocated_image_destroy(backend->device_ctx.logical_device, backend->allocator, &backend->sky_box_image); });
 }
 
-uint32_t upload_2d_texture(VkBackend* backend, std::span<const TextureSampler> tex_samplers) {
+uint32_t backend_upload_2d_texture(VkBackend* backend, std::span<const TextureSampler> tex_samplers) {
 
     // we will return this at the end of the function. It signifies an offset for
     // materials accessing these textures by their index.
@@ -879,8 +880,8 @@ uint32_t upload_2d_texture(VkBackend* backend, std::span<const TextureSampler> t
         total_byte_size += byte_size;
     }
 
-    AllocatedBuffer staging_buf = create_buffer(total_byte_size, backend->allocator, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                                                VMA_MEMORY_USAGE_AUTO_PREFER_HOST, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
+    AllocatedBuffer staging_buf = allocated_buffer_create(backend->allocator, total_byte_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                                                          VMA_MEMORY_USAGE_AUTO_PREFER_HOST, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
 
     // fill the staging buffer with the images
     uint32_t staging_buf_offset = 0;
@@ -899,9 +900,9 @@ uint32_t upload_2d_texture(VkBackend* backend, std::span<const TextureSampler> t
             .height = tex_sampler.height,
         };
 
-        AllocatedImage tex_image =
-            create_image(backend->device_ctx.logical_device, backend->allocator, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                         VK_IMAGE_VIEW_TYPE_2D, extent, VK_FORMAT_R8G8B8A8_UNORM);
+        AllocatedImage tex_image = allocated_image_create(backend->device_ctx.logical_device, backend->allocator,
+                                                          VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_VIEW_TYPE_2D, extent,
+                                                          VK_FORMAT_R8G8B8A8_UNORM);
 
         VkBufferImageCopy copy_region               = {};
         copy_region.imageSubresource.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -913,25 +914,25 @@ uint32_t upload_2d_texture(VkBackend* backend, std::span<const TextureSampler> t
         copy_region.imageExtent.depth               = 1;
         copy_region.bufferOffset                    = texture_buf_offset;
 
-        immediate_submit(backend, [&](VkCommandBuffer cmd) {
-            insert_image_memory_barrier(cmd, tex_image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1);
+        backend_immediate_submit(backend, [&](VkCommandBuffer cmd) {
+            vk_image_memory_barrier_insert(cmd, tex_image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1);
 
             vkCmdCopyBufferToImage(cmd, staging_buf.buffer, tex_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy_region);
 
-            insert_image_memory_barrier(cmd, tex_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 1);
+            vk_image_memory_barrier_insert(cmd, tex_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 1);
         });
 
         const uint32_t byte_size = tex_sampler.width * tex_sampler.height * tex_sampler.color_channels;
         texture_buf_offset += byte_size;
 
-        write_image_desc(&descriptor_writer, backend->texture_desc_binding, tex_image.image_view, tex_sampler.sampler,
-                         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, backend->tex_images.size());
-        update_desc_set(&descriptor_writer, backend->device_ctx.logical_device, backend->graphics_desc_set);
-        clear_desc_writer(&descriptor_writer);
+        desc_writer_write_image_desc(&descriptor_writer, backend->texture_desc_binding, tex_image.image_view, tex_sampler.sampler,
+                                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, backend->tex_images.size());
+        desc_writer_update_desc_set(&descriptor_writer, backend->device_ctx.logical_device, backend->graphics_desc_set);
+        desc_writer_clear(&descriptor_writer);
 
         backend->tex_images.push_back(tex_image);
     }
-    destroy_buffer(backend->allocator, &staging_buf);
+    allocated_buffer_destroy(backend->allocator, &staging_buf);
 
     return descriptor_index_offset;
 }
@@ -985,12 +986,12 @@ VkShaderModule load_shader_module(const VkBackend* backend, std::span<uint32_t> 
     return shader_module;
 }
 
-void finish_pending_vk_work(const VkBackend* backend) { vkDeviceWaitIdle(backend->device_ctx.logical_device); }
+void backend_finish_pending_vk_work(const VkBackend* backend) { vkDeviceWaitIdle(backend->device_ctx.logical_device); }
 
-void deinit_backend(VkBackend* backend) {
+void backend_deinit(VkBackend* backend) {
     DEBUG_PRINT("destroying Vulkan Backend");
 
-    fmt::println("average draw time: {:.3f} us", static_cast<float>(backend->stats.total_draw_time) / static_cast<float>(backend->frame_num));
+    fmt::println("average backend_draw time: {:.3f} us", static_cast<float>(backend->stats.total_draw_time) / static_cast<float>(backend->frame_num));
     fmt::println("average frame time: {:.3f} ms",
                  static_cast<float>(backend->stats.total_frame_time) / 1000.f / static_cast<float>(backend->frame_num));
     fmt::println("average fps: {:.3f}", static_cast<float>(backend->stats.total_fps) / static_cast<float>(backend->frame_num));
@@ -998,33 +999,36 @@ void deinit_backend(VkBackend* backend) {
     backend->deletion_queue.flush();
 
     if constexpr (vk_opts::validation_enabled) {
-        deinit_debugger(&backend->debugger, backend->instance);
+        debugger_deinit(&backend->debugger, backend->instance);
     }
 
     for (Frame& frame : backend->frames) {
-        deinit_frame(&frame, backend->device_ctx.logical_device);
+        frame_deinit(&frame, backend->device_ctx.logical_device);
     }
 
-    deinit_cmd_context(&backend->immediate_cmd_ctx, backend->device_ctx.logical_device);
-    deinit_cmd_context(&backend->compute_cmd_ctx, backend->device_ctx.logical_device);
-    deinit_shader_ctx(&backend->shader_ctx, &backend->ext_ctx, backend->device_ctx.logical_device);
-    deinit_swapchain_context(&backend->swapchain_context, backend->device_ctx.logical_device, backend->instance);
-    deinit_desc_allocator(&backend->scene_desc_allocator, backend->device_ctx.logical_device);
-    deinit_desc_allocator(&backend->graphics_desc_allocator, backend->device_ctx.logical_device);
+    command_ctx_deinit(&backend->immediate_cmd_ctx, backend->device_ctx.logical_device);
+    command_ctx_deinit(&backend->compute_cmd_ctx, backend->device_ctx.logical_device);
+
+    shader_ctx_init(&backend->shader_ctx, &backend->ext_ctx, backend->device_ctx.logical_device);
+
+    swapchain_ctx_deinit(&backend->swapchain_context, backend->device_ctx.logical_device, backend->instance);
+
+    desc_allocator_deinit(&backend->scene_desc_allocator, backend->device_ctx.logical_device);
+    desc_allocator_deinit(&backend->graphics_desc_allocator, backend->device_ctx.logical_device);
 
     for (const auto& tex_image : backend->tex_images) {
-        destroy_image(backend->device_ctx.logical_device, backend->allocator, &tex_image);
+        allocated_image_destroy(backend->device_ctx.logical_device, backend->allocator, &tex_image);
     }
 
-    destroy_image(backend->device_ctx.logical_device, backend->allocator, &backend->color_image);
-    destroy_image(backend->device_ctx.logical_device, backend->allocator, &backend->depth_image);
-    destroy_image(backend->device_ctx.logical_device, backend->allocator, &backend->color_resolve_image);
+    allocated_image_destroy(backend->device_ctx.logical_device, backend->allocator, &backend->color_image);
+    allocated_image_destroy(backend->device_ctx.logical_device, backend->allocator, &backend->depth_image);
+    allocated_image_destroy(backend->device_ctx.logical_device, backend->allocator, &backend->color_resolve_image);
 
     for (const auto& scene_buf : backend->scene_data_buffers) {
-        destroy_buffer(backend->allocator, &scene_buf);
+        allocated_buffer_destroy(backend->allocator, &scene_buf);
     }
 
-    destroy_buffer(backend->allocator, &backend->mat_buffer);
+    allocated_buffer_destroy(backend->allocator, &backend->mat_buffer);
 
     vkDestroySampler(backend->device_ctx.logical_device, backend->default_nearest_sampler, nullptr);
     vkDestroySampler(backend->device_ctx.logical_device, backend->default_linear_sampler, nullptr);
@@ -1043,7 +1047,7 @@ void deinit_backend(VkBackend* backend) {
 
     vmaDestroyAllocator(backend->allocator);
 
-    deinit_device_context(&backend->device_ctx);
+    device_ctx_deinit(&backend->device_ctx);
 
     vkDestroyInstance(backend->instance, nullptr);
 }

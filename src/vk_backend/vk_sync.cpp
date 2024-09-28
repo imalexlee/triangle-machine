@@ -1,7 +1,7 @@
 #include "vk_sync.h"
 #include "vk_backend/resources/vk_image.h"
 
-VkSemaphore create_semaphore(VkDevice device, VkSemaphoreType type, uint64_t initial_timeline_value) {
+VkSemaphore vk_semaphore_create(VkDevice device, VkSemaphoreType type, uint64_t initial_timeline_value) {
     VkSemaphore               semaphore;
     VkSemaphoreCreateInfo     semaphore_ci{};
     VkSemaphoreTypeCreateInfo semaphore_type_ci{};
@@ -19,7 +19,7 @@ VkSemaphore create_semaphore(VkDevice device, VkSemaphoreType type, uint64_t ini
     return semaphore;
 }
 
-VkFence create_fence(VkDevice device, VkFenceCreateFlags flags) {
+VkFence vk_fence_create(VkDevice device, VkFenceCreateFlags flags) {
     VkFence           fence;
     VkFenceCreateInfo fence_ci{};
     fence_ci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
@@ -31,7 +31,7 @@ VkFence create_fence(VkDevice device, VkFenceCreateFlags flags) {
     return fence;
 }
 
-VkSemaphoreSubmitInfo create_semaphore_submit_info(VkSemaphore semaphore, VkPipelineStageFlags2 stages, uint64_t timeline_value) {
+VkSemaphoreSubmitInfo vk_semaphore_submit_info_create(VkSemaphore semaphore, VkPipelineStageFlags2 stages, uint64_t timeline_value) {
     VkSemaphoreSubmitInfo semaphore_si{};
     semaphore_si.sType       = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
     semaphore_si.value       = timeline_value;
@@ -43,8 +43,8 @@ VkSemaphoreSubmitInfo create_semaphore_submit_info(VkSemaphore semaphore, VkPipe
     return semaphore_si;
 }
 
-void insert_image_memory_barrier(VkCommandBuffer cmd_buf, VkImage image, VkImageLayout current_layout, VkImageLayout new_layout, uint32_t layer_count,
-                                 VkPipelineStageFlags2 src_stages, VkPipelineStageFlags2 dst_stages) {
+void vk_image_memory_barrier_insert(VkCommandBuffer cmd_buf, VkImage image, VkImageLayout current_layout, VkImageLayout new_layout,
+                                    uint32_t layer_count, VkPipelineStageFlags2 src_stages, VkPipelineStageFlags2 dst_stages) {
 
     VkImageMemoryBarrier2 image_mem_barrier{};
     image_mem_barrier.sType         = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -66,7 +66,7 @@ void insert_image_memory_barrier(VkCommandBuffer cmd_buf, VkImage image, VkImage
         aspect_flags = VK_IMAGE_ASPECT_DEPTH_BIT;
     }
 
-    VkImageSubresourceRange subresource_range = create_image_subresource_range(aspect_flags, layer_count, 1);
+    VkImageSubresourceRange subresource_range = vk_image_subresource_range_create(aspect_flags, layer_count, 1);
     image_mem_barrier.subresourceRange        = subresource_range;
 
     dep_info.pImageMemoryBarriers    = &image_mem_barrier;

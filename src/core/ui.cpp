@@ -2,7 +2,7 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_vulkan.h>
 
-void init_ui(UI* ui, VkBackend* backend, GLFWwindow* window) {
+void ui_init(UI* ui, VkBackend* backend, GLFWwindow* window) {
     ui->imgui_ctx = ImGui::CreateContext();
 
     ui->imgui_io = &ImGui::GetIO();
@@ -14,10 +14,10 @@ void init_ui(UI* ui, VkBackend* backend, GLFWwindow* window) {
 
     ImGui::StyleColorsDark();
 
-    create_imgui_vk_resources(backend);
+    backend_create_imgui_resources(backend);
 }
 
-void update_ui(const VkBackend* backend) {
+void ui_update(const VkBackend* backend) {
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplGlfw_NewFrame();
 
@@ -40,7 +40,7 @@ void update_ui(const VkBackend* backend) {
     ImGui::Render();
 }
 
-void deinit_ui(const UI* ui) {
+void ui_deinit(const UI* ui) {
 
     ImGui_ImplGlfw_Shutdown();
     ImGui_ImplVulkan_Shutdown();

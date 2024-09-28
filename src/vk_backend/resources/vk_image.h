@@ -34,8 +34,8 @@ struct TextureSampler {
  * @param samples   The number of samples for the image (for multisampling)
  * @return          An AllocatedImage
  */
-[[nodiscard]] AllocatedImage create_image(VkDevice device, VmaAllocator allocator, VkImageUsageFlags usage, VkImageViewType view_type,
-                                          VkExtent2D extent, VkFormat format, uint32_t samples = 1);
+[[nodiscard]] AllocatedImage allocated_image_create(VkDevice device, VmaAllocator allocator, VkImageUsageFlags usage, VkImageViewType view_type,
+                                                    VkExtent2D extent, VkFormat format, uint32_t samples = 1);
 
 /**
  * @brief Perform a blit (copy) from one image to another
@@ -48,8 +48,8 @@ struct TextureSampler {
  * @param src_layer_count Layers of source image
  * @param dst_layer_count Layers of destination image
  */
-void blit_image(VkCommandBuffer cmd, VkImage src, VkImage dest, VkExtent2D src_extent, VkExtent2D dst_extent, uint32_t src_layer_count,
-                uint32_t dst_layer_count);
+void vk_image_blit(VkCommandBuffer cmd, VkImage src, VkImage dest, VkExtent2D src_extent, VkExtent2D dst_extent, uint32_t src_layer_count,
+                   uint32_t dst_layer_count);
 
 /**
  * @brief Deallocate a Vulkan Image, Image View, and Memory
@@ -58,7 +58,7 @@ void blit_image(VkCommandBuffer cmd, VkImage src, VkImage dest, VkExtent2D src_e
  * @param allocator       The VMA Allocator used to allocate this image
  * @param allocated_image The AllocatedImage to deallocate
  */
-void destroy_image(VkDevice device, VmaAllocator allocator, const AllocatedImage* allocated_image);
+void allocated_image_destroy(VkDevice device, VmaAllocator allocator, const AllocatedImage* allocated_image);
 
 /**
  * @brief Creates a raw Vulkan Image View
@@ -71,10 +71,10 @@ void destroy_image(VkDevice device, VmaAllocator allocator, const AllocatedImage
  * @param mip_levels   Amount of mip levels
  * @return             A VkImageView
  */
-[[nodiscard]] VkImageView create_image_view(VkDevice device, VkImage image, VkImageViewType view_type, VkFormat format,
-                                            VkImageAspectFlags aspect_flags, uint32_t mip_levels = 1);
+[[nodiscard]] VkImageView vk_image_view_create(VkDevice device, VkImage image, VkImageViewType view_type, VkFormat format,
+                                               VkImageAspectFlags aspect_flags, uint32_t mip_levels = 1);
 
-[[nodiscard]] VkImage create_vk_image(VkDevice device, VkFormat format, VkImageUsageFlags usage, uint32_t width, uint32_t height,
+[[nodiscard]] VkImage vk_image_create(VkDevice device, VkFormat format, VkImageUsageFlags usage, uint32_t width, uint32_t height,
                                       uint32_t layer_count = 1, uint32_t samples = 1);
 
 /**
@@ -87,9 +87,9 @@ void destroy_image(VkDevice device, VmaAllocator allocator, const AllocatedImage
  * @param address_mode_v Addressing mode for V coords outside [0,1)
  * @return               A VkSampler
  */
-[[nodiscard]] VkSampler create_sampler(VkDevice device, VkFilter min_filter, VkFilter mag_filter,
-                                       VkSamplerAddressMode address_mode_u = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-                                       VkSamplerAddressMode address_mode_v = VK_SAMPLER_ADDRESS_MODE_REPEAT);
+[[nodiscard]] VkSampler vk_sampler_create(VkDevice device, VkFilter min_filter, VkFilter mag_filter,
+                                          VkSamplerAddressMode address_mode_u = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+                                          VkSamplerAddressMode address_mode_v = VK_SAMPLER_ADDRESS_MODE_REPEAT);
 
 /**
  * @brief Creates a filled Vulkan Image Subresource Range
@@ -99,24 +99,4 @@ void destroy_image(VkDevice device, VmaAllocator allocator, const AllocatedImage
  * @param mip_levels   The mip levels in this subresource range
  * @return             a VkImageSubresourceRange
  */
-[[nodiscard]] VkImageSubresourceRange create_image_subresource_range(VkImageAspectFlags aspect_flags, uint32_t layer_count, uint32_t mip_levels);
-
-/**
- * @brief Allocates a texture
- *
- * @param backend        The backend to allocate the texture for
- * @param data           The image data for the texture
- * @param usage          The usage type of the texture
- * @param view_type      The view type for the textures image view
- * @param layer_count    The number of layers this texture will have
- * @param color_channels The color channels for each texel
- * @param width          Width of the texture (or for one layer in a multi-layered texture)
- * @param height         Height of the texture (or for one layer in a multi-layered texture)
- * @return               An AllocatedImage representing a texture
- */
-/*
-[[nodiscard]] AllocatedImage upload_texture(const VkBackend* backend, const uint8_t* data,
-                                            VkImageUsageFlags usage, VkImageViewType view_type,
-                                            uint32_t layer_count, uint32_t color_channels,
-                                            uint32_t width, uint32_t height);
-                                            */
+[[nodiscard]] VkImageSubresourceRange vk_image_subresource_range_create(VkImageAspectFlags aspect_flags, uint32_t layer_count, uint32_t mip_levels);

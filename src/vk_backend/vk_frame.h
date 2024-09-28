@@ -26,7 +26,7 @@ struct Frame {
  * @param allocator		        The allocator used to acquire resources
  * @param graphics_family_index	Index of Vulkan queue which supports graphics operations
  */
-void init_frame(Frame* frame, VkDevice device, VmaAllocator allocator, uint32_t graphics_family_index);
+void frame_init(Frame* frame, VkDevice device, VmaAllocator allocator, uint32_t graphics_family_index);
 
 /**
  * @brief Resets Vulkan synchronization structures for this frame
@@ -34,7 +34,7 @@ void init_frame(Frame* frame, VkDevice device, VmaAllocator allocator, uint32_t 
  * @param frame	  The frame to reset sync for
  * @param device  The device to destroy, and recreate sync structures for
  */
-void reset_frame_sync(Frame* frame, VkDevice device);
+void frame_reset_synchronization(Frame* frame, VkDevice device);
 
 /**
  * @brief Destroys Vulkan sync structures, command pools, and descriptor pools for this Frame
@@ -42,4 +42,4 @@ void reset_frame_sync(Frame* frame, VkDevice device);
  * @param frame	  The frame to deinitialize
  * @param device  The device associated with the memory to be destroyed
  */
-void deinit_frame(const Frame* frame, VkDevice device);
+void frame_deinit(const Frame* frame, VkDevice device);

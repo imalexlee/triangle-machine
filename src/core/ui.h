@@ -9,8 +9,8 @@ struct UI {
     ImGuiIO*      imgui_io;
 };
 
-void init_ui(UI* ui, VkBackend* backend, GLFWwindow* window);
+void ui_init(UI* ui, VkBackend* backend, GLFWwindow* window);
 
-void update_ui(const VkBackend* backend);
+void ui_update(const VkBackend* backend);
 
-void deinit_ui(const UI* ui);
+void ui_deinit(const UI* ui);

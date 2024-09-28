@@ -3,7 +3,7 @@
 #include <fmt/base.h>
 #include <vulkan/vulkan_core.h>
 
-PipelineInfo build_pipeline(const PipelineBuilder* pb, VkDevice device) {
+PipelineInfo pipeline_builder_create_pipeline(const PipelineBuilder* pb, VkDevice device) {
     VkPipeline new_pipeline;
 
     VkPipelineVertexInputStateCreateInfo vertex_input_ci{};
@@ -57,8 +57,8 @@ PipelineInfo build_pipeline(const PipelineBuilder* pb, VkDevice device) {
     };
 }
 
-VkPipelineLayout create_pipeline_layout(VkDevice device, std::span<VkDescriptorSetLayout> desc_set_layouts,
-                                        std::span<VkPushConstantRange> push_constant_ranges, VkPipelineLayoutCreateFlags flags) {
+VkPipelineLayout vk_pipeline_layout_create(VkDevice device, std::span<VkDescriptorSetLayout> desc_set_layouts,
+                                           std::span<VkPushConstantRange> push_constant_ranges, VkPipelineLayoutCreateFlags flags) {
 
     VkPipelineLayoutCreateInfo pipeline_layout_ci{};
     pipeline_layout_ci.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -74,7 +74,7 @@ VkPipelineLayout create_pipeline_layout(VkDevice device, std::span<VkDescriptorS
     return pipeline_layout;
 };
 
-void set_pipeline_render_state(PipelineBuilder* pb, VkFormat color_format, VkFormat depth_format) {
+void pipeline_builder_set_render_state(PipelineBuilder* pb, VkFormat color_format, VkFormat depth_format) {
     pb->color_attachment_format              = color_format;
     pb->rendering_ci                         = {.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
     pb->rendering_ci.pColorAttachmentFormats = &pb->color_attachment_format;
@@ -82,7 +82,7 @@ void set_pipeline_render_state(PipelineBuilder* pb, VkFormat color_format, VkFor
     pb->rendering_ci.depthAttachmentFormat   = depth_format;
 }
 
-void set_pipeline_shaders(PipelineBuilder* pb, VkShaderModule vert_shader, VkShaderModule frag_shader, const char* entry_name) {
+void pipeline_builder_set_shaders(PipelineBuilder* pb, VkShaderModule vert_shader, VkShaderModule frag_shader, const char* entry_name) {
     VkPipelineShaderStageCreateInfo vertex_stage_ci{};
     vertex_stage_ci.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     vertex_stage_ci.stage  = VK_SHADER_STAGE_VERTEX_BIT;
@@ -100,13 +100,13 @@ void set_pipeline_shaders(PipelineBuilder* pb, VkShaderModule vert_shader, VkSha
     pb->shader_stages.push_back(frag_stage_ci);
 }
 
-void set_pipeline_topology(PipelineBuilder* pb, VkPrimitiveTopology topology) {
+void pipeline_builder_set_topology(PipelineBuilder* pb, VkPrimitiveTopology topology) {
     pb->input_assembly_state                        = {.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
     pb->input_assembly_state.topology               = topology;
     pb->input_assembly_state.primitiveRestartEnable = VK_FALSE;
 }
 
-void set_pipeline_raster_state(PipelineBuilder* pb, VkCullModeFlags cull_mode, VkFrontFace front_face, VkPolygonMode poly_mode) {
+void pipeline_builder_set_raster_state(PipelineBuilder* pb, VkCullModeFlags cull_mode, VkFrontFace front_face, VkPolygonMode poly_mode) {
 
     pb->rasterization_state                         = {.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
     pb->rasterization_state.cullMode                = cull_mode;
@@ -116,7 +116,7 @@ void set_pipeline_raster_state(PipelineBuilder* pb, VkCullModeFlags cull_mode, V
     pb->rasterization_state.lineWidth               = 1.f;
 }
 
-void set_pipeline_multisampling(PipelineBuilder* pb, VkSampleCountFlagBits samples) {
+void pipeline_builder_set_multisampling(PipelineBuilder* pb, VkSampleCountFlagBits samples) {
     pb->multisample_state                       = {.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
     pb->multisample_state.rasterizationSamples  = samples;
     pb->multisample_state.sampleShadingEnable   = VK_FALSE;
@@ -126,7 +126,7 @@ void set_pipeline_multisampling(PipelineBuilder* pb, VkSampleCountFlagBits sampl
     pb->multisample_state.alphaToOneEnable      = VK_FALSE;
 }
 
-void set_pipeline_depth_state(PipelineBuilder* pb, bool depth_test_enabled, bool write_enabled, VkCompareOp compare_op) {
+void pipeline_builder_set_depth_state(PipelineBuilder* pb, bool depth_test_enabled, bool write_enabled, VkCompareOp compare_op) {
     pb->depth_stencil_state                       = {.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
     pb->depth_stencil_state.depthTestEnable       = depth_test_enabled;
     pb->depth_stencil_state.depthWriteEnable      = write_enabled;
@@ -139,8 +139,8 @@ void set_pipeline_depth_state(PipelineBuilder* pb, bool depth_test_enabled, bool
     pb->depth_stencil_state.maxDepthBounds        = 1.f;
 }
 
-void set_pipeline_layout(PipelineBuilder* pb, std::span<VkDescriptorSetLayout> desc_set_layouts, std::span<VkPushConstantRange> push_constant_ranges,
-                         VkPipelineLayoutCreateFlags flags) {
+void pipeline_builder_set_layout(PipelineBuilder* pb, std::span<VkDescriptorSetLayout> desc_set_layouts,
+                                 std::span<VkPushConstantRange> push_constant_ranges, VkPipelineLayoutCreateFlags flags) {
     pb->pipeline_layout_ci                        = {.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
     pb->pipeline_layout_ci.flags                  = flags;
     pb->pipeline_layout_ci.pSetLayouts            = desc_set_layouts.data();
@@ -179,7 +179,7 @@ void set_pipeline_blending_alpha(PipelineBuilder* pb) {
     pb->color_blend_attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
 }
 
-void set_pipeline_blending(PipelineBuilder* pb, BlendMode blend_mode) {
+void pipeline_builder_set_blending(PipelineBuilder* pb, BlendMode blend_mode) {
     switch (blend_mode) {
     case BlendMode::additive: {
         set_pipeline_blending_additive(pb);

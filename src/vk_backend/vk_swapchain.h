@@ -28,8 +28,8 @@ struct SwapchainContext {
  * @param surface		A surface to present to
  * @param desired_present_mode	The desired presentation mode
  */
-void init_swapchain_context(SwapchainContext* swapchain_ctx, const DeviceContext* device_ctx, VkSurfaceKHR surface,
-                            VkPresentModeKHR desired_present_mode);
+void swapchain_ctx_init(SwapchainContext* swapchain_ctx, const DeviceContext* device_ctx, VkSurfaceKHR surface,
+                        VkPresentModeKHR desired_present_mode);
 
 /**
  * @brief Destroys the current swapchain and creates a new
@@ -37,13 +37,13 @@ void init_swapchain_context(SwapchainContext* swapchain_ctx, const DeviceContext
  * @param swapchain_ctx	The swapchain context to reset
  * @param device_ctx	The device to create a swapchain for
  */
-void reset_swapchain_context(SwapchainContext* swapchain_ctx, const DeviceContext* device_ctx);
+void swapchain_ctx_reset(SwapchainContext* swapchain_ctx, const DeviceContext* device_ctx);
 
 /**
  * @brief Destroys the swapchain and the surface associated with it
  *
  * @param swapchain_ctx	The swapchain context to deinitialize
- * @param device	The device assocaited with this swapchain
+ * @param device	The device associated with this swapchain
  * @param instance	The instance associated with this swapchain
  */
-void deinit_swapchain_context(SwapchainContext* swapchain_ctx, VkDevice device, VkInstance instance);
+void swapchain_ctx_deinit(SwapchainContext* swapchain_ctx, VkDevice device, VkInstance instance);

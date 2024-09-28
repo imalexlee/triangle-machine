@@ -3,10 +3,10 @@
 #include <vulkan/vulkan_core.h>
 
 VkDescriptorPool create_pool(VkDevice device, uint32_t max_sets, std::span<PoolSizeRatio> pool_size_ratios);
-VkDescriptorPool get_pool(DescriptorAllocator* desc_allocator, VkDevice device);
+VkDescriptorPool desc_allocator_get_pool(DescriptorAllocator* desc_allocator, VkDevice device);
 
-void add_layout_binding(DescriptorLayoutBuilder* layout_builder, uint32_t binding, VkDescriptorType type, VkShaderStageFlags stage,
-                        VkDescriptorBindingFlags binding_flags, uint32_t descriptor_count) {
+void desc_layout_builder_add_binding(DescriptorLayoutBuilder* layout_builder, uint32_t binding, VkDescriptorType type, VkShaderStageFlags stage,
+                                     VkDescriptorBindingFlags binding_flags, uint32_t descriptor_count) {
 
     VkDescriptorSetLayoutBinding layout_binding{};
     layout_binding.binding         = binding;
@@ -18,12 +18,12 @@ void add_layout_binding(DescriptorLayoutBuilder* layout_builder, uint32_t bindin
     layout_builder->binding_flags.push_back(binding_flags);
 }
 
-void clear_layout_bindings(DescriptorLayoutBuilder* layout_builder) {
+void desc_layout_builder_clear(DescriptorLayoutBuilder* layout_builder) {
     layout_builder->bindings.clear();
     layout_builder->binding_flags.clear();
 }
 
-VkDescriptorSetLayout build_set_layout(const DescriptorLayoutBuilder* layout_builder, VkDevice device) {
+VkDescriptorSetLayout desc_layout_builder_create_layout(const DescriptorLayoutBuilder* layout_builder, VkDevice device) {
 
     VkDescriptorSetLayoutBindingFlagsCreateInfo binding_flags{};
     binding_flags.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
@@ -43,14 +43,14 @@ VkDescriptorSetLayout build_set_layout(const DescriptorLayoutBuilder* layout_bui
     return set;
 }
 
-void write_buffer_desc(DescriptorWriter* desc_writer, int binding, VkBuffer buffer, size_t size, size_t offset, VkDescriptorType type) {
+void desc_writer_write_buffer_desc(DescriptorWriter* desc_writer, int binding, VkBuffer buffer, size_t size, size_t offset, VkDescriptorType type) {
     const VkDescriptorBufferInfo& info =
         desc_writer->buffer_infos.emplace_back(VkDescriptorBufferInfo{.buffer = buffer, .offset = offset, .range = size});
 
     VkWriteDescriptorSet write = {.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
 
     write.dstBinding = binding;
-    // left empty for now until we need to write it. see update_desc_set()
+    // left empty for now until we need to write it. see desc_writer_update_desc_set()
     write.dstSet          = VK_NULL_HANDLE;
     write.descriptorCount = 1;
     write.descriptorType  = type;
@@ -59,15 +59,15 @@ void write_buffer_desc(DescriptorWriter* desc_writer, int binding, VkBuffer buff
     desc_writer->writes.push_back(write);
 }
 
-void write_image_desc(DescriptorWriter* desc_writer, int binding, VkImageView image, VkSampler sampler, VkImageLayout layout, VkDescriptorType type,
-                      uint32_t array_idx) {
+void desc_writer_write_image_desc(DescriptorWriter* desc_writer, int binding, VkImageView image, VkSampler sampler, VkImageLayout layout,
+                                  VkDescriptorType type, uint32_t array_idx) {
     VkDescriptorImageInfo& info =
         desc_writer->image_infos.emplace_back(VkDescriptorImageInfo{.sampler = sampler, .imageView = image, .imageLayout = layout});
 
     VkWriteDescriptorSet write = {.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
 
     write.dstBinding = binding;
-    // left empty for now until we need to write it. see update_desc_set()
+    // left empty for now until we need to write it. see desc_writer_update_desc_set()
     write.dstSet          = VK_NULL_HANDLE;
     write.descriptorCount = 1;
     write.descriptorType  = type;
@@ -77,13 +77,13 @@ void write_image_desc(DescriptorWriter* desc_writer, int binding, VkImageView im
     desc_writer->writes.push_back(write);
 }
 
-void clear_desc_writer(DescriptorWriter* desc_writer) {
+void desc_writer_clear(DescriptorWriter* desc_writer) {
     desc_writer->image_infos.clear();
     desc_writer->writes.clear();
     desc_writer->buffer_infos.clear();
 }
 
-void update_desc_set(DescriptorWriter* desc_writer, VkDevice device, VkDescriptorSet set) {
+void desc_writer_update_desc_set(DescriptorWriter* desc_writer, VkDevice device, VkDescriptorSet set) {
     for (VkWriteDescriptorSet& write : desc_writer->writes) {
         write.dstSet = set;
     }
@@ -91,7 +91,7 @@ void update_desc_set(DescriptorWriter* desc_writer, VkDevice device, VkDescripto
     vkUpdateDescriptorSets(device, desc_writer->writes.size(), desc_writer->writes.data(), 0, nullptr);
 }
 
-void init_desc_allocator(DescriptorAllocator* desc_allocator, VkDevice device, uint32_t init_set_count, std::span<PoolSizeRatio> pool_size_ratios) {
+void desc_allocator_init(DescriptorAllocator* desc_allocator, VkDevice device, uint32_t init_set_count, std::span<PoolSizeRatio> pool_size_ratios) {
     desc_allocator->ratios.clear();
 
     std::vector<VkDescriptorPoolSize> sizes;
@@ -105,8 +105,9 @@ void init_desc_allocator(DescriptorAllocator* desc_allocator, VkDevice device, u
     desc_allocator->sets_per_pool = init_set_count * 1.5;
 }
 
-VkDescriptorSet allocate_desc_set(DescriptorAllocator* desc_allocator, VkDevice device, VkDescriptorSetLayout layout, uint32_t variable_desc_count) {
-    VkDescriptorPool pool = get_pool(desc_allocator, device);
+VkDescriptorSet desc_allocator_allocate_desc_set(DescriptorAllocator* desc_allocator, VkDevice device, VkDescriptorSetLayout layout,
+                                                 uint32_t variable_desc_count) {
+    VkDescriptorPool pool = desc_allocator_get_pool(desc_allocator, device);
 
     VkDescriptorSetAllocateInfo alloc_info{};
     alloc_info.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -129,7 +130,7 @@ VkDescriptorSet allocate_desc_set(DescriptorAllocator* desc_allocator, VkDevice 
     if (result == VK_ERROR_OUT_OF_POOL_MEMORY || result == VK_ERROR_FRAGMENTED_POOL) {
         desc_allocator->full_pools.push_back(pool);
 
-        pool = get_pool(desc_allocator, device);
+        pool = desc_allocator_get_pool(desc_allocator, device);
 
         alloc_info.descriptorPool = pool;
 
@@ -139,7 +140,7 @@ VkDescriptorSet allocate_desc_set(DescriptorAllocator* desc_allocator, VkDevice 
     return new_set;
 }
 
-void reset_desc_pools(DescriptorAllocator* desc_allocator, VkDevice device) {
+void desc_allocator_reset_desc_pools(DescriptorAllocator* desc_allocator, VkDevice device) {
     for (auto p : desc_allocator->ready_pools) {
         vkResetDescriptorPool(device, p, 0);
     }
@@ -150,7 +151,7 @@ void reset_desc_pools(DescriptorAllocator* desc_allocator, VkDevice device) {
     desc_allocator->full_pools.clear();
 }
 
-void deinit_desc_allocator(DescriptorAllocator* desc_allocator, VkDevice device) {
+void desc_allocator_deinit(DescriptorAllocator* desc_allocator, VkDevice device) {
     for (const auto p : desc_allocator->ready_pools) {
         vkDestroyDescriptorPool(device, p, nullptr);
     }
@@ -162,7 +163,7 @@ void deinit_desc_allocator(DescriptorAllocator* desc_allocator, VkDevice device)
 }
 
 // gets a ready pool or allocates another with more sets
-VkDescriptorPool get_pool(DescriptorAllocator* desc_allocator, VkDevice device) {
+VkDescriptorPool desc_allocator_get_pool(DescriptorAllocator* desc_allocator, VkDevice device) {
 
     VkDescriptorPool new_pool;
     if (!desc_allocator->ready_pools.empty()) {

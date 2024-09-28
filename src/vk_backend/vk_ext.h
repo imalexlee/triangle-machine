@@ -1,7 +1,7 @@
 #pragma once
 #include <vulkan/vulkan.h>
 
-struct VkExtContext {
+struct ExtContext {
 
     PFN_vkCreateShadersEXT                  vkCreateShadersEXT;
     PFN_vkDestroyShaderEXT                  vkDestroyShaderEXT;
@@ -20,4 +20,4 @@ struct VkExtContext {
     PFN_vkCmdSetPatchControlPointsEXT       vkCmdSetPatchControlPointsEXT;
 };
 
-void init_vk_ext_context(VkExtContext* ext_ctx, VkDevice device);
+void ext_context_init(ExtContext* ext_ctx, VkDevice device);

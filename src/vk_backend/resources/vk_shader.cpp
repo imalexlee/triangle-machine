@@ -13,9 +13,9 @@ static std::string           read_file(const std::string& filename);
 static void                  flush_builder_state(ShaderBuilder* builder);
 static std::vector<uint32_t> compile_shader_spv(shaderc_compiler_t compiler, const std::string& filename, VkShaderStageFlagBits shader_stage);
 
-void init_shader_ctx(ShaderContext* shader_ctx) { shader_ctx->builder.compiler = shaderc_compiler_initialize(); }
+void shader_ctx_init(ShaderContext* shader_ctx) { shader_ctx->builder.compiler = shaderc_compiler_initialize(); }
 
-void deinit_shader_ctx(const ShaderContext* shader_ctx, const VkExtContext* ext_ctx, VkDevice device) {
+void shader_ctx_init(const ShaderContext* shader_ctx, const ExtContext* ext_ctx, VkDevice device) {
     shaderc_compiler_release(shader_ctx->builder.compiler);
 
     for (const auto& vert_shader : shader_ctx->vert_shaders) {
@@ -27,9 +27,9 @@ void deinit_shader_ctx(const ShaderContext* shader_ctx, const VkExtContext* ext_
     }
 }
 
-void stage_shader(ShaderContext* shader_ctx, const std::filesystem::path& file_path, const std::string& name,
-                  std::span<VkDescriptorSetLayout> desc_set_layouts, std::span<VkPushConstantRange> push_constant_ranges, VkShaderStageFlagBits stage,
-                  VkShaderStageFlags next_stage) {
+void shader_ctx_stage_shader(ShaderContext* shader_ctx, const std::filesystem::path& file_path, const std::string& name,
+                             std::span<VkDescriptorSetLayout> desc_set_layouts, std::span<VkPushConstantRange> push_constant_ranges,
+                             VkShaderStageFlagBits stage, VkShaderStageFlags next_stage) {
 
     std::vector<uint32_t> shader_spv = compile_shader_spv(shader_ctx->builder.compiler, file_path, stage);
 
@@ -52,7 +52,7 @@ void stage_shader(ShaderContext* shader_ctx, const std::filesystem::path& file_p
     shader_ctx->builder.spvs.push_back(shader_spv);
 }
 
-void commit_shaders(ShaderContext* shader_ctx, const VkExtContext* ext_ctx, VkDevice device, ShaderType shader_type) {
+void shader_ctx_commit_shaders(ShaderContext* shader_ctx, const ExtContext* ext_ctx, VkDevice device, ShaderType shader_type) {
     std::vector<VkShaderEXT> shader_exts{};
     shader_exts.resize(shader_ctx->builder.create_infos.size());
 

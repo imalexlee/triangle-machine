@@ -11,7 +11,7 @@ void create_physical_device(DeviceContext* device_ctx, VkInstance instance);
 void get_queue_family_indices(DeviceContext* device_ctx, VkSurfaceKHR surface);
 void create_logical_device(DeviceContext* device_ctx);
 
-void init_device_context(DeviceContext* device_ctx, VkInstance instance, VkSurfaceKHR surface) {
+void device_ctx_init(DeviceContext* device_ctx, VkInstance instance, VkSurfaceKHR surface) {
     create_physical_device(device_ctx, instance);
     get_queue_family_indices(device_ctx, surface);
     create_logical_device(device_ctx);
@@ -52,7 +52,7 @@ void create_physical_device(DeviceContext* device_ctx, VkInstance instance) {
     }
 }
 
-void deinit_device_context(const DeviceContext* device_ctx) { vkDestroyDevice(device_ctx->logical_device, nullptr); }
+void device_ctx_deinit(const DeviceContext* device_ctx) { vkDestroyDevice(device_ctx->logical_device, nullptr); }
 
 void get_queue_family_indices(DeviceContext* device_ctx, VkSurfaceKHR surface) {
 
