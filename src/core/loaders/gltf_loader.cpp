@@ -22,11 +22,6 @@ struct Vertex {
     };
 };
 
-struct MeshData {
-    glm::mat4       local_transform{1.f};
-    VkDeviceAddress vertex_buffer_address{};
-};
-
 struct GLTFTexture {
     uint8_t*                data{};
     std::optional<uint32_t> sampler_i{};
@@ -45,12 +40,13 @@ struct MaterialData {
     float     metal_factor{};
     float     rough_factor{};
     uint32_t  color_tex_i{};
+    uint32_t  color_tex_coord{};
     uint32_t  metal_rough_tex_i{};
+    uint32_t  metal_rough_tex_coord{};
+    float     padding[2];
 };
 
 struct GLTFMaterial {
-    TexCoordPair        base_color{};
-    TexCoordPair        metal_rough{};
     MaterialData        mat_data{};
     fastgltf::AlphaMode alpha_mode = fastgltf::AlphaMode::Opaque;
 };
@@ -105,20 +101,17 @@ static std::vector<GLTFTexture> load_gltf_textures(const fastgltf::Asset* asset)
                            assert(file_path.fileByteOffset == 0);
                            assert(file_path.uri.isLocalPath());
 
-                           const std::string path(file_path.uri.path().begin(),
-                                                  file_path.uri.path().end());
+                           const std::string path(file_path.uri.path().begin(), file_path.uri.path().end());
 
-                           new_tex.data = stbi_load(path.c_str(), &width, &height, &nr_channels,
-                                                    new_tex.color_channels);
+                           new_tex.data = stbi_load(path.c_str(), &width, &height, &nr_channels, new_tex.color_channels);
                            assert(new_tex.data);
 
                            new_tex.width  = width;
                            new_tex.height = height;
                        },
                        [&](const fastgltf::sources::Array& vector) {
-                           new_tex.data = stbi_load_from_memory(
-                               vector.bytes.data(), static_cast<int>(vector.bytes.size()), &width,
-                               &height, &nr_channels, new_tex.color_channels);
+                           new_tex.data = stbi_load_from_memory(vector.bytes.data(), static_cast<int>(vector.bytes.size()), &width, &height,
+                                                                &nr_channels, new_tex.color_channels);
 
                            assert(new_tex.data);
                            new_tex.width  = width;
@@ -128,18 +121,16 @@ static std::vector<GLTFTexture> load_gltf_textures(const fastgltf::Asset* asset)
                            auto& buffer_view = asset->bufferViews[view.bufferViewIndex];
                            auto& buffer      = asset->buffers[buffer_view.bufferIndex];
 
-                           std::visit(fastgltf::visitor{
-                                          []([[maybe_unused]] auto& arg) {},
-                                          [&](const fastgltf::sources::Array& vector) {
-                                              new_tex.data = stbi_load_from_memory(
-                                                  vector.bytes.data() + buffer_view.byteOffset,
-                                                  static_cast<int>(buffer_view.byteLength), &width,
-                                                  &height, &nr_channels, new_tex.color_channels);
-                                              assert(new_tex.data);
+                           std::visit(fastgltf::visitor{[]([[maybe_unused]] auto& arg) {},
+                                                        [&](const fastgltf::sources::Array& vector) {
+                                                            new_tex.data = stbi_load_from_memory(vector.bytes.data() + buffer_view.byteOffset,
+                                                                                                 static_cast<int>(buffer_view.byteLength), &width,
+                                                                                                 &height, &nr_channels, new_tex.color_channels);
+                                                            assert(new_tex.data);
 
-                                              new_tex.width  = width;
-                                              new_tex.height = height;
-                                          }},
+                                                            new_tex.width  = width;
+                                                            new_tex.height = height;
+                                                        }},
                                       buffer.data);
                        },
                    },
@@ -154,24 +145,26 @@ static std::vector<GLTFTexture> load_gltf_textures(const fastgltf::Asset* asset)
     return gltf_textures;
 }
 
-std::vector<GLTFMaterial> load_gltf_materials(const fastgltf::Asset& my_asset) {
+std::vector<GLTFMaterial> load_gltf_materials(const fastgltf::Asset* asset) {
     std::vector<GLTFMaterial> gltf_materials{};
-    gltf_materials.reserve(my_asset.materials.size());
-    int i = 0;
-    for (const auto& material : my_asset.materials) {
-        i++;
+    gltf_materials.reserve(asset->materials.size());
+    for (const auto& material : asset->materials) {
         GLTFMaterial new_mat{};
         if (material.pbrData.baseColorTexture.has_value()) {
-            const auto base_color_tex      = &material.pbrData.baseColorTexture.value();
-            new_mat.base_color.tex_i       = base_color_tex->textureIndex;
-            new_mat.base_color.tex_coord_i = base_color_tex->texCoordIndex;
-            new_mat.mat_data.color_tex_i   = new_mat.base_color.tex_coord_i;
+            const auto base_color_tex        = &material.pbrData.baseColorTexture.value();
+            new_mat.mat_data.color_tex_coord = base_color_tex->texCoordIndex;
+            new_mat.mat_data.color_tex_i     = base_color_tex->textureIndex;
+        } else {
+            new_mat.mat_data.color_tex_coord = 0;
+            new_mat.mat_data.color_tex_i     = 0;
         }
         if (material.pbrData.metallicRoughnessTexture.has_value()) {
-            const auto metal_rough_tex         = &material.pbrData.metallicRoughnessTexture.value();
-            new_mat.metal_rough.tex_i          = metal_rough_tex->textureIndex;
-            new_mat.metal_rough.tex_coord_i    = metal_rough_tex->texCoordIndex;
-            new_mat.mat_data.metal_rough_tex_i = new_mat.metal_rough.tex_coord_i;
+            const auto metal_rough_tex             = &material.pbrData.metallicRoughnessTexture.value();
+            new_mat.mat_data.metal_rough_tex_coord = metal_rough_tex->texCoordIndex;
+            new_mat.mat_data.metal_rough_tex_i     = metal_rough_tex->textureIndex;
+        } else {
+            new_mat.mat_data.metal_rough_tex_coord = 0;
+            new_mat.mat_data.metal_rough_tex_i     = 0;
         }
         new_mat.mat_data.metal_factor  = material.pbrData.metallicFactor;
         new_mat.mat_data.rough_factor  = material.pbrData.roughnessFactor;
@@ -207,10 +200,8 @@ static std::vector<GLTFMesh> load_gltf_meshes(const fastgltf::Asset* my_asset) {
             uint32_t total_vertex_count = 0;
             for (const auto& primitive : mesh.primitives) {
                 assert(primitive.indicesAccessor.has_value());
-                const fastgltf::Accessor* pos_accessor =
-                    &my_asset->accessors[primitive.findAttribute("POSITION")->second];
-                const fastgltf::Accessor* indices_accessor =
-                    &my_asset->accessors[primitive.indicesAccessor.value()];
+                const fastgltf::Accessor* pos_accessor     = &my_asset->accessors[primitive.findAttribute("POSITION")->second];
+                const fastgltf::Accessor* indices_accessor = &my_asset->accessors[primitive.indicesAccessor.value()];
 
                 total_index_count += indices_accessor->count;
                 total_vertex_count += pos_accessor->count;
@@ -231,50 +222,41 @@ static std::vector<GLTFMesh> load_gltf_meshes(const fastgltf::Asset* my_asset) {
 
             assert(primitive.findAttribute("NORMAL") != primitive.attributes.cend()); // no normal
 
-            const fastgltf::Accessor* pos_accessor =
-                &my_asset->accessors[primitive.findAttribute("POSITION")->second];
-            const fastgltf::Accessor* indices_accessor =
-                &my_asset->accessors[primitive.indicesAccessor.value()];
-            const fastgltf::Accessor* normal_accessor =
-                &my_asset->accessors[primitive.findAttribute("NORMAL")->second];
+            const fastgltf::Accessor* pos_accessor     = &my_asset->accessors[primitive.findAttribute("POSITION")->second];
+            const fastgltf::Accessor* indices_accessor = &my_asset->accessors[primitive.indicesAccessor.value()];
+            const fastgltf::Accessor* normal_accessor  = &my_asset->accessors[primitive.findAttribute("NORMAL")->second];
 
             new_primitive.indices_count = indices_accessor->count;
             new_primitive.indices_start = index_offset;
             new_mesh.primitives.push_back(new_primitive);
 
-            fastgltf::iterateAccessor<uint32_t>(
-                *my_asset, *indices_accessor, [&](uint32_t vert_index) {
-                    new_mesh.indices.push_back(vert_index + vertex_count);
-                });
+            fastgltf::iterateAccessor<uint32_t>(*my_asset, *indices_accessor,
+                                                [&](uint32_t vert_index) { new_mesh.indices.push_back(vert_index + vertex_count); });
 
-            fastgltf::iterateAccessorWithIndex<glm::vec3>(
-                *my_asset, *pos_accessor, [&](glm::vec3 pos, size_t i) {
-                    new_mesh.vertices[i + vertex_count].position.x = pos.x;
-                    new_mesh.vertices[i + vertex_count].position.y = pos.y;
-                    new_mesh.vertices[i + vertex_count].position.z = pos.z;
-                });
+            fastgltf::iterateAccessorWithIndex<glm::vec3>(*my_asset, *pos_accessor, [&](glm::vec3 pos, size_t i) {
+                new_mesh.vertices[i + vertex_count].position.x = pos.x;
+                new_mesh.vertices[i + vertex_count].position.y = pos.y;
+                new_mesh.vertices[i + vertex_count].position.z = pos.z;
+            });
 
-            fastgltf::iterateAccessorWithIndex<glm::vec3>(
-                *my_asset, *normal_accessor, [&](glm::vec3 normal, size_t i) {
-                    assert(i + vertex_count < new_mesh.vertices.size());
-                    new_mesh.vertices[i + vertex_count].normal.x = normal.x;
-                    new_mesh.vertices[i + vertex_count].normal.y = normal.y;
-                    new_mesh.vertices[i + vertex_count].normal.z = normal.z;
-                });
+            fastgltf::iterateAccessorWithIndex<glm::vec3>(*my_asset, *normal_accessor, [&](glm::vec3 normal, size_t i) {
+                assert(i + vertex_count < new_mesh.vertices.size());
+                new_mesh.vertices[i + vertex_count].normal.x = normal.x;
+                new_mesh.vertices[i + vertex_count].normal.y = normal.y;
+                new_mesh.vertices[i + vertex_count].normal.z = normal.z;
+            });
             for (int coord_i = 0; coord_i < tex_coord_num; coord_i++) {
                 std::string coord_name          = "TEXCOORD_" + std::to_string(coord_i);
                 const auto  tex_coord_attribute = primitive.findAttribute(coord_name);
 
                 if (tex_coord_attribute != primitive.attributes.cend()) {
                     // found tex coord
-                    const fastgltf::Accessor* tex_coord_accessor =
-                        &my_asset->accessors[tex_coord_attribute->second];
-                    fastgltf::iterateAccessorWithIndex<glm::vec2>(
-                        *my_asset, *tex_coord_accessor, [&](glm::vec2 tex_coord, size_t i) {
-                            assert(i + vertex_count < new_mesh.vertices.size());
-                            new_mesh.vertices[i + vertex_count].tex_coord[coord_i].x = tex_coord.x;
-                            new_mesh.vertices[i + vertex_count].tex_coord[coord_i].y = tex_coord.y;
-                        });
+                    const fastgltf::Accessor* tex_coord_accessor = &my_asset->accessors[tex_coord_attribute->second];
+                    fastgltf::iterateAccessorWithIndex<glm::vec2>(*my_asset, *tex_coord_accessor, [&](glm::vec2 tex_coord, size_t i) {
+                        assert(i + vertex_count < new_mesh.vertices.size());
+                        new_mesh.vertices[i + vertex_count].tex_coord[coord_i].x = tex_coord.x;
+                        new_mesh.vertices[i + vertex_count].tex_coord[coord_i].y = tex_coord.y;
+                    });
                 } // else, tex coords default to 0 which is fine
             }
             vertex_count += pos_accessor->count;
@@ -286,54 +268,24 @@ static std::vector<GLTFMesh> load_gltf_meshes(const fastgltf::Asset* my_asset) {
     return gltf_meshes;
 }
 
-static std::vector<VkDescriptorSet>
-create_mesh_desc_sets(VkBackend* backend, DescriptorAllocator* desc_allocator,
-                      const VkDescriptorSetLayout set_layout, std::span<const GLTFNode> gltf_nodes,
-                      const std::span<const MeshBuffers> vk_meshes) {
-    std::vector<VkDescriptorSet> mesh_desc_sets;
-    mesh_desc_sets.reserve(gltf_nodes.size());
-
-    std::vector<PoolSizeRatio> mesh_pool_sizes = {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1},
-    };
-    init_desc_allocator(desc_allocator, backend->device_ctx.logical_device, gltf_nodes.size(),
-                        mesh_pool_sizes);
-
+static std::vector<MeshData> create_mesh_data(const VkBackend* backend, std::span<const GLTFNode> gltf_nodes,
+                                              const std::span<const MeshBuffers> vk_meshes) {
+    std::vector<MeshData> mesh_data;
+    mesh_data.reserve(gltf_nodes.size());
     for (const auto& node : gltf_nodes) {
-        VkDescriptorSet new_desc_set =
-            allocate_desc_set(desc_allocator, backend->device_ctx.logical_device, set_layout);
-
-        const AllocatedBuffer mesh_uniform_buffer =
-            create_buffer(sizeof(MeshData), backend->allocator, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                          VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
-                          VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                              VMA_ALLOCATION_CREATE_MAPPED_BIT);
-
-        auto* mapped_mesh_data = static_cast<MeshData*>(mesh_uniform_buffer.info.pMappedData);
-        mapped_mesh_data->local_transform       = node.transform;
-        mapped_mesh_data->vertex_buffer_address = get_buffer_device_address(
-            backend->device_ctx.logical_device, &vk_meshes[node.mesh_i].vertices);
-
-        DescriptorWriter desc_writer;
-        write_buffer_desc(&desc_writer, 0, mesh_uniform_buffer.buffer, sizeof(MeshData), 0,
-                          VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-
-        update_desc_set(&desc_writer, backend->device_ctx.logical_device, new_desc_set);
-
-        mesh_desc_sets.push_back(new_desc_set);
-
-        backend->deletion_queue.push_persistant([=] {
-            vmaDestroyBuffer(backend->allocator, mesh_uniform_buffer.buffer,
-                             mesh_uniform_buffer.allocation);
-        });
+        MeshData new_mesh_data;
+        new_mesh_data.local_transform       = node.transform;
+        new_mesh_data.vertex_buffer_address = get_buffer_device_address(backend->device_ctx.logical_device, &vk_meshes[node.mesh_i].vertices);
+        new_mesh_data.mat_i                 = 0; // default mat
+        mesh_data.push_back(new_mesh_data);
     }
 
-    return mesh_desc_sets;
+    return mesh_data;
 }
+
 static int times_entered = 0;
 // Adds draw objects to entity from a given root node
-void create_node_tree(const fastgltf::Asset* asset, const glm::mat4x4* transform,
-                      const size_t node_i, std::vector<GLTFNode>* gltf_nodes) {
+void create_node_tree(const fastgltf::Asset* asset, const glm::mat4x4* transform, const size_t node_i, std::vector<GLTFNode>* gltf_nodes) {
 
     times_entered++;
     const fastgltf::Node* node = &asset->nodes[node_i];
@@ -341,11 +293,9 @@ void create_node_tree(const fastgltf::Asset* asset, const glm::mat4x4* transform
     if (const auto* pMatrix = std::get_if<fastgltf::Node::TransformMatrix>(&node->transform)) {
         new_gltf_node.transform = *transform * glm::mat4x4(glm::make_mat4x4(pMatrix->data()));
     } else if (const auto* pTransform = std::get_if<fastgltf::TRS>(&node->transform)) {
-        new_gltf_node.transform =
-            *transform *
-            glm::translate(glm::mat4(1.0f), glm::make_vec3(pTransform->translation.data())) *
-            glm::toMat4(glm::make_quat(pTransform->rotation.data())) *
-            glm::scale(glm::mat4(1.0f), glm::make_vec3(pTransform->scale.data()));
+        new_gltf_node.transform = *transform * glm::translate(glm::mat4(1.0f), glm::make_vec3(pTransform->translation.data())) *
+                                  glm::toMat4(glm::make_quat(pTransform->rotation.data())) *
+                                  glm::scale(glm::mat4(1.0f), glm::make_vec3(pTransform->scale.data()));
     } else {
         new_gltf_node.transform = *transform;
     }
@@ -375,8 +325,7 @@ static std::vector<GLTFNode> load_gltf_nodes(const fastgltf::Asset* asset) {
     return gltf_nodes;
 }
 
-static std::vector<VkSampler> upload_gltf_samplers(const VkBackend*                   backend,
-                                                   std::span<const fastgltf::Sampler> samplers) {
+static std::vector<VkSampler> upload_gltf_samplers(VkBackend* backend, std::span<const fastgltf::Sampler> samplers) {
     std::vector<VkSampler> vk_samplers;
     vk_samplers.reserve(samplers.size());
 
@@ -426,25 +375,31 @@ static std::vector<VkSampler> upload_gltf_samplers(const VkBackend*             
             sampler_ci.addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
         }
 
-        VK_CHECK(
-            vkCreateSampler(backend->device_ctx.logical_device, &sampler_ci, nullptr, &sampler));
+        VK_CHECK(vkCreateSampler(backend->device_ctx.logical_device, &sampler_ci, nullptr, &sampler));
         vk_samplers.push_back(sampler);
+
+        backend->deletion_queue.push_persistent([=] {
+            for (VkSampler vk_sampler : vk_samplers) {
+                vkDestroySampler(backend->device_ctx.logical_device, vk_sampler, nullptr);
+            }
+        });
     }
 
     return vk_samplers;
 }
 
-static std::vector<TextureSampler>
-upload_gltf_textures(VkBackend* backend, std::span<const GLTFTexture> textures,
-                     std::span<const fastgltf::Sampler> samplers) {
+static uint32_t upload_gltf_textures(VkBackend* backend, std::span<const GLTFTexture> textures, std::span<const fastgltf::Sampler> samplers) {
     const std::vector<VkSampler> vk_samplers = upload_gltf_samplers(backend, samplers);
     std::vector<TextureSampler>  tex_samplers;
     tex_samplers.reserve(tex_samplers.size());
     for (const auto& texture : textures) {
         TextureSampler new_tex_sampler{};
-        new_tex_sampler.tex =
-            upload_texture(backend, texture.data, VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_VIEW_TYPE_2D,
-                           1, texture.color_channels, texture.width, texture.height);
+        new_tex_sampler.view_type      = VK_IMAGE_VIEW_TYPE_2D;
+        new_tex_sampler.width          = texture.width;
+        new_tex_sampler.height         = texture.height;
+        new_tex_sampler.layer_count    = 1;
+        new_tex_sampler.color_channels = texture.color_channels;
+        new_tex_sampler.data           = texture.data;
         if (texture.sampler_i.has_value()) {
             new_tex_sampler.sampler = vk_samplers[texture.sampler_i.value()];
         } else {
@@ -453,20 +408,10 @@ upload_gltf_textures(VkBackend* backend, std::span<const GLTFTexture> textures,
         tex_samplers.push_back(new_tex_sampler);
     }
 
-    backend->deletion_queue.push_persistant([=] {
-        for (const VkSampler sampler : vk_samplers) {
-            vkDestroySampler(backend->device_ctx.logical_device, sampler, nullptr);
-        }
-        for (const auto& texture : tex_samplers) {
-            vmaDestroyImage(backend->allocator, texture.tex.image, texture.tex.allocation);
-            vkDestroyImageView(backend->device_ctx.logical_device, texture.tex.image_view, nullptr);
-        }
-    });
-    return tex_samplers;
+    return upload_2d_texture(backend, tex_samplers);
 }
 
-static std::vector<MeshBuffers> upload_gltf_mesh_buffers(VkBackend*                backend,
-                                                         std::span<const GLTFMesh> meshes) {
+static std::vector<MeshBuffers> upload_gltf_mesh_buffers(VkBackend* backend, std::span<const GLTFMesh> meshes) {
     std::vector<MeshBuffers> mesh_buffers;
     mesh_buffers.reserve(meshes.size());
     for (const auto& mesh : meshes) {
@@ -474,145 +419,48 @@ static std::vector<MeshBuffers> upload_gltf_mesh_buffers(VkBackend*             
         mesh_buffers.push_back(new_mesh_buffers);
     }
 
-    backend->deletion_queue.push_persistant([=] {
-        for (const auto& mesh_buffer : mesh_buffers) {
-            vmaDestroyBuffer(backend->allocator, mesh_buffer.indices.buffer,
-                             mesh_buffer.indices.allocation);
-            vmaDestroyBuffer(backend->allocator, mesh_buffer.vertices.buffer,
-                             mesh_buffer.vertices.allocation);
-        }
-    });
     return mesh_buffers;
 }
 
-// last element will be the default material desc set
-static std::vector<VkDescriptorSet>
-create_mat_desc_sets(VkBackend* backend, DescriptorAllocator* desc_allocator,
-                     VkDescriptorSetLayout set_layout, std::span<const GLTFMaterial> gltf_materials,
-                     std::span<const TextureSampler> vk_textures) {
+static uint32_t upload_gltf_materials(VkBackend* backend, std::span<const GLTFMaterial> gltf_materials, uint32_t tex_desc_offset) {
 
-    std::vector<VkDescriptorSet> mat_desc_sets;
-    mat_desc_sets.reserve(gltf_materials.size() + 1);
+    // If the backend has no materials, create the default material at index 0
+    if (backend->mat_count == 0) {
+        MaterialData default_mat{};
+        // TODO: remove this. just a sanity check
+        assert(!default_mat.color_tex_i && !default_mat.metal_rough_tex_i && !default_mat.metal_rough_tex_coord && !default_mat.color_tex_coord);
+        std::array mat_arr = {default_mat};
 
-    std::vector<PoolSizeRatio> mat_pool_sizes = {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         1},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2}
-    };
-    init_desc_allocator(desc_allocator, backend->device_ctx.logical_device, gltf_materials.size(),
-                        mat_pool_sizes);
-
-    const TextureSampler default_tex_sampler = {
-        .tex     = backend->default_texture,
-        .sampler = backend->default_nearest_sampler,
-    };
-
-    for (const auto& material : gltf_materials) {
-        // 1. allocate uninitialized desc set
-        const VkDescriptorSet new_desc_set =
-            allocate_desc_set(desc_allocator, backend->device_ctx.logical_device, set_layout);
-
-        // 2. allocate gpu buffer for which we can write data to through a memory mapping
-        // this is just a uniform buffer for some data about materials like color/metal factors
-        const AllocatedBuffer mat_uniform_buffer =
-            create_buffer(sizeof(MaterialData), backend->allocator,
-                          VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
-                          VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                              VMA_ALLOCATION_CREATE_MAPPED_BIT);
-
-        auto* mapped_mat_data = static_cast<MaterialData*>(mat_uniform_buffer.info.pMappedData);
-        mapped_mat_data->color_factors     = material.mat_data.color_factors;
-        mapped_mat_data->metal_factor      = material.mat_data.metal_factor;
-        mapped_mat_data->rough_factor      = material.mat_data.rough_factor;
-        mapped_mat_data->color_tex_i       = material.mat_data.color_tex_i;
-        mapped_mat_data->metal_rough_tex_i = material.mat_data.metal_rough_tex_i;
-
-        // 3. assign the appropriate textures to this material or use default options
-        const TextureSampler* color_tex_sampler       = &default_tex_sampler;
-        const TextureSampler* metal_rough_tex_sampler = &default_tex_sampler;
-        if (material.base_color.tex_i.has_value()) {
-            color_tex_sampler = &vk_textures[material.base_color.tex_i.value()];
-        }
-        if (material.metal_rough.tex_i.has_value()) {
-            metal_rough_tex_sampler = &vk_textures[material.metal_rough.tex_i.value()];
-        }
-
-        // 4. set descriptors in the desc set to point to all of our allocated and filled resources
-        DescriptorWriter desc_writer;
-        write_buffer_desc(&desc_writer, 0, mat_uniform_buffer.buffer, sizeof(MaterialData), 0,
-                          VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-        write_image_desc(&desc_writer, 1, color_tex_sampler->tex.image_view,
-                         color_tex_sampler->sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                         VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-        write_image_desc(&desc_writer, 2, metal_rough_tex_sampler->tex.image_view,
-                         metal_rough_tex_sampler->sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                         VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-
-        update_desc_set(&desc_writer, backend->device_ctx.logical_device, new_desc_set);
-
-        mat_desc_sets.push_back(new_desc_set);
-
-        backend->deletion_queue.push_persistant([=] {
-            vmaDestroyBuffer(backend->allocator, mat_uniform_buffer.buffer,
-                             mat_uniform_buffer.allocation);
-        });
+        std::ignore = upload_materials<MaterialData>(backend, mat_arr);
     }
 
-    {
-        // create final default mat desc set
-        const VkDescriptorSet new_desc_set =
-            allocate_desc_set(desc_allocator, backend->device_ctx.logical_device, set_layout);
-
-        const AllocatedBuffer mat_uniform_buffer =
-            create_buffer(sizeof(MaterialData), backend->allocator,
-                          VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
-                          VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                              VMA_ALLOCATION_CREATE_MAPPED_BIT);
-
-        auto* mapped_mat_data = static_cast<MaterialData*>(mat_uniform_buffer.info.pMappedData);
-        mapped_mat_data->color_factors = default_material.mat_data.color_factors;
-        mapped_mat_data->metal_factor  = default_material.mat_data.metal_factor;
-        mapped_mat_data->rough_factor  = default_material.mat_data.rough_factor;
-
-        DescriptorWriter desc_writer;
-        write_buffer_desc(&desc_writer, 0, mat_uniform_buffer.buffer, sizeof(MaterialData), 0,
-                          VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-        write_image_desc(&desc_writer, 1, default_tex_sampler.tex.image_view,
-                         default_tex_sampler.sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                         VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-        write_image_desc(&desc_writer, 2, default_tex_sampler.tex.image_view,
-                         default_tex_sampler.sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                         VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-
-        update_desc_set(&desc_writer, backend->device_ctx.logical_device, new_desc_set);
-
-        mat_desc_sets.push_back(new_desc_set);
-
-        backend->deletion_queue.push_persistant([=] {
-            vmaDestroyBuffer(backend->allocator, mat_uniform_buffer.buffer,
-                             mat_uniform_buffer.allocation);
-        });
+    std::vector<MaterialData> materials;
+    materials.reserve(gltf_materials.size());
+    for (const auto& gltf_mat : gltf_materials) {
+        MaterialData new_mat_data      = gltf_mat.mat_data;
+        new_mat_data.color_tex_i       = gltf_mat.mat_data.color_tex_i + tex_desc_offset;
+        new_mat_data.metal_rough_tex_i = gltf_mat.mat_data.metal_rough_tex_i + tex_desc_offset;
+        materials.push_back(new_mat_data);
     }
 
-    return mat_desc_sets;
+    return upload_materials<MaterialData>(backend, materials);
+
+    return 0;
 }
 
 Entity load_entity(VkBackend* backend, const std::filesystem::path& path) {
 
-    constexpr auto supported_extensions = fastgltf::Extensions::KHR_mesh_quantization |
-                                          fastgltf::Extensions::KHR_texture_transform |
-                                          fastgltf::Extensions::KHR_materials_clearcoat |
-                                          fastgltf::Extensions::KHR_materials_specular |
-                                          fastgltf::Extensions::KHR_materials_transmission |
-                                          fastgltf::Extensions::KHR_materials_variants;
+    constexpr auto supported_extensions = fastgltf::Extensions::KHR_mesh_quantization | fastgltf::Extensions::KHR_texture_transform |
+                                          fastgltf::Extensions::KHR_materials_clearcoat | fastgltf::Extensions::KHR_materials_specular |
+                                          fastgltf::Extensions::KHR_materials_transmission | fastgltf::Extensions::KHR_materials_variants;
 
     fastgltf::Parser         parser(supported_extensions);
     fastgltf::GltfDataBuffer data;
     data.loadFromFile(path);
 
-    constexpr auto gltf_options =
-        fastgltf::Options::DontRequireValidAssetMember | fastgltf::Options::AllowDouble |
-        fastgltf::Options::LoadGLBBuffers | fastgltf::Options::LoadExternalBuffers |
-        fastgltf::Options::LoadExternalImages | fastgltf::Options::GenerateMeshIndices;
+    constexpr auto gltf_options = fastgltf::Options::DontRequireValidAssetMember | fastgltf::Options::AllowDouble |
+                                  fastgltf::Options::LoadGLBBuffers | fastgltf::Options::LoadExternalBuffers | fastgltf::Options::LoadExternalImages |
+                                  fastgltf::Options::GenerateMeshIndices;
 
     auto load = parser.loadGltf(&data, path.parent_path(), gltf_options);
 
@@ -623,38 +471,16 @@ Entity load_entity(VkBackend* backend, const std::filesystem::path& path) {
     fastgltf::Asset asset;
     asset = std::move(load.get());
 
-    const std::vector<GLTFTexture> gltf_textures  = load_gltf_textures(&asset);
-    std::vector<GLTFMaterial>      gltf_materials = load_gltf_materials(asset);
-    const std::vector<GLTFMesh>    gltf_meshes    = load_gltf_meshes(&asset);
-    const std::vector<GLTFNode>    gltf_nodes     = load_gltf_nodes(&asset);
+    const std::vector<GLTFTexture>  gltf_textures  = load_gltf_textures(&asset);
+    const std::vector<GLTFMaterial> gltf_materials = load_gltf_materials(&asset);
+    const std::vector<GLTFMesh>     gltf_meshes    = load_gltf_meshes(&asset);
+    const std::vector<GLTFNode>     gltf_nodes     = load_gltf_nodes(&asset);
 
-    const std::vector<TextureSampler> vk_textures =
-        upload_gltf_textures(backend, gltf_textures, asset.samplers);
-    const std::vector<MeshBuffers> vk_meshes = upload_gltf_mesh_buffers(backend, gltf_meshes);
+    const std::vector<MeshBuffers> vk_meshes       = upload_gltf_mesh_buffers(backend, gltf_meshes);
+    const uint32_t                 tex_desc_offset = upload_gltf_textures(backend, gltf_textures, asset.samplers);
+    const uint32_t                 mat_desc_offset = upload_gltf_materials(backend, gltf_materials, tex_desc_offset);
 
-    DescriptorAllocator mat_desc_allocator;
-    DescriptorAllocator mesh_desc_allocator;
-
-    DescriptorLayoutBuilder layout_builder;
-    add_layout_binding(&layout_builder, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-    add_layout_binding(&layout_builder, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-    add_layout_binding(&layout_builder, 2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-
-    VkDescriptorSetLayout mat_desc_layout =
-        build_set_layout(&layout_builder, backend->device_ctx.logical_device,
-                         VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
-
-    clear_layout_bindings(&layout_builder);
-
-    add_layout_binding(&layout_builder, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-    VkDescriptorSetLayout mesh_desc_layout =
-        build_set_layout(&layout_builder, backend->device_ctx.logical_device,
-                         VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
-
-    const std::vector<VkDescriptorSet> vk_mat_desc_sets = create_mat_desc_sets(
-        backend, &mat_desc_allocator, mat_desc_layout, gltf_materials, vk_textures);
-    const std::vector<VkDescriptorSet> vk_mesh_desc_sets = create_mesh_desc_sets(
-        backend, &mesh_desc_allocator, mesh_desc_layout, gltf_nodes, vk_meshes);
+    const std::vector<MeshData> mesh_data = create_mesh_data(backend, gltf_nodes, vk_meshes);
 
     Entity entity;
     for (size_t node_i = 0; node_i < gltf_nodes.size(); node_i++) {
@@ -662,16 +488,18 @@ Entity load_entity(VkBackend* backend, const std::filesystem::path& path) {
         const GLTFMesh* mesh = &gltf_meshes[node->mesh_i];
         for (const auto& primitive : mesh->primitives) {
             DrawObject new_draw_obj{};
-            new_draw_obj.obj_desc_set  = vk_mesh_desc_sets[node_i];
+            new_draw_obj.mesh_data     = mesh_data[node_i];
             new_draw_obj.index_buffer  = vk_meshes[node->mesh_i].indices.buffer;
             new_draw_obj.indices_count = primitive.indices_count;
             new_draw_obj.indices_start = primitive.indices_start;
 
-            // the last mat desc set will hold the default material
-            const size_t mat_i        = primitive.material_i.value_or(vk_mat_desc_sets.size() - 1);
-            new_draw_obj.mat_desc_set = vk_mat_desc_sets[mat_i];
+            if (primitive.material_i.has_value()) {
+                new_draw_obj.mesh_data.mat_i = primitive.material_i.value() + mat_desc_offset;
+            } else {
+                new_draw_obj.mesh_data.mat_i = 0;
+            }
 
-            if (gltf_materials[mat_i].alpha_mode == fastgltf::AlphaMode::Blend) {
+            if (gltf_materials[primitive.material_i.value_or(0)].alpha_mode == fastgltf::AlphaMode::Blend) {
                 entity.transparent_objs.push_back(new_draw_obj);
             } else {
                 entity.opaque_objs.push_back(new_draw_obj);
@@ -679,47 +507,12 @@ Entity load_entity(VkBackend* backend, const std::filesystem::path& path) {
         }
     }
 
-    // sort by material
-    std::sort(entity.opaque_objs.begin(), entity.opaque_objs.end(),
-              [&](const DrawObject& obj_a, const DrawObject& obj_b) {
-                  if (obj_a.mat_desc_set == obj_b.mat_desc_set) {
-                      return obj_a.indices_start < obj_b.indices_start;
-                  }
-                  return obj_a.mat_desc_set < obj_b.mat_desc_set;
-              });
-
-    std::sort(entity.transparent_objs.begin(), entity.transparent_objs.end(),
-              [&](const DrawObject& obj_a, const DrawObject& obj_b) {
-                  if (obj_a.mat_desc_set == obj_b.mat_desc_set) {
-                      return obj_a.indices_start < obj_b.indices_start;
-                  }
-                  return obj_a.mat_desc_set < obj_b.mat_desc_set;
-              });
-
     entity.opaque_objs.shrink_to_fit();
     entity.transparent_objs.shrink_to_fit();
 
     for (auto& texture : gltf_textures) {
         stbi_image_free(texture.data);
     }
-
-    backend->deletion_queue.push_persistant([=] {
-        vkDestroyDescriptorSetLayout(backend->device_ctx.logical_device, mesh_desc_layout, nullptr);
-        vkDestroyDescriptorSetLayout(backend->device_ctx.logical_device, mat_desc_layout, nullptr);
-
-        for (const auto p : mesh_desc_allocator.ready_pools) {
-            vkDestroyDescriptorPool(backend->device_ctx.logical_device, p, nullptr);
-        }
-        for (const auto p : mesh_desc_allocator.full_pools) {
-            vkDestroyDescriptorPool(backend->device_ctx.logical_device, p, nullptr);
-        }
-        for (const auto p : mat_desc_allocator.ready_pools) {
-            vkDestroyDescriptorPool(backend->device_ctx.logical_device, p, nullptr);
-        }
-        for (const auto p : mat_desc_allocator.full_pools) {
-            vkDestroyDescriptorPool(backend->device_ctx.logical_device, p, nullptr);
-        }
-    });
 
     return entity;
 }

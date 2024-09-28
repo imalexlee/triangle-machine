@@ -32,8 +32,7 @@ void update_ui(const VkBackend* backend) {
     ImGui::Begin("Stats", &show_window, window_flags);
 
     ImGui::Text("Host buffer recording: %.3f us", backend->stats.draw_time);
-    ImGui::Text("Frame time: %.3f ms (%.1f FPS)", backend->stats.frame_time,
-                1000.f / backend->stats.frame_time);
+    ImGui::Text("Frame time: %.3f ms (%.1f FPS)", backend->stats.frame_time, 1000.f / backend->stats.frame_time);
     ImGui::Text("Scene update time: %.3f us", backend->stats.scene_update_time);
 
     ImGui::End();

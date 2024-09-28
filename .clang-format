@@ -1,7 +1,7 @@
 BasedOnStyle: LLVM
 IndentWidth: 4
 TabWidth: 4
-ColumnLimit: 100
+ColumnLimit: 150
 NamespaceIndentation: All
 PointerAlignment: Left
 AlignArrayOfStructures: Left
@@ -11,6 +11,6 @@ AlignConsecutiveDeclarations:
   #AcrossComments: true
   #AlignFunctionPointers: true
 AlignConsecutiveAssignments: true
-#BinPackArguments: true
-#BinPackParameters: true
-#AllowAllParametersOfDeclarationOnNextLine: false
+#BinPackArguments: false
+#BinPackParameters: false
+AllowAllParametersOfDeclarationOnNextLine: true

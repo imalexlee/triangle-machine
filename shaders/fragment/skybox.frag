@@ -1,5 +1,10 @@
 #version 450
 
+#extension GL_GOOGLE_include_directive: require
+#extension GL_EXT_nonuniform_qualifier: require
+#include "../input_structures.glsl"
+
+/**
 layout (set = 0, binding = 0) uniform SceneData {
     mat4 view;
     mat4 proj;
@@ -7,6 +12,7 @@ layout (set = 0, binding = 0) uniform SceneData {
 } scene_data;
 
 layout (set = 1, binding = 0) uniform samplerCube sky_box_tex;
+*/
 
 layout (location = 0) in vec3 dir;
 

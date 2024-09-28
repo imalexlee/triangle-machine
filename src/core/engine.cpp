@@ -19,8 +19,7 @@ void init_engine(Engine* engine) {
 
     constexpr glm::vec4 init_cam_pos = {0, -1, -8, 1};
 
-    init_window(&engine->window, core_opts::initial_width, core_opts::initial_height,
-                "Triangle Machine");
+    init_window(&engine->window, core_opts::initial_width, core_opts::initial_height, "Triangle Machine");
 
     init_camera(&engine->camera, &engine->window, init_cam_pos);
 
@@ -32,8 +31,7 @@ void init_engine(Engine* engine) {
     upload_vert_shader(&engine->backend, "../shaders/vertex/indexed_draw.vert", "vert shader");
     upload_frag_shader(&engine->backend, "../shaders/fragment/simple_lighting.frag", "frag shader");
 
-    upload_sky_box_shaders(&engine->backend, "../shaders/vertex/skybox.vert",
-                           "../shaders/fragment/skybox.frag", "skybox shaders");
+    upload_sky_box_shaders(&engine->backend, "../shaders/vertex/skybox.vert", "../shaders/fragment/skybox.frag", "skybox shaders");
     std::array file_names = {
         "../assets/skybox/right.jpg",  "../assets/skybox/left.jpg",  "../assets/skybox/top.jpg",
         "../assets/skybox/bottom.jpg", "../assets/skybox/front.jpg", "../assets/skybox/back.jpg",
@@ -70,9 +68,7 @@ void init_engine(Engine* engine) {
         scene_key_callback(&engine->scene, key, action);
     });
 
-    register_cursor_callback(&engine->window, [=](double x_pos, double y_pos) {
-        camera_cursor_callback(&engine->camera, x_pos, y_pos);
-    });
+    register_cursor_callback(&engine->window, [=](double x_pos, double y_pos) { camera_cursor_callback(&engine->camera, x_pos, y_pos); });
 }
 
 void run_engine(Engine* engine) {
@@ -80,8 +76,7 @@ void run_engine(Engine* engine) {
     while (!glfwWindowShouldClose(engine->window.glfw_window)) {
         glfwPollEvents();
 
-        SceneData scene_data =
-            update_camera(&engine->camera, engine->window.width, engine->window.height);
+        SceneData scene_data = update_camera(&engine->camera, engine->window.width, engine->window.height);
         update_scene(&engine->scene);
 
         update_ui(&engine->backend);

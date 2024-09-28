@@ -17,8 +17,7 @@ struct CommandContext {
  * @param queue_index Index of which queue we will submit these buffers to
  * @param flags	      Command pool creation usage
  */
-void init_cmd_context(CommandContext* cmd_ctx, VkDevice device, uint32_t queue_index,
-                      VkCommandPoolCreateFlags flags);
+void init_cmd_context(CommandContext* cmd_ctx, VkDevice device, uint32_t queue_index, VkCommandPoolCreateFlags flags);
 
 /**
  * @brief Creates primary buffer info and begins command recording
@@ -37,8 +36,7 @@ void begin_primary_buffer(const CommandContext* cmd_ctx, VkCommandBufferUsageFla
  * @param signal_semaphore_info Semaphore to signal once buffer is done
  * @param fence
  */
-void submit_primary_buffer(const CommandContext* cmd_ctx, const VkQueue queue,
-                           const VkSemaphoreSubmitInfo* wait_semaphore_info,
+void submit_primary_buffer(const CommandContext* cmd_ctx, const VkQueue queue, const VkSemaphoreSubmitInfo* wait_semaphore_info,
                            const VkSemaphoreSubmitInfo* signal_semaphore_info, const VkFence fence);
 
 /**

@@ -8,18 +8,16 @@
 #include <set>
 #include <vulkan/vulkan_core.h>
 
-[[nodiscard]] SwapchainSupportDetails query_support_details(const SwapchainContext* swapchain_ctx,
-                                                            VkPhysicalDevice physical_device);
-void create_swapchain(SwapchainContext* swapchain_ctx, const DeviceContext* device_ctx);
-void destroy_swapchain(SwapchainContext* swapchain_ctx, VkDevice device);
+[[nodiscard]] SwapchainSupportDetails query_support_details(const SwapchainContext* swapchain_ctx, VkPhysicalDevice physical_device);
+void                                  create_swapchain(SwapchainContext* swapchain_ctx, const DeviceContext* device_ctx);
+void                                  destroy_swapchain(SwapchainContext* swapchain_ctx, VkDevice device);
 
-void init_swapchain_context(SwapchainContext* swapchain_ctx, const DeviceContext* device_ctx,
-                            VkSurfaceKHR surface, VkPresentModeKHR desired_present_mode) {
+void init_swapchain_context(SwapchainContext* swapchain_ctx, const DeviceContext* device_ctx, VkSurfaceKHR surface,
+                            VkPresentModeKHR desired_present_mode) {
     swapchain_ctx->surface      = surface;
     swapchain_ctx->present_mode = VK_PRESENT_MODE_FIFO_KHR; // fifo is guaranteed
 
-    swapchain_ctx->support_details =
-        query_support_details(swapchain_ctx, device_ctx->physical_device);
+    swapchain_ctx->support_details = query_support_details(swapchain_ctx, device_ctx->physical_device);
     for (const auto& mode : swapchain_ctx->support_details.present_modes) {
         if (mode == desired_present_mode) {
             swapchain_ctx->present_mode = mode;
@@ -33,21 +31,18 @@ void reset_swapchain_context(SwapchainContext* swapchain_ctx, const DeviceContex
     create_swapchain(swapchain_ctx, device_ctx);
 }
 
-void deinit_swapchain_context(SwapchainContext* swapchain_ctx, VkDevice device,
-                              VkInstance instance) {
+void deinit_swapchain_context(SwapchainContext* swapchain_ctx, VkDevice device, VkInstance instance) {
     destroy_swapchain(swapchain_ctx, device);
     vkDestroySurfaceKHR(instance, swapchain_ctx->surface, nullptr);
 }
 
 void create_swapchain(SwapchainContext* swapchain_ctx, const DeviceContext* device_ctx) {
-    swapchain_ctx->support_details =
-        query_support_details(swapchain_ctx, device_ctx->physical_device);
-    swapchain_ctx->extent = swapchain_ctx->support_details.capabilities.currentExtent;
+    swapchain_ctx->support_details = query_support_details(swapchain_ctx, device_ctx->physical_device);
+    swapchain_ctx->extent          = swapchain_ctx->support_details.capabilities.currentExtent;
 
     VkSurfaceFormatKHR surface_format = swapchain_ctx->support_details.formats[0];
     for (const auto& format : swapchain_ctx->support_details.formats) {
-        if (format.format == VK_FORMAT_B8G8R8A8_UNORM &&
-            format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+        if (format.format == VK_FORMAT_B8G8R8A8_UNORM && format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
             surface_format = format;
         }
     }
@@ -57,8 +52,7 @@ void create_swapchain(SwapchainContext* swapchain_ctx, const DeviceContext* devi
 
     // max image count of 0 means its unbounded.
     if (swapchain_ctx->support_details.capabilities.maxImageCount != 0) {
-        desired_image_count = std::clamp(desired_image_count,
-                                         swapchain_ctx->support_details.capabilities.minImageCount,
+        desired_image_count = std::clamp(desired_image_count, swapchain_ctx->support_details.capabilities.minImageCount,
                                          swapchain_ctx->support_details.capabilities.maxImageCount);
     }
 
@@ -73,14 +67,13 @@ void create_swapchain(SwapchainContext* swapchain_ctx, const DeviceContext* devi
     swapchain_ci.imageArrayLayers = 1;
     swapchain_ci.compositeAlpha   = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
     swapchain_ci.preTransform     = swapchain_ctx->support_details.capabilities.currentTransform;
-    swapchain_ci.imageUsage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    swapchain_ci.clipped    = VK_TRUE;
+    swapchain_ci.imageUsage       = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    swapchain_ci.clipped          = VK_TRUE;
     // try this out later
     // swapchain_ci.oldSwapchain
     // = swapchain;
 
-    const std::set        unique_queue_families{device_ctx->queues.graphics_family_index,
-                                         device_ctx->queues.present_family_index};
+    const std::set        unique_queue_families{device_ctx->queues.graphics_family_index, device_ctx->queues.present_family_index};
     std::vector<uint32_t> queue_family_indices;
 
     if (unique_queue_families.size() > 1) {
@@ -99,23 +92,19 @@ void create_swapchain(SwapchainContext* swapchain_ctx, const DeviceContext* devi
         swapchain_ci.imageSharingMode      = VK_SHARING_MODE_EXCLUSIVE;
     }
 
-    VK_CHECK(vkCreateSwapchainKHR(device_ctx->logical_device, &swapchain_ci, nullptr,
-                                  &swapchain_ctx->swapchain));
+    VK_CHECK(vkCreateSwapchainKHR(device_ctx->logical_device, &swapchain_ci, nullptr, &swapchain_ctx->swapchain));
 
     uint32_t actual_image_count;
-    VK_CHECK(vkGetSwapchainImagesKHR(device_ctx->logical_device, swapchain_ctx->swapchain,
-                                     &actual_image_count, nullptr));
+    VK_CHECK(vkGetSwapchainImagesKHR(device_ctx->logical_device, swapchain_ctx->swapchain, &actual_image_count, nullptr));
 
     DEBUG_PRINT("created %d images", actual_image_count);
 
     swapchain_ctx->images.resize(actual_image_count);
-    VK_CHECK(vkGetSwapchainImagesKHR(device_ctx->logical_device, swapchain_ctx->swapchain,
-                                     &actual_image_count, swapchain_ctx->images.data()));
+    VK_CHECK(vkGetSwapchainImagesKHR(device_ctx->logical_device, swapchain_ctx->swapchain, &actual_image_count, swapchain_ctx->images.data()));
 
     for (const auto& image : swapchain_ctx->images) {
         swapchain_ctx->image_views.push_back(
-            create_image_view(device_ctx->logical_device, image, VK_IMAGE_VIEW_TYPE_2D,
-                              swapchain_ctx->format, VK_IMAGE_ASPECT_COLOR_BIT));
+            create_image_view(device_ctx->logical_device, image, VK_IMAGE_VIEW_TYPE_2D, swapchain_ctx->format, VK_IMAGE_ASPECT_COLOR_BIT));
     }
 }
 
@@ -129,32 +118,26 @@ void destroy_swapchain(SwapchainContext* swapchain_ctx, VkDevice device) {
     swapchain_ctx->image_views.clear();
 }
 
-SwapchainSupportDetails query_support_details(const SwapchainContext* swapchain_ctx,
-                                              VkPhysicalDevice        physical_device) {
+SwapchainSupportDetails query_support_details(const SwapchainContext* swapchain_ctx, VkPhysicalDevice physical_device) {
     SwapchainSupportDetails swap_chain_details{};
-    VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, swapchain_ctx->surface,
-                                                       &swap_chain_details.capabilities));
+    VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, swapchain_ctx->surface, &swap_chain_details.capabilities));
 
     uint32_t surface_format_count{};
-    VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, swapchain_ctx->surface,
-                                                  &surface_format_count, nullptr));
+    VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, swapchain_ctx->surface, &surface_format_count, nullptr));
 
     if (surface_format_count > 0) {
         swap_chain_details.formats.resize(surface_format_count);
-        VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, swapchain_ctx->surface,
-                                                      &surface_format_count,
-                                                      swap_chain_details.formats.data()));
+        VK_CHECK(
+            vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, swapchain_ctx->surface, &surface_format_count, swap_chain_details.formats.data()));
     }
 
     uint32_t present_modes_count{};
-    VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, swapchain_ctx->surface,
-                                                       &present_modes_count, nullptr));
+    VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, swapchain_ctx->surface, &present_modes_count, nullptr));
 
     if (present_modes_count > 0) {
         swap_chain_details.present_modes.resize(present_modes_count);
-        VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(
-            physical_device, swapchain_ctx->surface, &present_modes_count,
-            swap_chain_details.present_modes.data()));
+        VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, swapchain_ctx->surface, &present_modes_count,
+                                                           swap_chain_details.present_modes.data()));
     }
     return swap_chain_details;
 }

@@ -16,9 +16,9 @@
 [submodule "thirdparty/imgui"]
 	path = thirdparty/imgui
 	url = https://github.com/ocornut/imgui.git
-[submodule "thirdparty/thirdparty/taskflow"]
-	path = thirdparty/thirdparty/taskflow
+[submodule "thirdparty/taskflow"]
+	path = thirdparty/taskflow
 	url = https://github.com/taskflow/taskflow.git
-[submodule "thirdparty/thirdparty/etc2comp"]
-	path = thirdparty/thirdparty/etc2comp
+[submodule "thirdparty/etc2comp"]
+	path = thirdparty/etc2comp
 	url = https://github.com/google/etc2comp.git

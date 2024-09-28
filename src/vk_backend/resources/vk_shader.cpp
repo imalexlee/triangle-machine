@@ -11,16 +11,11 @@
 
 static std::string           read_file(const std::string& filename);
 static void                  flush_builder_state(ShaderBuilder* builder);
-static std::vector<uint32_t> compile_shader_spv(shaderc_compiler_t    compiler,
-                                                const std::string&    filename,
-                                                VkShaderStageFlagBits shader_stage);
+static std::vector<uint32_t> compile_shader_spv(shaderc_compiler_t compiler, const std::string& filename, VkShaderStageFlagBits shader_stage);
 
-void init_shader_ctx(ShaderContext* shader_ctx) {
-    shader_ctx->builder.compiler = shaderc_compiler_initialize();
-}
+void init_shader_ctx(ShaderContext* shader_ctx) { shader_ctx->builder.compiler = shaderc_compiler_initialize(); }
 
-void deinit_shader_ctx(const ShaderContext* shader_ctx, const VkExtContext* ext_ctx,
-                       VkDevice device) {
+void deinit_shader_ctx(const ShaderContext* shader_ctx, const VkExtContext* ext_ctx, VkDevice device) {
     shaderc_compiler_release(shader_ctx->builder.compiler);
 
     for (const auto& vert_shader : shader_ctx->vert_shaders) {
@@ -32,13 +27,11 @@ void deinit_shader_ctx(const ShaderContext* shader_ctx, const VkExtContext* ext_
     }
 }
 
-void stage_shader(ShaderContext* shader_ctx, const std::filesystem::path& file_path,
-                  const std::string& name, std::span<VkDescriptorSetLayout> desc_set_layouts,
-                  std::span<VkPushConstantRange> push_constant_ranges, VkShaderStageFlagBits stage,
+void stage_shader(ShaderContext* shader_ctx, const std::filesystem::path& file_path, const std::string& name,
+                  std::span<VkDescriptorSetLayout> desc_set_layouts, std::span<VkPushConstantRange> push_constant_ranges, VkShaderStageFlagBits stage,
                   VkShaderStageFlags next_stage) {
 
-    std::vector<uint32_t> shader_spv =
-        compile_shader_spv(shader_ctx->builder.compiler, file_path, stage);
+    std::vector<uint32_t> shader_spv = compile_shader_spv(shader_ctx->builder.compiler, file_path, stage);
 
     VkShaderCreateInfoEXT vk_shader_ci{};
     vk_shader_ci.sType                  = VK_STRUCTURE_TYPE_SHADER_CREATE_INFO_EXT;
@@ -59,21 +52,17 @@ void stage_shader(ShaderContext* shader_ctx, const std::filesystem::path& file_p
     shader_ctx->builder.spvs.push_back(shader_spv);
 }
 
-void commit_shaders(ShaderContext* shader_ctx, const VkExtContext* ext_ctx, VkDevice device,
-                    ShaderType shader_type) {
+void commit_shaders(ShaderContext* shader_ctx, const VkExtContext* ext_ctx, VkDevice device, ShaderType shader_type) {
     std::vector<VkShaderEXT> shader_exts{};
     shader_exts.resize(shader_ctx->builder.create_infos.size());
 
     for (size_t i = 0; i < shader_ctx->builder.create_infos.size(); i++) {
-        shader_ctx->builder.create_infos[i].flags |=
-            shader_type == ShaderType::linked ? VK_SHADER_CREATE_LINK_STAGE_BIT_EXT : 0;
-        shader_ctx->builder.create_infos[i].pCode = shader_ctx->builder.spvs[i].data();
-        shader_ctx->builder.create_infos[i].codeSize =
-            shader_ctx->builder.spvs[i].size() * sizeof(uint32_t);
+        shader_ctx->builder.create_infos[i].flags |= shader_type == ShaderType::linked ? VK_SHADER_CREATE_LINK_STAGE_BIT_EXT : 0;
+        shader_ctx->builder.create_infos[i].pCode    = shader_ctx->builder.spvs[i].data();
+        shader_ctx->builder.create_infos[i].codeSize = shader_ctx->builder.spvs[i].size() * sizeof(uint32_t);
     }
 
-    VK_CHECK(ext_ctx->vkCreateShadersEXT(device, shader_ctx->builder.create_infos.size(),
-                                         shader_ctx->builder.create_infos.data(), nullptr,
+    VK_CHECK(ext_ctx->vkCreateShadersEXT(device, shader_ctx->builder.create_infos.size(), shader_ctx->builder.create_infos.data(), nullptr,
                                          shader_exts.data()));
 
     for (size_t i = 0; i < shader_exts.size(); i++) {
@@ -93,8 +82,7 @@ void commit_shaders(ShaderContext* shader_ctx, const VkExtContext* ext_ctx, VkDe
             shader_ctx->frag_shaders.push_back(new_shader);
             break;
         default:
-            std::cerr << "shader stage " << shader_ctx->builder.create_infos[i].stage
-                      << "not handled\n";
+            std::cerr << "shader stage " << shader_ctx->builder.create_infos[i].stage << "not handled\n";
         }
     }
 
@@ -130,7 +118,7 @@ std::string process_includes(std::string content, const std::string& base_dir) {
             size_t quote_start = content.find('"', start);
             size_t quote_end   = content.find('"', quote_start + 1);
             if (quote_start != std::string::npos && quote_end != std::string::npos) {
-                std::string filename = content.substr(quote_start + 1, quote_end - quote_start - 1);
+                std::string filename        = content.substr(quote_start + 1, quote_end - quote_start - 1);
                 std::string full_path       = base_dir + "/" + filename;
                 std::string include_content = read_file(full_path);
                 content.replace(start, end - start, include_content);
@@ -150,16 +138,14 @@ std::string parse_shader_file(const std::string& filename) {
     return content;
 }
 
-std::vector<uint32_t> compile_shader_spv(shaderc_compiler_t compiler, const std::string& filename,
-                                         VkShaderStageFlagBits shader_stage) {
+std::vector<uint32_t> compile_shader_spv(shaderc_compiler_t compiler, const std::string& filename, VkShaderStageFlagBits shader_stage) {
 
     std::string shader_source = parse_shader_file(filename);
 
     auto shader_kind = static_cast<shaderc_shader_kind>(shader_stage >> 1);
 
     shaderc_compilation_result_t result =
-        shaderc_compile_into_spv(compiler, shader_source.data(), shader_source.size(), shader_kind,
-                                 filename.data(), "main", nullptr);
+        shaderc_compile_into_spv(compiler, shader_source.data(), shader_source.size(), shader_kind, filename.data(), "main", nullptr);
 
     std::vector<uint32_t> spv;
     spv.resize(result->output_data_size / sizeof(uint32_t));

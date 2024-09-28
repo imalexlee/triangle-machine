@@ -4,22 +4,20 @@
 #include <functional>
 #include <vulkan/generated/vk_enum_string_helper.h>
 
-#define VK_CHECK(x)                                                                                \
-    do {                                                                                           \
-        VkResult err = x;                                                                          \
-        if (err) {                                                                                 \
-            fmt::println("Detected Vulkan error: {}", string_VkResult(err));                       \
-            abort();                                                                               \
-        }                                                                                          \
+#define VK_CHECK(x)                                                                                                                                  \
+    do {                                                                                                                                             \
+        VkResult err = x;                                                                                                                            \
+        if (err) {                                                                                                                                   \
+            fmt::println("Detected Vulkan error: {}", string_VkResult(err));                                                                         \
+            abort();                                                                                                                                 \
+        }                                                                                                                                            \
     } while (0)
 
 // allows the pushing and flushing of consistently updating data and long living data
 class DeletionQueue {
   public:
     void push_volatile(std::function<void()>&& function) { _volatile_deletors.push_back(function); }
-    void push_persistant(std::function<void()>&& function) {
-        _persistant_deletors.push_back(function);
-    }
+    void push_persistent(std::function<void()>&& function) { _persistent_deletors.push_back(function); }
 
     // flushes everything
     void flush() {
@@ -27,17 +25,17 @@ class DeletionQueue {
             (*it)();
         }
         _volatile_deletors.clear();
-        for (auto it = _persistant_deletors.rbegin(); it != _persistant_deletors.rend(); it++) {
+        for (auto it = _persistent_deletors.rbegin(); it != _persistent_deletors.rend(); it++) {
             (*it)();
         }
-        _persistant_deletors.clear();
+        _persistent_deletors.clear();
     }
 
-    void flush_persistant() {
-        for (auto it = _persistant_deletors.rbegin(); it != _persistant_deletors.rend(); it++) {
+    void flush_persistent() {
+        for (auto it = _persistent_deletors.rbegin(); it != _persistent_deletors.rend(); it++) {
             (*it)();
         }
-        _persistant_deletors.clear();
+        _persistent_deletors.clear();
     }
 
     void flush_volatile() {
@@ -49,5 +47,5 @@ class DeletionQueue {
 
   private:
     std::deque<std::function<void()>> _volatile_deletors;
-    std::deque<std::function<void()>> _persistant_deletors;
+    std::deque<std::function<void()>> _persistent_deletors;
 };

@@ -34,13 +34,10 @@ enum class ShaderType {
 
 void init_shader_ctx(ShaderContext* shader_ctx);
 
-void deinit_shader_ctx(const ShaderContext* shader_ctx, const VkExtContext* ext_ctx,
-                       VkDevice device);
+void deinit_shader_ctx(const ShaderContext* shader_ctx, const VkExtContext* ext_ctx, VkDevice device);
 
-void stage_shader(ShaderContext* shader_ctx, const std::filesystem::path& file_path,
-                  const std::string& name, std::span<VkDescriptorSetLayout> desc_set_layouts,
-                  std::span<VkPushConstantRange> push_constant_ranges, VkShaderStageFlagBits stage,
+void stage_shader(ShaderContext* shader_ctx, const std::filesystem::path& file_path, const std::string& name,
+                  std::span<VkDescriptorSetLayout> desc_set_layouts, std::span<VkPushConstantRange> push_constant_ranges, VkShaderStageFlagBits stage,
                   VkShaderStageFlags next_stage);
 
-void commit_shaders(ShaderContext* shader_ctx, const VkExtContext* ext_ctx, VkDevice device,
-                    ShaderType shader_type);
+void commit_shaders(ShaderContext* shader_ctx, const VkExtContext* ext_ctx, VkDevice device, ShaderType shader_type);

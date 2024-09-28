@@ -1,9 +1,8 @@
 #include "vk_init.h"
 #include <vulkan/vulkan_core.h>
 
-VkRenderingInfo create_rendering_info(const VkRenderingAttachmentInfo* color_attachment,
-                                      const VkRenderingAttachmentInfo* depth_attachment,
-                                      VkExtent2D                       extent) {
+VkRenderingInfo create_rendering_info(const VkRenderingAttachmentInfo* color_attachment, const VkRenderingAttachmentInfo* depth_attachment,
+                                      VkExtent2D extent) {
 
     VkRenderingInfo rendering_info{};
     rendering_info.sType      = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -21,10 +20,8 @@ VkRenderingInfo create_rendering_info(const VkRenderingAttachmentInfo* color_att
     return rendering_info;
 }
 
-VkRenderingAttachmentInfo create_color_attachment_info(VkImageView view, const VkClearValue* clear,
-                                                       VkAttachmentLoadOp  load_op,
-                                                       VkAttachmentStoreOp store_op,
-                                                       VkImageView         resolve_img_view) {
+VkRenderingAttachmentInfo create_color_attachment_info(VkImageView view, const VkClearValue* clear, VkAttachmentLoadOp load_op,
+                                                       VkAttachmentStoreOp store_op, VkImageView resolve_img_view) {
     VkRenderingAttachmentInfo color_attachment{};
     color_attachment.sType              = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
     color_attachment.pNext              = nullptr;
@@ -43,8 +40,7 @@ VkRenderingAttachmentInfo create_color_attachment_info(VkImageView view, const V
     return color_attachment;
 }
 
-VkRenderingAttachmentInfo create_depth_attachment_info(VkImageView view, VkAttachmentLoadOp load_op,
-                                                       VkAttachmentStoreOp store_op) {
+VkRenderingAttachmentInfo create_depth_attachment_info(VkImageView view, VkAttachmentLoadOp load_op, VkAttachmentStoreOp store_op) {
     VkRenderingAttachmentInfo depth_attachment{};
     depth_attachment.sType                         = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
     depth_attachment.pNext                         = nullptr;

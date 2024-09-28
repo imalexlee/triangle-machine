@@ -56,16 +56,11 @@ VkSurfaceKHR get_vulkan_surface(const Window* window, VkInstance instance) {
     return surface;
 }
 
-void register_key_callback(Window* window, std::function<void(int, int, int, int)>&& fn_ptr) {
-    window->key_callbacks.push_back(fn_ptr);
-}
+void register_key_callback(Window* window, std::function<void(int, int, int, int)>&& fn_ptr) { window->key_callbacks.push_back(fn_ptr); }
 
-void register_cursor_callback(Window* window, std::function<void(double, double)>&& fn_ptr) {
-    window->cursor_callbacks.push_back(fn_ptr);
-}
+void register_cursor_callback(Window* window, std::function<void(double, double)>&& fn_ptr) { window->cursor_callbacks.push_back(fn_ptr); }
 
-void key_callback(GLFWwindow* window, int key, [[maybe_unused]] int scancode, int action,
-                  [[maybe_unused]] int mods) {
+void key_callback(GLFWwindow* window, int key, [[maybe_unused]] int scancode, int action, [[maybe_unused]] int mods) {
 
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
@@ -82,6 +77,4 @@ void cursor_callback([[maybe_unused]] GLFWwindow* window, double x_pos, double y
     }
 }
 
-void error_callback([[maybe_unused]] int error, const char* description) {
-    fmt::println("GLFW errow: {}", description);
-}
+void error_callback([[maybe_unused]] int error, const char* description) { fmt::println("GLFW errow: {}", description); }

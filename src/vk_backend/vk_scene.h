@@ -4,12 +4,19 @@
 #include <vector>
 #include <vulkan/vulkan_core.h>
 
+struct MeshData {
+    glm::mat4       local_transform{1.f};
+    VkDeviceAddress vertex_buffer_address{};
+    uint32_t        mat_i{};
+};
+
 struct DrawObject {
-    VkDescriptorSet mat_desc_set;
-    VkDescriptorSet obj_desc_set;
-    VkBuffer        index_buffer;
-    uint32_t        indices_count;
-    uint32_t        indices_start;
+    // VkDescriptorSet mat_desc_set;
+    // VkDescriptorSet obj_desc_set;
+    MeshData mesh_data{};
+    VkBuffer index_buffer;
+    uint32_t indices_count{};
+    uint32_t indices_start{};
 };
 
 struct Entity {
@@ -19,5 +26,5 @@ struct Entity {
 };
 
 struct EntityPushConstants {
-    glm::vec3 pos;
+    glm::vec3 pos{};
 };

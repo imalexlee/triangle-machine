@@ -1,11 +1,17 @@
 //we will be using glsl version 4.5 syntax
 #version 450
 
+#extension GL_GOOGLE_include_directive: require
+
+#include "../input_structures.glsl"
+
+/**
 layout (set = 0, binding = 0) uniform SceneData {
     mat4 view_proj;
     vec4 eye_pos;
     vec4 dir;
 } scene_data;
+*/
 
 layout (location = 0) in vec3 vertex;
 
@@ -21,5 +27,5 @@ vec3(0.f, -1.f, 0.0f)
 void main()
 {
     //output the position of each vertex
-    gl_Position = scene_data.view_proj * vec4(positions[gl_VertexIndex], 1.0f);
+    gl_Position = scene_data.proj * scene_data.view * vec4(positions[gl_VertexIndex], 1.0f);
 }

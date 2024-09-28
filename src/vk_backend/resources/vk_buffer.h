@@ -25,11 +25,9 @@ struct MeshBuffers {
  * @param queue_family_indices  Queue family indices that this buffer will be accessed
  * @return                      An allocated buffer struct
  */
-[[nodiscard]] AllocatedBuffer create_buffer(VkDeviceSize byte_size, VmaAllocator allocator,
-                                            VkBufferUsageFlags       buffer_usage,
-                                            VmaMemoryUsage           memory_usage,
-                                            VmaAllocationCreateFlags flags,
-                                            std::span<uint32_t>      queue_family_indices = {});
+[[nodiscard]] AllocatedBuffer create_buffer(VkDeviceSize byte_size, VmaAllocator allocator, VkBufferUsageFlags buffer_usage,
+                                            VmaMemoryUsage memory_usage, VmaAllocationCreateFlags flags,
+                                            std::span<uint32_t> queue_family_indices = {});
 
 /**
  * @brief Deallocates a Vulkan buffer and its memory
@@ -46,5 +44,4 @@ void destroy_buffer(VmaAllocator allocator, const AllocatedBuffer* allocated_buf
  * @param buffer The AllocatedBuffer object to retrieve an address for
  * @return       A GPU memory address of the buffer
  */
-[[nodiscard]] VkDeviceAddress get_buffer_device_address(VkDevice               device,
-                                                        const AllocatedBuffer* buffer);
+[[nodiscard]] VkDeviceAddress get_buffer_device_address(VkDevice device, const AllocatedBuffer* buffer);

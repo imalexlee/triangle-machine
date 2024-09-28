@@ -5,8 +5,7 @@
 #include <iostream>
 #include <vk_backend/vk_frame.h>
 
-void init_camera(Camera* cam, const Window* window, glm::vec4 initial_pos, float init_pitch_theta,
-                 float init_yaw_theta) {
+void init_camera(Camera* cam, const Window* window, glm::vec4 initial_pos, float init_pitch_theta, float init_yaw_theta) {
 
     cam->position    = initial_pos;
     cam->pitch_theta = init_pitch_theta;
@@ -17,8 +16,7 @@ void init_camera(Camera* cam, const Window* window, glm::vec4 initial_pos, float
     update_camera(cam, window->width, window->height);
 }
 
-void camera_key_callback(Camera* cam, int key, [[maybe_unused]] int scancode, int action,
-                         [[maybe_unused]] int mods) {
+void camera_key_callback(Camera* cam, int key, [[maybe_unused]] int scancode, int action, [[maybe_unused]] int mods) {
     if (action == GLFW_PRESS) {
         if (key == GLFW_KEY_W) {
             cam->velocity.z = cam->movement_speed;
@@ -81,9 +79,7 @@ SceneData update_camera(Camera* cam, uint32_t window_width, uint32_t window_heig
     // cam->view      = glm::mat4(glm::mat3(cam->view));
     cam->direction = cam_rotation * glm::vec4{0, 0, -1.f, 0};
 
-    glm::mat4 projection = glm::perspective(
-        glm::radians(60.f), static_cast<float>(window_width) / static_cast<float>(window_height),
-        10000.0f, 0.1f);
+    glm::mat4 projection = glm::perspective(glm::radians(60.f), static_cast<float>(window_width) / static_cast<float>(window_height), 10000.0f, 0.1f);
 
     projection[1][1] *= -1;
 

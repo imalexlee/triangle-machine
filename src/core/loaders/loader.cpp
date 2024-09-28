@@ -95,14 +95,10 @@ std::vector<Mesh> load_meshes_2(const aiScene* scene) {
         for (uint32_t vert_i = 0; vert_i < ai_mesh->mNumVertices; vert_i++) {
             Vertex new_vertex;
 
-            new_vertex.position     = {ai_mesh->mVertices[vert_i].x, ai_mesh->mVertices[vert_i].y,
-                                       ai_mesh->mVertices[vert_i].z, 1.f};
-            new_vertex.normal       = {ai_mesh->mNormals[vert_i].x, ai_mesh->mNormals[vert_i].y,
-                                       ai_mesh->mNormals[vert_i].z, 1.f};
-            new_vertex.tex_coord[0] = {ai_mesh->mTextureCoords[vert_i][0].x,
-                                       ai_mesh->mTextureCoords[vert_i][0].y};
-            new_vertex.tex_coord[1] = {ai_mesh->mTextureCoords[vert_i][1].x,
-                                       ai_mesh->mTextureCoords[vert_i][1].y};
+            new_vertex.position     = {ai_mesh->mVertices[vert_i].x, ai_mesh->mVertices[vert_i].y, ai_mesh->mVertices[vert_i].z, 1.f};
+            new_vertex.normal       = {ai_mesh->mNormals[vert_i].x, ai_mesh->mNormals[vert_i].y, ai_mesh->mNormals[vert_i].z, 1.f};
+            new_vertex.tex_coord[0] = {ai_mesh->mTextureCoords[vert_i][0].x, ai_mesh->mTextureCoords[vert_i][0].y};
+            new_vertex.tex_coord[1] = {ai_mesh->mTextureCoords[vert_i][1].x, ai_mesh->mTextureCoords[vert_i][1].y};
             new_mesh.vertices.push_back(new_vertex);
         }
 
@@ -124,8 +120,7 @@ std::vector<Mesh> load_meshes_2(const aiScene* scene) {
 
 Entity load_entity_2(VkBackend* backend, const std::filesystem::path& path) {
 
-    int ai_flags = aiProcess_Triangulate | aiProcess_GenUVCoords | aiProcess_GenNormals |
-                   aiProcess_JoinIdenticalVertices;
+    int ai_flags = aiProcess_Triangulate | aiProcess_GenUVCoords | aiProcess_GenNormals | aiProcess_JoinIdenticalVertices;
 
     const aiScene* scene = aiImportFile(path.c_str(), ai_flags);
     if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {

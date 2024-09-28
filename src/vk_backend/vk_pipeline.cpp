@@ -7,7 +7,7 @@ PipelineInfo build_pipeline(const PipelineBuilder* pb, VkDevice device) {
     VkPipeline new_pipeline;
 
     VkPipelineVertexInputStateCreateInfo vertex_input_ci{};
-    vertex_input_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertex_input_ci.sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     vertex_input_ci.vertexBindingDescriptionCount   = 0;
     vertex_input_ci.vertexAttributeDescriptionCount = 0;
 
@@ -57,10 +57,8 @@ PipelineInfo build_pipeline(const PipelineBuilder* pb, VkDevice device) {
     };
 }
 
-VkPipelineLayout create_pipeline_layout(VkDevice                         device,
-                                        std::span<VkDescriptorSetLayout> desc_set_layouts,
-                                        std::span<VkPushConstantRange>   push_constant_ranges,
-                                        VkPipelineLayoutCreateFlags      flags) {
+VkPipelineLayout create_pipeline_layout(VkDevice device, std::span<VkDescriptorSetLayout> desc_set_layouts,
+                                        std::span<VkPushConstantRange> push_constant_ranges, VkPipelineLayoutCreateFlags flags) {
 
     VkPipelineLayoutCreateInfo pipeline_layout_ci{};
     pipeline_layout_ci.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -77,15 +75,14 @@ VkPipelineLayout create_pipeline_layout(VkDevice                         device,
 };
 
 void set_pipeline_render_state(PipelineBuilder* pb, VkFormat color_format, VkFormat depth_format) {
-    pb->color_attachment_format = color_format;
-    pb->rendering_ci            = {.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
+    pb->color_attachment_format              = color_format;
+    pb->rendering_ci                         = {.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
     pb->rendering_ci.pColorAttachmentFormats = &pb->color_attachment_format;
     pb->rendering_ci.colorAttachmentCount    = 1;
     pb->rendering_ci.depthAttachmentFormat   = depth_format;
 }
 
-void set_pipeline_shaders(PipelineBuilder* pb, VkShaderModule vert_shader,
-                          VkShaderModule frag_shader, const char* entry_name) {
+void set_pipeline_shaders(PipelineBuilder* pb, VkShaderModule vert_shader, VkShaderModule frag_shader, const char* entry_name) {
     VkPipelineShaderStageCreateInfo vertex_stage_ci{};
     vertex_stage_ci.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     vertex_stage_ci.stage  = VK_SHADER_STAGE_VERTEX_BIT;
@@ -104,16 +101,14 @@ void set_pipeline_shaders(PipelineBuilder* pb, VkShaderModule vert_shader,
 }
 
 void set_pipeline_topology(PipelineBuilder* pb, VkPrimitiveTopology topology) {
-    pb->input_assembly_state                        = {.sType =
-                                                           VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
+    pb->input_assembly_state                        = {.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
     pb->input_assembly_state.topology               = topology;
     pb->input_assembly_state.primitiveRestartEnable = VK_FALSE;
 }
 
-void set_pipeline_raster_state(PipelineBuilder* pb, VkCullModeFlags cull_mode,
-                               VkFrontFace front_face, VkPolygonMode poly_mode) {
+void set_pipeline_raster_state(PipelineBuilder* pb, VkCullModeFlags cull_mode, VkFrontFace front_face, VkPolygonMode poly_mode) {
 
-    pb->rasterization_state = {.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
+    pb->rasterization_state                         = {.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
     pb->rasterization_state.cullMode                = cull_mode;
     pb->rasterization_state.frontFace               = front_face;
     pb->rasterization_state.rasterizerDiscardEnable = VK_FALSE;
@@ -122,7 +117,7 @@ void set_pipeline_raster_state(PipelineBuilder* pb, VkCullModeFlags cull_mode,
 }
 
 void set_pipeline_multisampling(PipelineBuilder* pb, VkSampleCountFlagBits samples) {
-    pb->multisample_state = {.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
+    pb->multisample_state                       = {.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
     pb->multisample_state.rasterizationSamples  = samples;
     pb->multisample_state.sampleShadingEnable   = VK_FALSE;
     pb->multisample_state.minSampleShading      = 1.0f;
@@ -131,9 +126,8 @@ void set_pipeline_multisampling(PipelineBuilder* pb, VkSampleCountFlagBits sampl
     pb->multisample_state.alphaToOneEnable      = VK_FALSE;
 }
 
-void set_pipeline_depth_state(PipelineBuilder* pb, bool depth_test_enabled, bool write_enabled,
-                              VkCompareOp compare_op) {
-    pb->depth_stencil_state = {.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
+void set_pipeline_depth_state(PipelineBuilder* pb, bool depth_test_enabled, bool write_enabled, VkCompareOp compare_op) {
+    pb->depth_stencil_state                       = {.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
     pb->depth_stencil_state.depthTestEnable       = depth_test_enabled;
     pb->depth_stencil_state.depthWriteEnable      = write_enabled;
     pb->depth_stencil_state.depthCompareOp        = compare_op;
@@ -145,28 +139,25 @@ void set_pipeline_depth_state(PipelineBuilder* pb, bool depth_test_enabled, bool
     pb->depth_stencil_state.maxDepthBounds        = 1.f;
 }
 
-void set_pipeline_layout(PipelineBuilder* pb, std::span<VkDescriptorSetLayout> desc_set_layouts,
-                         std::span<VkPushConstantRange> push_constant_ranges,
-                         VkPipelineLayoutCreateFlags    flags) {
-    pb->pipeline_layout_ci             = {.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
-    pb->pipeline_layout_ci.flags       = flags;
-    pb->pipeline_layout_ci.pSetLayouts = desc_set_layouts.data();
+void set_pipeline_layout(PipelineBuilder* pb, std::span<VkDescriptorSetLayout> desc_set_layouts, std::span<VkPushConstantRange> push_constant_ranges,
+                         VkPipelineLayoutCreateFlags flags) {
+    pb->pipeline_layout_ci                        = {.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+    pb->pipeline_layout_ci.flags                  = flags;
+    pb->pipeline_layout_ci.pSetLayouts            = desc_set_layouts.data();
     pb->pipeline_layout_ci.setLayoutCount         = desc_set_layouts.size();
     pb->pipeline_layout_ci.pPushConstantRanges    = push_constant_ranges.data();
     pb->pipeline_layout_ci.pushConstantRangeCount = push_constant_ranges.size();
 }
 
 void disable_pipeline_blending(PipelineBuilder* pb) {
-    pb->color_blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
-                                                VK_COLOR_COMPONENT_G_BIT |
-                                                VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    pb->color_blend_attachment.colorWriteMask =
+        VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
     pb->color_blend_attachment.blendEnable = VK_FALSE;
 }
 
 void set_pipeline_blending_additive(PipelineBuilder* pb) {
-    pb->color_blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
-                                                VK_COLOR_COMPONENT_G_BIT |
-                                                VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    pb->color_blend_attachment.colorWriteMask =
+        VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
     pb->color_blend_attachment.blendEnable         = VK_TRUE;
     pb->color_blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
     pb->color_blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_DST_ALPHA;
@@ -177,9 +168,8 @@ void set_pipeline_blending_additive(PipelineBuilder* pb) {
 }
 
 void set_pipeline_blending_alpha(PipelineBuilder* pb) {
-    pb->color_blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
-                                                VK_COLOR_COMPONENT_G_BIT |
-                                                VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    pb->color_blend_attachment.colorWriteMask =
+        VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
     pb->color_blend_attachment.blendEnable         = VK_TRUE;
     pb->color_blend_attachment.colorBlendOp        = VK_BLEND_OP_ADD;
     pb->color_blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;

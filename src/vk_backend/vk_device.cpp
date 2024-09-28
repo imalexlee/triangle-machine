@@ -52,20 +52,16 @@ void create_physical_device(DeviceContext* device_ctx, VkInstance instance) {
     }
 }
 
-void deinit_device_context(const DeviceContext* device_ctx) {
-    vkDestroyDevice(device_ctx->logical_device, nullptr);
-}
+void deinit_device_context(const DeviceContext* device_ctx) { vkDestroyDevice(device_ctx->logical_device, nullptr); }
 
 void get_queue_family_indices(DeviceContext* device_ctx, VkSurfaceKHR surface) {
 
     std::vector<VkQueueFamilyProperties> queue_family_properties;
     uint32_t                             family_property_count;
 
-    vkGetPhysicalDeviceQueueFamilyProperties(device_ctx->physical_device, &family_property_count,
-                                             nullptr);
+    vkGetPhysicalDeviceQueueFamilyProperties(device_ctx->physical_device, &family_property_count, nullptr);
     queue_family_properties.resize(family_property_count);
-    vkGetPhysicalDeviceQueueFamilyProperties(device_ctx->physical_device, &family_property_count,
-                                             queue_family_properties.data());
+    vkGetPhysicalDeviceQueueFamilyProperties(device_ctx->physical_device, &family_property_count, queue_family_properties.data());
 
     std::optional<uint32_t> graphics_index;
     std::optional<uint32_t> present_index;
@@ -73,8 +69,7 @@ void get_queue_family_indices(DeviceContext* device_ctx, VkSurfaceKHR surface) {
     // find graphics and presentation queues. prefer the same queue
     for (uint32_t i = 0; i < queue_family_properties.size(); i++) {
         VkBool32 present_supported = VK_FALSE;
-        vkGetPhysicalDeviceSurfaceSupportKHR(device_ctx->physical_device, i, surface,
-                                             &present_supported);
+        vkGetPhysicalDeviceSurfaceSupportKHR(device_ctx->physical_device, i, surface, &present_supported);
         // iterate through all queues and hope to find one queue family that supports both.
         // Otherwise, pick out queues that either present or graphics can use.
         bool graphics_supported = queue_family_properties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT;
@@ -118,8 +113,7 @@ void get_queue_family_indices(DeviceContext* device_ctx, VkSurfaceKHR surface) {
 }
 
 void create_logical_device(DeviceContext* device_ctx) {
-    std::set unique_family_indices{device_ctx->queues.graphics_family_index,
-                                   device_ctx->queues.present_family_index,
+    std::set                             unique_family_indices{device_ctx->queues.graphics_family_index, device_ctx->queues.present_family_index,
                                    device_ctx->queues.compute_family_index};
     std::vector<VkDeviceQueueCreateInfo> queue_infos;
     constexpr float                      priority = 1.f;
@@ -134,28 +128,23 @@ void create_logical_device(DeviceContext* device_ctx) {
         queue_infos.push_back(queue_ci);
     }
     constexpr std::array device_extensions = {
-        VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
-        VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-        VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
-        VK_EXT_SHADER_OBJECT_EXTENSION_NAME,
-        VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME,
-        VK_NV_INHERITED_VIEWPORT_SCISSOR_EXTENSION_NAME,
+        VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,          VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+        VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,        VK_EXT_SHADER_OBJECT_EXTENSION_NAME,
+        VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME, VK_NV_INHERITED_VIEWPORT_SCISSOR_EXTENSION_NAME,
     };
 
     VkPhysicalDeviceVertexInputDynamicStateFeaturesEXT vertex_input_feature{};
-    vertex_input_feature.sType =
-        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_INPUT_DYNAMIC_STATE_FEATURES_EXT;
+    vertex_input_feature.sType                   = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_INPUT_DYNAMIC_STATE_FEATURES_EXT;
     vertex_input_feature.vertexInputDynamicState = VK_TRUE;
 
     // Enable Shader Object
     VkPhysicalDeviceShaderObjectFeaturesEXT shader_object_feature{};
-    shader_object_feature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_OBJECT_FEATURES_EXT;
+    shader_object_feature.sType        = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_OBJECT_FEATURES_EXT;
     shader_object_feature.shaderObject = VK_TRUE;
     shader_object_feature.pNext        = &vertex_input_feature;
 
     VkPhysicalDeviceInheritedViewportScissorFeaturesNV inherited_scissor_feature{};
-    inherited_scissor_feature.sType =
-        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INHERITED_VIEWPORT_SCISSOR_FEATURES_NV;
+    inherited_scissor_feature.sType                      = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INHERITED_VIEWPORT_SCISSOR_FEATURES_NV;
     inherited_scissor_feature.inheritedViewportScissor2D = VK_TRUE;
     inherited_scissor_feature.pNext                      = &shader_object_feature;
 
@@ -166,13 +155,16 @@ void create_logical_device(DeviceContext* device_ctx) {
     features_1_3.pNext            = &inherited_scissor_feature;
 
     VkPhysicalDeviceVulkan12Features features_1_2{};
-    features_1_2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
-    features_1_2.descriptorBindingVariableDescriptorCount  = VK_TRUE;
-    features_1_2.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
-    features_1_2.bufferDeviceAddress                       = VK_TRUE;
-    features_1_2.descriptorIndexing                        = VK_TRUE;
-    features_1_2.runtimeDescriptorArray                    = VK_TRUE;
-    features_1_2.pNext                                     = &features_1_3;
+    features_1_2.sType                                        = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+    features_1_2.descriptorBindingVariableDescriptorCount     = VK_TRUE;
+    features_1_2.shaderSampledImageArrayNonUniformIndexing    = VK_TRUE;
+    features_1_2.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
+    features_1_2.descriptorBindingUpdateUnusedWhilePending    = VK_TRUE;
+    features_1_2.descriptorBindingPartiallyBound              = VK_TRUE;
+    features_1_2.bufferDeviceAddress                          = VK_TRUE;
+    features_1_2.descriptorIndexing                           = VK_TRUE;
+    features_1_2.runtimeDescriptorArray                       = VK_TRUE;
+    features_1_2.pNext                                        = &features_1_3;
 
     VkDeviceCreateInfo device_ci{};
     device_ci.sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -182,13 +174,9 @@ void create_logical_device(DeviceContext* device_ctx) {
     device_ci.enabledExtensionCount   = device_extensions.size();
     device_ci.pNext                   = &features_1_2;
 
-    VK_CHECK(vkCreateDevice(device_ctx->physical_device, &device_ci, nullptr,
-                            &device_ctx->logical_device));
+    VK_CHECK(vkCreateDevice(device_ctx->physical_device, &device_ci, nullptr, &device_ctx->logical_device));
 
-    vkGetDeviceQueue(device_ctx->logical_device, device_ctx->queues.graphics_family_index, 0,
-                     &device_ctx->queues.graphics);
-    vkGetDeviceQueue(device_ctx->logical_device, device_ctx->queues.present_family_index, 0,
-                     &device_ctx->queues.present);
-    vkGetDeviceQueue(device_ctx->logical_device, device_ctx->queues.compute_family_index, 0,
-                     &device_ctx->queues.compute);
+    vkGetDeviceQueue(device_ctx->logical_device, device_ctx->queues.graphics_family_index, 0, &device_ctx->queues.graphics);
+    vkGetDeviceQueue(device_ctx->logical_device, device_ctx->queues.present_family_index, 0, &device_ctx->queues.present);
+    vkGetDeviceQueue(device_ctx->logical_device, device_ctx->queues.compute_family_index, 0, &device_ctx->queues.compute);
 }

@@ -48,9 +48,7 @@ VkValidationFeaturesEXT create_validation_features();
  *
  * @return  a compile-time generated array of validation features
  */
-consteval std::array<const char*, 1> create_validation_layers() {
-    return std::array<const char*, 1>{"VK_LAYER_KHRONOS_validation"};
-};
+consteval std::array<const char*, 1> create_validation_layers() { return std::array<const char*, 1>{"VK_LAYER_KHRONOS_validation"}; };
 
 /**
  * @brief Enables setting readable names for vulkan objects like buffers, images, etc. for easier
@@ -62,8 +60,7 @@ consteval std::array<const char*, 1> create_validation_layers() {
  * @param object_type The type of object this is
  * @param name	      The name to give the object
  */
-template <typename T>
-void set_handle_name(const Debugger* db, T handle, VkObjectType object_type, std::string name) {
+template <typename T> void set_handle_name(const Debugger* db, T handle, VkObjectType object_type, std::string name) {
     VkDebugUtilsObjectNameInfoEXT name_info = {VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
     name_info.objectType                    = object_type;
     name_info.objectHandle                  = (uint64_t)handle;

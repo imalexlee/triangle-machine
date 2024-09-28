@@ -13,21 +13,25 @@ struct PoolSizeRatio {
 
 // 1. create the layout of a descriptor set
 struct DescriptorLayoutBuilder {
+    std::vector<VkDescriptorBindingFlags>     binding_flags;
     std::vector<VkDescriptorSetLayoutBinding> bindings;
 };
 
 /**
  * @brief Appends a descriptor set layout binding to this layout builder
  *
- * @param layout_builder  The layout builder to append to
- * @param binding	  The index location of the descriptor set to bind to
- * @param type		  The type of descriptor
+ * @param layout_builder   The layout builder to append to
+ * @param binding	       The index location of the descriptor set to bind to
+ * @param type		       The type of descriptor
+ * @param stage            The shader stage to connect this binding with
+ * @param binding_flags    The binding flags for this layout binding
+ * @param descriptor_count The number of descriptors with this type and stage
  */
-void add_layout_binding(DescriptorLayoutBuilder* layout_builder, uint32_t binding,
-                        VkDescriptorType type);
+void add_layout_binding(DescriptorLayoutBuilder* layout_builder, uint32_t binding, VkDescriptorType type, VkShaderStageFlags stage,
+                        VkDescriptorBindingFlags binding_flags = 0, uint32_t descriptor_count = 1);
 
 /**
- * @brief Clears the current layhout bindings for this layout builder
+ * @brief Clears the current layout bindings for this layout builder
  *
  * @param layout_builder The layout builder to clear
  */
@@ -38,12 +42,9 @@ void clear_layout_bindings(DescriptorLayoutBuilder* layout_builder);
  *
  * @param layout_builder  The layout builder to build the set from
  * @param device	  The device associated with this set layout
- * @param shader_stages	  The shader stages which can access resources in this set
  * @return		  The bound descriptor set layout
  */
-[[nodiscard]] VkDescriptorSetLayout build_set_layout(DescriptorLayoutBuilder* layout_builder,
-                                                     VkDevice                 device,
-                                                     VkShaderStageFlags       shader_stages);
+[[nodiscard]] VkDescriptorSetLayout build_set_layout(const DescriptorLayoutBuilder* layout_builder, VkDevice device);
 
 // 2. create a pool and allow user to allocate a set with whatever layout
 struct DescriptorAllocator {
@@ -61,19 +62,20 @@ struct DescriptorAllocator {
  * @param init_set_count    The initial amount of descriptor sets to be allocated in the pool
  * @param pool_size_ratios  The type and amount of descriptors to reserve space for in each set
  */
-void init_desc_allocator(DescriptorAllocator* desc_allocator, VkDevice device,
-                         uint32_t init_set_count, std::span<PoolSizeRatio> pool_size_ratios);
+void init_desc_allocator(DescriptorAllocator* desc_allocator, VkDevice device, uint32_t init_set_count, std::span<PoolSizeRatio> pool_size_ratios);
 
 /**
  * @brief Trys to allocate a descriptor set from an existing pool or creates a new pool if no space
  *
- * @param desc_allocator  The allocator to allocate with
- * @param device	  The device to allocate from
- * @param layout	  the layout of the descriptor set to allocate
- * @return		  An allocated descriptor set with the desired layout
+ * @param desc_allocator      The allocator to allocate with
+ * @param device	          The device to allocate from
+ * @param layout	          The layout of the descriptor set to allocate
+ * @param variable_desc_count If the set was created with a variable binding, set this count
+ *                            to represent how many actual descriptors to allocate here
+ * @return		              An allocated descriptor set with the desired layout
  */
-[[nodiscard]] VkDescriptorSet allocate_desc_set(DescriptorAllocator* desc_allocator,
-                                                VkDevice device, VkDescriptorSetLayout layout);
+[[nodiscard]] VkDescriptorSet allocate_desc_set(DescriptorAllocator* desc_allocator, VkDevice device, VkDescriptorSetLayout layout,
+                                                uint32_t variable_desc_count = 0);
 
 /**
  * @brief Resets all descriptor pools and marks all previously allocated pools as ready-to-use
@@ -104,12 +106,13 @@ struct DescriptorWriter {
  * @param desc_writer The descriptor writer used to write this image view
  * @param binding     The index location to write this image view to in the set
  * @param image	      The image view to write
- * @param sampler     The sampler to assocaite with this image view
+ * @param sampler     The sampler to associate with this image view
  * @param layout      The layout of this image
  * @param type	      The type of descriptor
+ * @param array_idx   The index of descriptor to write at this binding
  */
-void write_image_desc(DescriptorWriter* desc_writer, int binding, VkImageView image,
-                      VkSampler sampler, VkImageLayout layout, VkDescriptorType type);
+void write_image_desc(DescriptorWriter* desc_writer, int binding, VkImageView image, VkSampler sampler, VkImageLayout layout, VkDescriptorType type,
+                      uint32_t array_idx = 0);
 
 /**
  * @brief Appends a buffer descriptor to a list of descriptors in which to eventually write to a set
@@ -121,14 +124,13 @@ void write_image_desc(DescriptorWriter* desc_writer, int binding, VkImageView im
  * @param offset      The starting offset position to read this buffer from
  * @param type        The type of descriptor
  */
-void write_buffer_desc(DescriptorWriter* desc_writer, int binding, VkBuffer buffer, size_t size,
-                       size_t offset, VkDescriptorType type);
+void write_buffer_desc(DescriptorWriter* desc_writer, int binding, VkBuffer buffer, size_t size, size_t offset, VkDescriptorType type);
 
 /**
  * @brief Writes out saved image and/or buffer descriptors in our descriptor writer to an allocated
  * set
  *
- * @param desc_writer The DescriptorWriter which is storing our pending buffers/iamge descriptors
+ * @param desc_writer The DescriptorWriter which is storing our pending buffers/image descriptors
  * @param device      The device in which our descriptor set is allocated from
  * @param set	      The allocated descriptor set to fill in
  */
