@@ -13,25 +13,25 @@
 
 static Engine* active_engine = nullptr;
 
-void init_engine(Engine* engine) {
+void engine_init(Engine* engine) {
     assert(active_engine == nullptr);
     active_engine = engine;
 
     constexpr glm::vec4 init_cam_pos = {0, -1, -8, 1};
 
-    init_window(&engine->window, core_opts::initial_width, core_opts::initial_height, "Triangle Machine");
+    window_init(&engine->window, core_opts::initial_width, core_opts::initial_height, "Triangle Machine");
 
-    init_camera(&engine->camera, &engine->window, init_cam_pos);
+    camera_init(&engine->camera, &engine->window, init_cam_pos);
 
-    const VkInstance   instance = create_vk_instance("triangle machine", "my engine");
-    const VkSurfaceKHR surface  = get_vulkan_surface(&engine->window, instance);
+    const VkInstance   instance = vk_instance_create("triangle machine", "my engine");
+    const VkSurfaceKHR surface  = vk_surface_get(&engine->window, instance);
 
-    init_backend(&engine->backend, instance, surface, engine->window.width, engine->window.height);
-    init_ui(&engine->ui, &engine->backend, engine->window.glfw_window);
-    upload_vert_shader(&engine->backend, "../shaders/vertex/indexed_draw.vert", "vert shader");
-    upload_frag_shader(&engine->backend, "../shaders/fragment/simple_lighting.frag", "frag shader");
+    backend_init(&engine->backend, instance, surface, engine->window.width, engine->window.height);
+    ui_init(&engine->ui, &engine->backend, engine->window.glfw_window);
+    backend_upload_vert_shader(&engine->backend, "../shaders/vertex/indexed_draw.vert", "vert shader");
+    backend_upload_frag_shader(&engine->backend, "../shaders/fragment/simple_lighting.frag", "frag shader");
 
-    upload_sky_box_shaders(&engine->backend, "../shaders/vertex/skybox.vert", "../shaders/fragment/skybox.frag", "skybox shaders");
+    backend_upload_sky_box_shaders(&engine->backend, "../shaders/vertex/skybox.vert", "../shaders/fragment/skybox.frag", "skybox shaders");
     std::array file_names = {
         "../assets/skybox/right.jpg",  "../assets/skybox/left.jpg",  "../assets/skybox/top.jpg",
         "../assets/skybox/bottom.jpg", "../assets/skybox/front.jpg", "../assets/skybox/back.jpg",
@@ -50,7 +50,7 @@ void init_engine(Engine* engine) {
         memcpy(skybox_data.data() + offset, data, data_size);
     }
 
-    upload_sky_box(&engine->backend, skybox_data.data(), 4, width, height);
+    backend_upload_sky_box(&engine->backend, skybox_data.data(), 4, width, height);
 
     /*
     std::array gltf_paths = {
@@ -61,33 +61,33 @@ void init_engine(Engine* engine) {
     */
 
     std::array gltf_paths = {"../assets/glb/porsche.glb"};
-    load_scene(&engine->scene, &engine->backend, gltf_paths);
+    scene_load(&engine->scene, &engine->backend, gltf_paths);
 
-    register_key_callback(&engine->window, [=](int key, int scancode, int action, int mods) {
+    window_register_key_callback(&engine->window, [=](int key, int scancode, int action, int mods) {
         camera_key_callback(&engine->camera, key, scancode, action, mods);
         scene_key_callback(&engine->scene, key, action);
     });
 
-    register_cursor_callback(&engine->window, [=](double x_pos, double y_pos) { camera_cursor_callback(&engine->camera, x_pos, y_pos); });
+    window_register_cursor_callback(&engine->window, [=](double x_pos, double y_pos) { camera_cursor_callback(&engine->camera, x_pos, y_pos); });
 }
 
-void run_engine(Engine* engine) {
+void engine_run(Engine* engine) {
 
     while (!glfwWindowShouldClose(engine->window.glfw_window)) {
         glfwPollEvents();
 
-        SceneData scene_data = update_camera(&engine->camera, engine->window.width, engine->window.height);
-        update_scene(&engine->scene);
+        SceneData scene_data = camera_update(&engine->camera, engine->window.width, engine->window.height);
+        scene_update(&engine->scene);
 
-        update_ui(&engine->backend);
-        draw(&engine->backend, engine->scene.entities, &scene_data, 0, 0);
+        ui_update(&engine->backend);
+        backend_draw(&engine->backend, engine->scene.entities, &scene_data, 0, 0);
     }
 }
 
-void deinit_engine(Engine* engine) {
-    finish_pending_vk_work(&engine->backend);
+void engine_deinit(Engine* engine) {
+    backend_finish_pending_vk_work(&engine->backend);
 
-    deinit_ui(&engine->ui);
-    deinit_window(&engine->window);
-    deinit_backend(&engine->backend);
+    ui_deinit(&engine->ui);
+    window_deinit(&engine->window);
+    backend_deinit(&engine->backend);
 }

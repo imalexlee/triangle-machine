@@ -12,7 +12,7 @@
 void                                  create_swapchain(SwapchainContext* swapchain_ctx, const DeviceContext* device_ctx);
 void                                  destroy_swapchain(SwapchainContext* swapchain_ctx, VkDevice device);
 
-void init_swapchain_context(SwapchainContext* swapchain_ctx, const DeviceContext* device_ctx, VkSurfaceKHR surface,
+void swapchain_ctx_init(SwapchainContext* swapchain_ctx, const DeviceContext* device_ctx, VkSurfaceKHR surface,
                             VkPresentModeKHR desired_present_mode) {
     swapchain_ctx->surface      = surface;
     swapchain_ctx->present_mode = VK_PRESENT_MODE_FIFO_KHR; // fifo is guaranteed
@@ -26,12 +26,12 @@ void init_swapchain_context(SwapchainContext* swapchain_ctx, const DeviceContext
     create_swapchain(swapchain_ctx, device_ctx);
 }
 
-void reset_swapchain_context(SwapchainContext* swapchain_ctx, const DeviceContext* device_ctx) {
+void swapchain_ctx_reset(SwapchainContext* swapchain_ctx, const DeviceContext* device_ctx) {
     destroy_swapchain(swapchain_ctx, device_ctx->logical_device);
     create_swapchain(swapchain_ctx, device_ctx);
 }
 
-void deinit_swapchain_context(SwapchainContext* swapchain_ctx, VkDevice device, VkInstance instance) {
+void swapchain_ctx_deinit(SwapchainContext* swapchain_ctx, VkDevice device, VkInstance instance) {
     destroy_swapchain(swapchain_ctx, device);
     vkDestroySurfaceKHR(instance, swapchain_ctx->surface, nullptr);
 }
@@ -104,7 +104,7 @@ void create_swapchain(SwapchainContext* swapchain_ctx, const DeviceContext* devi
 
     for (const auto& image : swapchain_ctx->images) {
         swapchain_ctx->image_views.push_back(
-            create_image_view(device_ctx->logical_device, image, VK_IMAGE_VIEW_TYPE_2D, swapchain_ctx->format, VK_IMAGE_ASPECT_COLOR_BIT));
+            vk_image_view_create(device_ctx->logical_device, image, VK_IMAGE_VIEW_TYPE_2D, swapchain_ctx->format, VK_IMAGE_ASPECT_COLOR_BIT));
     }
 }
 

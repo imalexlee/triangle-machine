@@ -5,7 +5,7 @@
 #include <iostream>
 #include <vk_backend/vk_frame.h>
 
-void init_camera(Camera* cam, const Window* window, glm::vec4 initial_pos, float init_pitch_theta, float init_yaw_theta) {
+void camera_init(Camera* cam, const Window* window, glm::vec4 initial_pos, float init_pitch_theta, float init_yaw_theta) {
 
     cam->position    = initial_pos;
     cam->pitch_theta = init_pitch_theta;
@@ -13,7 +13,7 @@ void init_camera(Camera* cam, const Window* window, glm::vec4 initial_pos, float
     cam->direction   = {0, 0, -1.f, 0};
     cam->cursor_x    = window->width / 2.0;
     cam->cursor_y    = window->height / 2.0;
-    update_camera(cam, window->width, window->height);
+    camera_update(cam, window->width, window->height);
 }
 
 void camera_key_callback(Camera* cam, int key, [[maybe_unused]] int scancode, int action, [[maybe_unused]] int mods) {
@@ -61,7 +61,7 @@ void camera_cursor_callback(Camera* cam, double x_pos, double y_pos) {
 using namespace std::chrono;
 static auto start_time = high_resolution_clock::now();
 
-SceneData update_camera(Camera* cam, uint32_t window_width, uint32_t window_height) {
+SceneData camera_update(Camera* cam, uint32_t window_width, uint32_t window_height) {
     auto  time_duration = duration_cast<duration<float>>(high_resolution_clock::now() - start_time);
     float time_elapsed  = time_duration.count();
 

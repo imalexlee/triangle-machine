@@ -5,7 +5,7 @@
 #include <vk_backend/vk_sync.h>
 
 // creates a 2D image along with its image_view
-AllocatedImage create_image(VkDevice device, VmaAllocator allocator, VkImageUsageFlags usage, VkImageViewType view_type, VkExtent2D extent,
+AllocatedImage allocated_image_create(VkDevice device, VmaAllocator allocator, VkImageUsageFlags usage, VkImageViewType view_type, VkExtent2D extent,
                             VkFormat format, uint32_t samples) {
 
     VkExtent3D extent_3D{
@@ -43,12 +43,12 @@ AllocatedImage create_image(VkDevice device, VmaAllocator allocator, VkImageUsag
         aspect_flag = VK_IMAGE_ASPECT_DEPTH_BIT;
     }
 
-    allocated_image.image_view = create_image_view(device, allocated_image.image, view_type, format, aspect_flag);
+    allocated_image.image_view = vk_image_view_create(device, allocated_image.image, view_type, format, aspect_flag);
 
     return allocated_image;
 }
 
-VkImageView create_image_view(VkDevice device, VkImage image, VkImageViewType view_type, VkFormat format, VkImageAspectFlags aspect_flags,
+VkImageView vk_image_view_create(VkDevice device, VkImage image, VkImageViewType view_type, VkFormat format, VkImageAspectFlags aspect_flags,
                               uint32_t mip_levels) {
 
     VkImageView           image_view;
@@ -62,7 +62,7 @@ VkImageView create_image_view(VkDevice device, VkImage image, VkImageViewType vi
 
     uint32_t layer_count = view_type == VK_IMAGE_VIEW_TYPE_CUBE ? 6 : 1;
 
-    VkImageSubresourceRange subresource_range = create_image_subresource_range(aspect_flags, layer_count, mip_levels);
+    VkImageSubresourceRange subresource_range = vk_image_subresource_range_create(aspect_flags, layer_count, mip_levels);
 
     image_view_ci.subresourceRange = subresource_range;
 
@@ -71,7 +71,7 @@ VkImageView create_image_view(VkDevice device, VkImage image, VkImageViewType vi
     return image_view;
 }
 
-VkImage create_vk_image(VkDevice device, VkFormat format, VkImageUsageFlags usage, uint32_t width, uint32_t height, uint32_t layer_count,
+VkImage vk_image_create(VkDevice device, VkFormat format, VkImageUsageFlags usage, uint32_t width, uint32_t height, uint32_t layer_count,
                         uint32_t samples) {
 
     VkImageCreateInfo image_ci{};
@@ -94,7 +94,7 @@ VkImage create_vk_image(VkDevice device, VkFormat format, VkImageUsageFlags usag
     return image;
 }
 
-VkSampler create_sampler(VkDevice device, VkFilter min_filter, VkFilter mag_filter, VkSamplerAddressMode address_mode_u,
+VkSampler vk_sampler_create(VkDevice device, VkFilter min_filter, VkFilter mag_filter, VkSamplerAddressMode address_mode_u,
                          VkSamplerAddressMode address_mode_v) {
     VkSamplerCreateInfo sampler_ci{};
     sampler_ci.sType        = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -109,7 +109,7 @@ VkSampler create_sampler(VkDevice device, VkFilter min_filter, VkFilter mag_filt
     return sampler;
 };
 
-void blit_image(VkCommandBuffer cmd, VkImage src, VkImage dest, VkExtent2D src_extent, VkExtent2D dst_extent, uint32_t src_layer_count,
+void vk_image_blit(VkCommandBuffer cmd, VkImage src, VkImage dest, VkExtent2D src_extent, VkExtent2D dst_extent, uint32_t src_layer_count,
                 uint32_t dst_layer_count) {
     VkImageBlit2 blit_region{.sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2, .pNext = nullptr};
     blit_region.srcOffsets[1].x = src_extent.width;
@@ -143,12 +143,12 @@ void blit_image(VkCommandBuffer cmd, VkImage src, VkImage dest, VkExtent2D src_e
     vkCmdBlitImage2(cmd, &blit_info);
 }
 
-void destroy_image(VkDevice device, VmaAllocator allocator, const AllocatedImage* allocated_image) {
+void allocated_image_destroy(VkDevice device, VmaAllocator allocator, const AllocatedImage* allocated_image) {
     vmaDestroyImage(allocator, allocated_image->image, allocated_image->allocation);
     vkDestroyImageView(device, allocated_image->image_view, nullptr);
 }
 
-VkImageSubresourceRange create_image_subresource_range(VkImageAspectFlags aspect_flags, uint32_t layer_count, uint32_t mip_levels) {
+VkImageSubresourceRange vk_image_subresource_range_create(VkImageAspectFlags aspect_flags, uint32_t layer_count, uint32_t mip_levels) {
     VkImageSubresourceRange subresource_range{};
     subresource_range.aspectMask     = aspect_flags;
     subresource_range.baseMipLevel   = 0;

@@ -1,6 +1,5 @@
 #pragma once
 #include <glm/vec3.hpp>
-#include <glm/vec4.hpp>
 #include <vector>
 #include <vulkan/vulkan_core.h>
 
@@ -11,8 +10,6 @@ struct MeshData {
 };
 
 struct DrawObject {
-    // VkDescriptorSet mat_desc_set;
-    // VkDescriptorSet obj_desc_set;
     MeshData mesh_data{};
     VkBuffer index_buffer;
     uint32_t indices_count{};

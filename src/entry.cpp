@@ -2,9 +2,9 @@
 
 int main() {
     Engine engine;
-    init_engine(&engine);
+    engine_init(&engine);
 
-    run_engine(&engine);
+    engine_run(&engine);
 
-    deinit_engine(&engine);
+    engine_deinit(&engine);
 }

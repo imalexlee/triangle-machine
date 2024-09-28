@@ -27,15 +27,15 @@ struct DescriptorLayoutBuilder {
  * @param binding_flags    The binding flags for this layout binding
  * @param descriptor_count The number of descriptors with this type and stage
  */
-void add_layout_binding(DescriptorLayoutBuilder* layout_builder, uint32_t binding, VkDescriptorType type, VkShaderStageFlags stage,
-                        VkDescriptorBindingFlags binding_flags = 0, uint32_t descriptor_count = 1);
+void desc_layout_builder_add_binding(DescriptorLayoutBuilder* layout_builder, uint32_t binding, VkDescriptorType type, VkShaderStageFlags stage,
+                                     VkDescriptorBindingFlags binding_flags = 0, uint32_t descriptor_count = 1);
 
 /**
  * @brief Clears the current layout bindings for this layout builder
  *
  * @param layout_builder The layout builder to clear
  */
-void clear_layout_bindings(DescriptorLayoutBuilder* layout_builder);
+void desc_layout_builder_clear(DescriptorLayoutBuilder* layout_builder);
 
 /**
  * @brief Builds a descriptor set layout based on the bindings in a layout builder
@@ -44,7 +44,7 @@ void clear_layout_bindings(DescriptorLayoutBuilder* layout_builder);
  * @param device	  The device associated with this set layout
  * @return		  The bound descriptor set layout
  */
-[[nodiscard]] VkDescriptorSetLayout build_set_layout(const DescriptorLayoutBuilder* layout_builder, VkDevice device);
+[[nodiscard]] VkDescriptorSetLayout desc_layout_builder_create_layout(const DescriptorLayoutBuilder* layout_builder, VkDevice device);
 
 // 2. create a pool and allow user to allocate a set with whatever layout
 struct DescriptorAllocator {
@@ -62,7 +62,7 @@ struct DescriptorAllocator {
  * @param init_set_count    The initial amount of descriptor sets to be allocated in the pool
  * @param pool_size_ratios  The type and amount of descriptors to reserve space for in each set
  */
-void init_desc_allocator(DescriptorAllocator* desc_allocator, VkDevice device, uint32_t init_set_count, std::span<PoolSizeRatio> pool_size_ratios);
+void desc_allocator_init(DescriptorAllocator* desc_allocator, VkDevice device, uint32_t init_set_count, std::span<PoolSizeRatio> pool_size_ratios);
 
 /**
  * @brief Trys to allocate a descriptor set from an existing pool or creates a new pool if no space
@@ -74,8 +74,8 @@ void init_desc_allocator(DescriptorAllocator* desc_allocator, VkDevice device, u
  *                            to represent how many actual descriptors to allocate here
  * @return		              An allocated descriptor set with the desired layout
  */
-[[nodiscard]] VkDescriptorSet allocate_desc_set(DescriptorAllocator* desc_allocator, VkDevice device, VkDescriptorSetLayout layout,
-                                                uint32_t variable_desc_count = 0);
+[[nodiscard]] VkDescriptorSet desc_allocator_allocate_desc_set(DescriptorAllocator* desc_allocator, VkDevice device, VkDescriptorSetLayout layout,
+                                                               uint32_t variable_desc_count = 0);
 
 /**
  * @brief Resets all descriptor pools and marks all previously allocated pools as ready-to-use
@@ -83,7 +83,7 @@ void init_desc_allocator(DescriptorAllocator* desc_allocator, VkDevice device, u
  * @param desc_allocator  The allocator to use to reset pools
  * @param device	  The device to reset the pools for
  */
-void reset_desc_pools(DescriptorAllocator* desc_allocator, VkDevice device);
+void desc_allocator_reset_desc_pools(DescriptorAllocator* desc_allocator, VkDevice device);
 
 /**
  * @brief Destroys all descriptor pools associated with this descriptor allocator
@@ -91,7 +91,7 @@ void reset_desc_pools(DescriptorAllocator* desc_allocator, VkDevice device);
  * @param desc_allocator  The DescriptorAllocator to deinitialize
  * @param device	  The device that the pools were allocated from
  */
-void deinit_desc_allocator(DescriptorAllocator* desc_allocator, VkDevice device);
+void desc_allocator_deinit(DescriptorAllocator* desc_allocator, VkDevice device);
 
 // 3. fill in an allocated set with actual data
 struct DescriptorWriter {
@@ -111,8 +111,8 @@ struct DescriptorWriter {
  * @param type	      The type of descriptor
  * @param array_idx   The index of descriptor to write at this binding
  */
-void write_image_desc(DescriptorWriter* desc_writer, int binding, VkImageView image, VkSampler sampler, VkImageLayout layout, VkDescriptorType type,
-                      uint32_t array_idx = 0);
+void desc_writer_write_image_desc(DescriptorWriter* desc_writer, int binding, VkImageView image, VkSampler sampler, VkImageLayout layout,
+                                  VkDescriptorType type, uint32_t array_idx = 0);
 
 /**
  * @brief Appends a buffer descriptor to a list of descriptors in which to eventually write to a set
@@ -124,7 +124,7 @@ void write_image_desc(DescriptorWriter* desc_writer, int binding, VkImageView im
  * @param offset      The starting offset position to read this buffer from
  * @param type        The type of descriptor
  */
-void write_buffer_desc(DescriptorWriter* desc_writer, int binding, VkBuffer buffer, size_t size, size_t offset, VkDescriptorType type);
+void desc_writer_write_buffer_desc(DescriptorWriter* desc_writer, int binding, VkBuffer buffer, size_t size, size_t offset, VkDescriptorType type);
 
 /**
  * @brief Writes out saved image and/or buffer descriptors in our descriptor writer to an allocated
@@ -134,11 +134,11 @@ void write_buffer_desc(DescriptorWriter* desc_writer, int binding, VkBuffer buff
  * @param device      The device in which our descriptor set is allocated from
  * @param set	      The allocated descriptor set to fill in
  */
-void update_desc_set(DescriptorWriter* desc_writer, VkDevice device, VkDescriptorSet set);
+void desc_writer_update_desc_set(DescriptorWriter* desc_writer, VkDevice device, VkDescriptorSet set);
 
 /**
  * @brief Clears the state of this DescriptorWriter
  *
  * @param desc_writer the writer to clear
  */
-void clear_desc_writer(DescriptorWriter* desc_writer);
+void desc_writer_clear(DescriptorWriter* desc_writer);

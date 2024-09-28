@@ -22,9 +22,9 @@ struct Camera {
     double cursor_y;
 };
 
-void init_camera(Camera* cam, const Window* window, glm::vec4 initial_pos, float init_pitch_theta = 0.f, float init_yaw_theta = 0.f);
+void camera_init(Camera* cam, const Window* window, glm::vec4 initial_pos, float init_pitch_theta = 0.f, float init_yaw_theta = 0.f);
 
-SceneData update_camera(Camera* cam, uint32_t window_width, uint32_t window_height);
+SceneData camera_update(Camera* cam, uint32_t window_width, uint32_t window_height);
 
 void camera_key_callback(Camera* cam, int key, int scancode, int action, int mods);
 

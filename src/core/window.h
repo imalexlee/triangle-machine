@@ -17,12 +17,12 @@ struct Window {
     static inline std::vector<std::function<void(int, int)>>           resize_callbacks;
 };
 
-void init_window(Window* window, uint32_t width, uint32_t height, const char* title);
+void window_init(Window* window, uint32_t width, uint32_t height, const char* title);
 
-void deinit_window(const Window* window);
+void window_deinit(const Window* window);
 
-[[nodiscard]] VkSurfaceKHR get_vulkan_surface(const Window* window, VkInstance instance);
+[[nodiscard]] VkSurfaceKHR vk_surface_get(const Window* window, VkInstance instance);
 
-void register_key_callback(Window* window, std::function<void(int, int, int, int)>&& fn_ptr);
+void window_register_key_callback(Window* window, std::function<void(int, int, int, int)>&& fn_ptr);
 
-void register_cursor_callback(Window* window, std::function<void(double, double)>&& fn_ptr);
+void window_register_cursor_callback(Window* window, std::function<void(double, double)>&& fn_ptr);

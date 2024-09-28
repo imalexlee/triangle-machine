@@ -15,8 +15,8 @@ struct Engine {
     UI        ui;
 };
 
-void init_engine(Engine* engine);
+void engine_init(Engine* engine);
 
-void run_engine(Engine* engine);
+void engine_run(Engine* engine);
 
-void deinit_engine(Engine* engine);
+void engine_deinit(Engine* engine);

@@ -4,7 +4,7 @@
 
 #include <fmt/base.h>
 
-void load_scene(Scene* scene, VkBackend* backend, std::span<const char*> gltf_paths) {
+void scene_load(Scene* scene, VkBackend* backend, std::span<const char*> gltf_paths) {
     scene->entities.reserve(gltf_paths.size());
     for (const auto& path : gltf_paths) {
         scene->entities.push_back(load_entity(backend, path));
@@ -45,7 +45,7 @@ void scene_key_callback(Scene* scene, int key, int action) {
 using namespace std::chrono;
 static auto start_time = high_resolution_clock::now();
 
-void update_scene(Scene* scene) {
+void scene_update(Scene* scene) {
     auto  time_duration = duration_cast<duration<float>>(high_resolution_clock::now() - start_time);
     float time_elapsed  = time_duration.count();
 

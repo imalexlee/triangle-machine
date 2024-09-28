@@ -7,7 +7,7 @@
 #include <vk_backend/vk_backend.h>
 #include <vulkan/vulkan_core.h>
 
-void init_cmd_context(CommandContext* cmd_ctx, VkDevice device, uint32_t queue_index, VkCommandPoolCreateFlags flags) {
+void command_ctx_init(CommandContext* cmd_ctx, VkDevice device, uint32_t queue_index, VkCommandPoolCreateFlags flags) {
 
     VkCommandPoolCreateInfo command_pool_ci{};
     command_pool_ci.sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -27,9 +27,9 @@ void init_cmd_context(CommandContext* cmd_ctx, VkDevice device, uint32_t queue_i
     VK_CHECK(vkAllocateCommandBuffers(device, &primary_buffer_ai, &cmd_ctx->primary_buffer));
 }
 
-void deinit_cmd_context(const CommandContext* cmd_ctx, VkDevice device) { vkDestroyCommandPool(device, cmd_ctx->primary_pool, nullptr); }
+void command_ctx_deinit(const CommandContext* cmd_ctx, VkDevice device) { vkDestroyCommandPool(device, cmd_ctx->primary_pool, nullptr); }
 
-void begin_primary_buffer(const CommandContext* cmd_ctx, VkCommandBufferUsageFlags flags) {
+void command_ctx_begin_primary_buffer(const CommandContext* cmd_ctx, VkCommandBufferUsageFlags flags) {
     VkCommandBufferBeginInfo command_buffer_bi{};
     command_buffer_bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     command_buffer_bi.pNext = nullptr;
@@ -38,7 +38,7 @@ void begin_primary_buffer(const CommandContext* cmd_ctx, VkCommandBufferUsageFla
     VK_CHECK(vkBeginCommandBuffer(cmd_ctx->primary_buffer, &command_buffer_bi));
 }
 
-void submit_primary_buffer(const CommandContext* cmd_ctx, const VkQueue queue, const VkSemaphoreSubmitInfo* wait_semaphore_info,
+void command_ctx_submit_primary_buffer(const CommandContext* cmd_ctx, const VkQueue queue, const VkSemaphoreSubmitInfo* wait_semaphore_info,
                            const VkSemaphoreSubmitInfo* signal_semaphore_info, const VkFence fence) {
     VK_CHECK(vkEndCommandBuffer(cmd_ctx->primary_buffer));
 

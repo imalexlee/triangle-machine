@@ -275,7 +275,7 @@ static std::vector<MeshData> create_mesh_data(const VkBackend* backend, std::spa
     for (const auto& node : gltf_nodes) {
         MeshData new_mesh_data;
         new_mesh_data.local_transform       = node.transform;
-        new_mesh_data.vertex_buffer_address = get_buffer_device_address(backend->device_ctx.logical_device, &vk_meshes[node.mesh_i].vertices);
+        new_mesh_data.vertex_buffer_address = vk_buffer_device_address_get(backend->device_ctx.logical_device, &vk_meshes[node.mesh_i].vertices);
         new_mesh_data.mat_i                 = 0; // default mat
         mesh_data.push_back(new_mesh_data);
     }
@@ -284,7 +284,7 @@ static std::vector<MeshData> create_mesh_data(const VkBackend* backend, std::spa
 }
 
 static int times_entered = 0;
-// Adds draw objects to entity from a given root node
+// Adds backend_draw objects to entity from a given root node
 void create_node_tree(const fastgltf::Asset* asset, const glm::mat4x4* transform, const size_t node_i, std::vector<GLTFNode>* gltf_nodes) {
 
     times_entered++;
@@ -408,14 +408,14 @@ static uint32_t upload_gltf_textures(VkBackend* backend, std::span<const GLTFTex
         tex_samplers.push_back(new_tex_sampler);
     }
 
-    return upload_2d_texture(backend, tex_samplers);
+    return backend_upload_2d_texture(backend, tex_samplers);
 }
 
 static std::vector<MeshBuffers> upload_gltf_mesh_buffers(VkBackend* backend, std::span<const GLTFMesh> meshes) {
     std::vector<MeshBuffers> mesh_buffers;
     mesh_buffers.reserve(meshes.size());
     for (const auto& mesh : meshes) {
-        MeshBuffers new_mesh_buffers = upload_mesh<Vertex>(backend, mesh.indices, mesh.vertices);
+        MeshBuffers new_mesh_buffers = backend_upload_mesh<Vertex>(backend, mesh.indices, mesh.vertices);
         mesh_buffers.push_back(new_mesh_buffers);
     }
 
@@ -431,7 +431,7 @@ static uint32_t upload_gltf_materials(VkBackend* backend, std::span<const GLTFMa
         assert(!default_mat.color_tex_i && !default_mat.metal_rough_tex_i && !default_mat.metal_rough_tex_coord && !default_mat.color_tex_coord);
         std::array mat_arr = {default_mat};
 
-        std::ignore = upload_materials<MaterialData>(backend, mat_arr);
+        std::ignore = backend_upload_materials<MaterialData>(backend, mat_arr);
     }
 
     std::vector<MaterialData> materials;
@@ -443,7 +443,7 @@ static uint32_t upload_gltf_materials(VkBackend* backend, std::span<const GLTFMa
         materials.push_back(new_mat_data);
     }
 
-    return upload_materials<MaterialData>(backend, materials);
+    return backend_upload_materials<MaterialData>(backend, materials);
 
     return 0;
 }

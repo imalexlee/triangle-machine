@@ -12,8 +12,8 @@ struct Scene {
     glm::vec3           velocity        = {0, 0, 0};
 };
 
-void load_scene(Scene* scene, VkBackend* backend, std::span<const char*> gltf_paths);
+void scene_load(Scene* scene, VkBackend* backend, std::span<const char*> gltf_paths);
 
-void update_scene(Scene* scene);
+void scene_update(Scene* scene);
 
 void scene_key_callback(Scene* scene, int key, int action);

@@ -1,6 +1,6 @@
 #include "vk_ext.h"
 
-void init_vk_ext_context(VkExtContext* ext_ctx, VkDevice device) {
+void ext_context_init(ExtContext* ext_ctx, VkDevice device) {
     ext_ctx->vkCreateShadersEXT     = reinterpret_cast<PFN_vkCreateShadersEXT>(vkGetDeviceProcAddr(device, "vkCreateShadersEXT"));
     ext_ctx->vkDestroyShaderEXT     = reinterpret_cast<PFN_vkDestroyShaderEXT>(vkGetDeviceProcAddr(device, "vkDestroyShaderEXT"));
     ext_ctx->vkCmdBindShadersEXT    = reinterpret_cast<PFN_vkCmdBindShadersEXT>(vkGetDeviceProcAddr(device, "vkCmdBindShadersEXT"));

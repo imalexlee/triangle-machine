@@ -26,11 +26,11 @@ struct DeviceContext {
  * @param instance    Vulkan Instance used to check for physical devices
  * @param surface     Vulkan Surface used to check
  */
-void init_device_context(DeviceContext* device_ctx, VkInstance instance, VkSurfaceKHR surface);
+void device_ctx_init(DeviceContext* device_ctx, VkInstance instance, VkSurfaceKHR surface);
 
 /**
  * @brief Frees Vulkan devices attached to this DeviceContext
  *
  * @param device_ctx DeviceContext to deinit
  */
-void deinit_device_context(const DeviceContext* device_ctx);
+void device_ctx_deinit(const DeviceContext* device_ctx);
