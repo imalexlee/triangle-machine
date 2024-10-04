@@ -274,9 +274,10 @@ static std::vector<MeshData> create_mesh_data(const VkBackend* backend, std::spa
     mesh_data.reserve(gltf_nodes.size());
     for (const auto& node : gltf_nodes) {
         MeshData new_mesh_data;
-        new_mesh_data.local_transform       = node.transform;
-        new_mesh_data.vertex_buffer_address = vk_buffer_device_address_get(backend->device_ctx.logical_device, &vk_meshes[node.mesh_i].vertices);
-        new_mesh_data.mat_i                 = 0; // default mat
+        new_mesh_data.local_transform = node.transform;
+        new_mesh_data.vertex_buffer_address =
+            vk_buffer_device_address_get(backend->device_ctx.logical_device, vk_meshes[node.mesh_i].vertices.buffer);
+        new_mesh_data.mat_i = 0; // default mat
         mesh_data.push_back(new_mesh_data);
     }
 
@@ -311,7 +312,7 @@ void create_node_tree(const fastgltf::Asset* asset, const glm::mat4x4* transform
 }
 
 // turns nodes with a mesh into a flat buffer instead of GLTF's tree structure
-static std::vector<GLTFNode> load_gltf_nodes(const fastgltf::Asset* asset) {
+static std::vector<GLTFNode> load_gltf_mesh_nodes(const fastgltf::Asset* asset) {
     std::vector<GLTFNode> gltf_nodes;
     gltf_nodes.reserve(asset->nodes.size());
 
@@ -471,20 +472,32 @@ Entity load_entity(VkBackend* backend, const std::filesystem::path& path) {
     fastgltf::Asset asset;
     asset = std::move(load.get());
 
-    const std::vector<GLTFTexture>  gltf_textures  = load_gltf_textures(&asset);
-    const std::vector<GLTFMaterial> gltf_materials = load_gltf_materials(&asset);
-    const std::vector<GLTFMesh>     gltf_meshes    = load_gltf_meshes(&asset);
-    const std::vector<GLTFNode>     gltf_nodes     = load_gltf_nodes(&asset);
+    const std::vector<GLTFTexture>  gltf_textures   = load_gltf_textures(&asset);
+    const std::vector<GLTFMaterial> gltf_materials  = load_gltf_materials(&asset);
+    const std::vector<GLTFMesh>     gltf_meshes     = load_gltf_meshes(&asset);
+    const std::vector<GLTFNode>     gltf_mesh_nodes = load_gltf_mesh_nodes(&asset);
 
     const std::vector<MeshBuffers> vk_meshes       = upload_gltf_mesh_buffers(backend, gltf_meshes);
     const uint32_t                 tex_desc_offset = upload_gltf_textures(backend, gltf_textures, asset.samplers);
     const uint32_t                 mat_desc_offset = upload_gltf_materials(backend, gltf_materials, tex_desc_offset);
 
-    const std::vector<MeshData> mesh_data = create_mesh_data(backend, gltf_nodes, vk_meshes);
+    const std::vector<MeshData> mesh_data = create_mesh_data(backend, gltf_mesh_nodes, vk_meshes);
+
+    std::vector<TopLevelInstanceRef> instance_refs;
+    instance_refs.reserve(gltf_mesh_nodes.size());
+    for (const auto& node : gltf_mesh_nodes) {
+        TopLevelInstanceRef new_instance_ref{};
+        new_instance_ref.mesh_idx  = node.mesh_i;
+        new_instance_ref.transform = node.transform;
+
+        instance_refs.push_back(new_instance_ref);
+    }
+
+    backend_create_accel_struct(backend, vk_meshes, instance_refs, sizeof(Vertex));
 
     Entity entity;
-    for (size_t node_i = 0; node_i < gltf_nodes.size(); node_i++) {
-        const GLTFNode* node = &gltf_nodes[node_i];
+    for (size_t node_i = 0; node_i < gltf_mesh_nodes.size(); node_i++) {
+        const GLTFNode* node = &gltf_mesh_nodes[node_i];
         const GLTFMesh* mesh = &gltf_meshes[node->mesh_i];
         for (const auto& primitive : mesh->primitives) {
             DrawObject new_draw_obj{};

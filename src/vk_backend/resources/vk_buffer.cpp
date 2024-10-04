@@ -26,10 +26,10 @@ void allocated_buffer_destroy(VmaAllocator allocator, const AllocatedBuffer* all
     vmaDestroyBuffer(allocator, allocated_buffer->buffer, allocated_buffer->allocation);
 }
 
-VkDeviceAddress vk_buffer_device_address_get(VkDevice device, const AllocatedBuffer* buffer) {
+VkDeviceAddress vk_buffer_device_address_get(VkDevice device, VkBuffer buffer) {
     VkBufferDeviceAddressInfo device_address_info{};
     device_address_info.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-    device_address_info.buffer = buffer->buffer;
+    device_address_info.buffer = buffer;
 
     return vkGetBufferDeviceAddress(device, &device_address_info);
 }

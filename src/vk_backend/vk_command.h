@@ -14,10 +14,10 @@ struct CommandContext {
  *
  * @param cmd_ctx     CommandContext to init
  * @param device      Vulkan device to use to acquire command buffers from
- * @param queue_index Index of which queue we will submit these buffers to
+ * @param queue_family_index Index of which queue we will submit these buffers to
  * @param flags	      Command pool creation usage
  */
-void command_ctx_init(CommandContext* cmd_ctx, VkDevice device, uint32_t queue_index, VkCommandPoolCreateFlags flags);
+void command_ctx_init(CommandContext* cmd_ctx, VkDevice device, uint32_t queue_family_index, VkCommandPoolCreateFlags flags);
 
 /**
  * @brief Creates primary buffer info and begins command recording
@@ -32,12 +32,12 @@ void command_ctx_begin_primary_buffer(const CommandContext* cmd_ctx, VkCommandBu
  *
  * @param cmd_ctx		CommandContext to submit from
  * @param queue			Vulkan queue to submit to
+ * @param fence
  * @param wait_semaphore_info	Semaphore to wait for to complete before executing
  * @param signal_semaphore_info Semaphore to signal once buffer is done
- * @param fence
  */
-void command_ctx_submit_primary_buffer(const CommandContext* cmd_ctx, const VkQueue queue, const VkSemaphoreSubmitInfo* wait_semaphore_info,
-                                       const VkSemaphoreSubmitInfo* signal_semaphore_info, const VkFence fence);
+void command_ctx_submit_primary_buffer(const CommandContext* cmd_ctx, VkQueue queue, VkFence fence, const VkSemaphoreSubmitInfo* wait_semaphore_info,
+                                       const VkSemaphoreSubmitInfo* signal_semaphore_info);
 
 /**
  * @brief Deinitializes and frees command pools for this CommandContext
@@ -46,3 +46,6 @@ void command_ctx_submit_primary_buffer(const CommandContext* cmd_ctx, const VkQu
  * @param device  Vulkan Device used to free pools from
  */
 void command_ctx_deinit(const CommandContext* cmd_ctx, VkDevice device);
+
+void command_ctx_immediate_submit(const CommandContext* cmd_ctx, VkDevice device, VkQueue queue, VkFence fence,
+                                  std::function<void(VkCommandBuffer cmd_buf)>&& function);

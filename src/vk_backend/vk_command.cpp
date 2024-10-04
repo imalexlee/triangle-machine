@@ -1,5 +1,7 @@
 #include "vk_command.h"
+
 #include "vk_backend/vk_utils.h"
+#include "vk_options.h"
 #include <cassert>
 #include <cstdint>
 #include <fmt/format.h>
@@ -7,12 +9,12 @@
 #include <vk_backend/vk_backend.h>
 #include <vulkan/vulkan_core.h>
 
-void command_ctx_init(CommandContext* cmd_ctx, VkDevice device, uint32_t queue_index, VkCommandPoolCreateFlags flags) {
+void command_ctx_init(CommandContext* cmd_ctx, VkDevice device, uint32_t queue_family_index, VkCommandPoolCreateFlags flags) {
 
     VkCommandPoolCreateInfo command_pool_ci{};
     command_pool_ci.sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     command_pool_ci.pNext            = nullptr;
-    command_pool_ci.queueFamilyIndex = queue_index;
+    command_pool_ci.queueFamilyIndex = queue_family_index;
     command_pool_ci.flags            = flags;
 
     VK_CHECK(vkCreateCommandPool(device, &command_pool_ci, nullptr, &cmd_ctx->primary_pool));
@@ -38,8 +40,8 @@ void command_ctx_begin_primary_buffer(const CommandContext* cmd_ctx, VkCommandBu
     VK_CHECK(vkBeginCommandBuffer(cmd_ctx->primary_buffer, &command_buffer_bi));
 }
 
-void command_ctx_submit_primary_buffer(const CommandContext* cmd_ctx, const VkQueue queue, const VkSemaphoreSubmitInfo* wait_semaphore_info,
-                           const VkSemaphoreSubmitInfo* signal_semaphore_info, const VkFence fence) {
+void command_ctx_submit_primary_buffer(const CommandContext* cmd_ctx, VkQueue queue, VkFence fence, const VkSemaphoreSubmitInfo* wait_semaphore_info,
+                                       const VkSemaphoreSubmitInfo* signal_semaphore_info) {
     VK_CHECK(vkEndCommandBuffer(cmd_ctx->primary_buffer));
 
     VkCommandBufferSubmitInfo command_buffer_si{};
@@ -60,4 +62,17 @@ void command_ctx_submit_primary_buffer(const CommandContext* cmd_ctx, const VkQu
     submit_info.signalSemaphoreInfoCount = signal_semaphore_info != nullptr ? 1 : 0;
 
     VK_CHECK(vkQueueSubmit2(queue, 1, &submit_info, fence));
+}
+
+void command_ctx_immediate_submit(const CommandContext* cmd_ctx, VkDevice device, VkQueue queue, VkFence fence,
+                                  std::function<void(VkCommandBuffer cmd_buf)>&& function) {
+    VK_CHECK(vkResetFences(device, 1, &fence));
+
+    command_ctx_begin_primary_buffer(cmd_ctx, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+
+    function(cmd_ctx->primary_buffer);
+
+    command_ctx_submit_primary_buffer(cmd_ctx, queue, fence, nullptr, nullptr);
+
+    VK_CHECK(vkWaitForFences(device, 1, &fence, VK_TRUE, vk_opts::timeout_dur));
 }

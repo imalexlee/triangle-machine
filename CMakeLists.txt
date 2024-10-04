@@ -38,12 +38,14 @@ add_executable(
         src/vk_backend/resources/vk_descriptor.cpp
         src/vk_backend/resources/vk_buffer.cpp
         src/vk_backend/resources/vk_image.cpp
-        src/vk_backend/resources/vk_shader.cpp
-        src/vk_backend/resources/vk_shader.h
+        src/vk_backend/vk_shader.cpp
+        src/vk_backend/vk_shader.h
         src/vk_backend/vk_ext.cpp
         src/vk_backend/vk_ext.h
         src/core/loaders/loader.cpp
         src/core/loaders/loader.h
+        src/vk_backend/resources/vk_accel_struct.cpp
+        src/vk_backend/resources/vk_accel_struct.h
         #  src/vk_backend/resources/sudo apt-get install glslang-tools_comp.cpp
 )
 

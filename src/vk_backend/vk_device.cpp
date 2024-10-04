@@ -127,15 +127,33 @@ void create_logical_device(DeviceContext* device_ctx) {
         queue_ci.pQueuePriorities = &priority;
         queue_infos.push_back(queue_ci);
     }
+
     constexpr std::array device_extensions = {
-        VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,          VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-        VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,        VK_EXT_SHADER_OBJECT_EXTENSION_NAME,
-        VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME, VK_NV_INHERITED_VIEWPORT_SCISSOR_EXTENSION_NAME,
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+        VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
+        VK_KHR_RAY_QUERY_EXTENSION_NAME,
+        VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
+        VK_KHR_SPIRV_1_4_EXTENSION_NAME,
+        VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME,
+        VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
+        VK_EXT_SHADER_OBJECT_EXTENSION_NAME,
+        VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME,
+        VK_NV_INHERITED_VIEWPORT_SCISSOR_EXTENSION_NAME,
     };
+
+    VkPhysicalDeviceRayQueryFeaturesKHR ray_query_features{};
+    ray_query_features.sType    = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
+    ray_query_features.rayQuery = VK_TRUE;
+
+    VkPhysicalDeviceAccelerationStructureFeaturesKHR accel_struct_features{};
+    accel_struct_features.sType                 = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+    accel_struct_features.accelerationStructure = VK_TRUE;
+    accel_struct_features.pNext                 = &ray_query_features;
 
     VkPhysicalDeviceVertexInputDynamicStateFeaturesEXT vertex_input_feature{};
     vertex_input_feature.sType                   = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_INPUT_DYNAMIC_STATE_FEATURES_EXT;
     vertex_input_feature.vertexInputDynamicState = VK_TRUE;
+    vertex_input_feature.pNext                   = &accel_struct_features;
 
     // Enable Shader Object
     VkPhysicalDeviceShaderObjectFeaturesEXT shader_object_feature{};

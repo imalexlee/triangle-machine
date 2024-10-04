@@ -1,11 +1,13 @@
 #pragma once
 
-#include "resources/vk_shader.h"
+#include "resources/vk_accel_struct.h"
 #include "vk_backend/resources/vk_image.h"
 #include "vk_backend/vk_command.h"
 #include "vk_backend/vk_debug.h"
 #include "vk_backend/vk_frame.h"
+#include "vk_backend/vk_shader.h"
 #include "vk_ext.h"
+
 #include <vk_backend/vk_pipeline.h>
 #include <vk_backend/vk_scene.h>
 #include <vk_backend/vk_swapchain.h>
@@ -51,6 +53,7 @@ struct VkBackend {
     Stats                          stats;
     CommandContext                 immediate_cmd_ctx;
     CommandContext                 compute_cmd_ctx;
+    AccelStructContext             accel_struct_ctx;
     AllocatedImage                 color_image;
     AllocatedImage                 color_resolve_image;
     AllocatedImage                 depth_image;
@@ -80,7 +83,7 @@ void backend_deinit(VkBackend* backend);
 
 void backend_draw(VkBackend* backend, std::span<const Entity> entities, const SceneData* scene_data, size_t vert_shader, size_t frag_shader);
 
-void backend_immediate_submit(const VkBackend* backend, std::function<void(VkCommandBuffer cmd)>&& function);
+// void backend_immediate_submit(const VkBackend* backend, std::function<void(VkCommandBuffer cmd)>&& function);
 
 void backend_create_imgui_resources(VkBackend* backend);
 
@@ -94,6 +97,9 @@ void backend_upload_sky_box_shaders(VkBackend* backend, const std::filesystem::p
 void backend_upload_sky_box(VkBackend* backend, const uint8_t* texture_data, uint32_t color_channels, uint32_t width, uint32_t height);
 
 [[nodiscard]] uint32_t backend_upload_2d_texture(VkBackend* backend, std::span<const TextureSampler> tex_samplers);
+
+void backend_create_accel_struct(VkBackend* backend, std::span<const MeshBuffers> mesh_buffers, std::span<const TopLevelInstanceRef> instance_refs,
+                                 uint32_t vertex_byte_size);
 
 template <typename T>
 [[nodiscard]] MeshBuffers backend_upload_mesh(VkBackend* backend, const std::span<const uint32_t> indices, std::span<const T> vertices) {
@@ -112,27 +118,31 @@ template <typename T>
     MeshBuffers new_mesh_buffer;
     new_mesh_buffer.vertices =
         allocated_buffer_create(backend->allocator, vertex_buffer_bytes,
-                                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                                VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+                                    VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
                                 VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE, 0);
     new_mesh_buffer.indices =
-        allocated_buffer_create(backend->allocator, index_buffer_bytes, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        allocated_buffer_create(backend->allocator, index_buffer_bytes,
+                                VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+                                    VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
                                 VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE, 0);
 
-    backend_immediate_submit(backend, [&](const VkCommandBuffer cmd) {
-        VkBufferCopy vertex_buffer_region{};
-        vertex_buffer_region.size      = vertex_buffer_bytes;
-        vertex_buffer_region.srcOffset = 0;
-        vertex_buffer_region.dstOffset = 0;
+    command_ctx_immediate_submit(&backend->immediate_cmd_ctx, backend->device_ctx.logical_device, backend->device_ctx.queues.graphics,
+                                 backend->imm_fence, [&](VkCommandBuffer cmd) {
+                                     VkBufferCopy vertex_buffer_region{};
+                                     vertex_buffer_region.size      = vertex_buffer_bytes;
+                                     vertex_buffer_region.srcOffset = 0;
+                                     vertex_buffer_region.dstOffset = 0;
 
-        vkCmdCopyBuffer(cmd, staging_buf.buffer, new_mesh_buffer.vertices.buffer, 1, &vertex_buffer_region);
+                                     vkCmdCopyBuffer(cmd, staging_buf.buffer, new_mesh_buffer.vertices.buffer, 1, &vertex_buffer_region);
 
-        VkBufferCopy index_buffer_region{};
-        index_buffer_region.size      = index_buffer_bytes;
-        index_buffer_region.srcOffset = vertex_buffer_bytes;
-        index_buffer_region.dstOffset = 0;
+                                     VkBufferCopy index_buffer_region{};
+                                     index_buffer_region.size      = index_buffer_bytes;
+                                     index_buffer_region.srcOffset = vertex_buffer_bytes;
+                                     index_buffer_region.dstOffset = 0;
 
-        vkCmdCopyBuffer(cmd, staging_buf.buffer, new_mesh_buffer.indices.buffer, 1, &index_buffer_region);
-    });
+                                     vkCmdCopyBuffer(cmd, staging_buf.buffer, new_mesh_buffer.indices.buffer, 1, &index_buffer_region);
+                                 });
 
     allocated_buffer_destroy(backend->allocator, &staging_buf);
     backend->deletion_queue.push_persistent([=] {
@@ -171,10 +181,11 @@ template <typename T> [[nodiscard]] uint32_t backend_upload_materials(VkBackend*
         new_materials_region.srcOffset = 0;
         new_materials_region.dstOffset = backend->mat_buffer.info.size;
 
-        backend_immediate_submit(backend, [&](VkCommandBuffer cmd) {
-            vkCmdCopyBuffer(cmd, backend->mat_buffer.buffer, new_mat_buf.buffer, 1, &old_materials_region);
-            vkCmdCopyBuffer(cmd, staging_buf.buffer, new_mat_buf.buffer, 1, &new_materials_region);
-        });
+        command_ctx_immediate_submit(&backend->immediate_cmd_ctx, backend->device_ctx.logical_device, backend->device_ctx.queues.graphics,
+                                     backend->imm_fence, [&](VkCommandBuffer cmd) {
+                                         vkCmdCopyBuffer(cmd, backend->mat_buffer.buffer, new_mat_buf.buffer, 1, &old_materials_region);
+                                         vkCmdCopyBuffer(cmd, staging_buf.buffer, new_mat_buf.buffer, 1, &new_materials_region);
+                                     });
 
         allocated_buffer_destroy(backend->allocator, &backend->mat_buffer);
     } else {
@@ -189,8 +200,9 @@ template <typename T> [[nodiscard]] uint32_t backend_upload_materials(VkBackend*
         new_materials_region.srcOffset = 0;
         new_materials_region.dstOffset = 0;
 
-        backend_immediate_submit(
-            backend, [&](VkCommandBuffer cmd) { vkCmdCopyBuffer(cmd, staging_buf.buffer, new_mat_buf.buffer, 1, &new_materials_region); });
+        command_ctx_immediate_submit(
+            &backend->immediate_cmd_ctx, backend->device_ctx.logical_device, backend->device_ctx.queues.graphics, backend->imm_fence,
+            [&](VkCommandBuffer cmd) { vkCmdCopyBuffer(cmd, staging_buf.buffer, new_mat_buf.buffer, 1, &new_materials_region); });
     }
     allocated_buffer_destroy(backend->allocator, &staging_buf);
 

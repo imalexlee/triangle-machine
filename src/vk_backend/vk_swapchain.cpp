@@ -13,7 +13,7 @@ void                                  create_swapchain(SwapchainContext* swapcha
 void                                  destroy_swapchain(SwapchainContext* swapchain_ctx, VkDevice device);
 
 void swapchain_ctx_init(SwapchainContext* swapchain_ctx, const DeviceContext* device_ctx, VkSurfaceKHR surface,
-                            VkPresentModeKHR desired_present_mode) {
+                        VkPresentModeKHR desired_present_mode) {
     swapchain_ctx->surface      = surface;
     swapchain_ctx->present_mode = VK_PRESENT_MODE_FIFO_KHR; // fifo is guaranteed
 
@@ -109,7 +109,7 @@ void create_swapchain(SwapchainContext* swapchain_ctx, const DeviceContext* devi
 }
 
 void destroy_swapchain(SwapchainContext* swapchain_ctx, VkDevice device) {
-    // this call implicitely destroys the VkImage's it gave us in create_swapchain
+    // this call implicitly destroys the VkImage's it gave us in create_swapchain
     vkDestroySwapchainKHR(device, swapchain_ctx->swapchain, nullptr);
     for (const auto& image_view : swapchain_ctx->image_views) {
         vkDestroyImageView(device, image_view, nullptr);

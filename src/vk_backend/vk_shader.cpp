@@ -1,11 +1,11 @@
 #include "vk_shader.h"
 
-#include "../../../thirdparty/shaderc/libshaderc/src/shaderc_private.h"
+#include "../../thirdparty/shaderc/libshaderc/src/shaderc_private.h"
+#include <../../thirdparty/fmt/include/fmt/format.h>
+#include <../../thirdparty/shaderc/libshaderc/include/shaderc/shaderc.h>
 #include <assert.h>
-#include <fmt/format.h>
 #include <fstream>
 #include <iostream>
-#include <shaderc/shaderc.h>
 #include <vk_backend/vk_backend.h>
 #include <vk_backend/vk_utils.h>
 
@@ -15,7 +15,7 @@ static std::vector<uint32_t> compile_shader_spv(shaderc_compiler_t compiler, con
 
 void shader_ctx_init(ShaderContext* shader_ctx) { shader_ctx->builder.compiler = shaderc_compiler_initialize(); }
 
-void shader_ctx_init(const ShaderContext* shader_ctx, const ExtContext* ext_ctx, VkDevice device) {
+void shader_ctx_deinit(const ShaderContext* shader_ctx, const ExtContext* ext_ctx, VkDevice device) {
     shaderc_compiler_release(shader_ctx->builder.compiler);
 
     for (const auto& vert_shader : shader_ctx->vert_shaders) {

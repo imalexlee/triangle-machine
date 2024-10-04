@@ -2,8 +2,6 @@
 
 #include <vk_backend/vk_types.h>
 
-struct VkBackend;
-
 struct AllocatedImage {
     VkImage       image;
     VkImageView   image_view;

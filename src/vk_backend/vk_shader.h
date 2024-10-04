@@ -1,8 +1,8 @@
 #pragma once
 
-#include "vk_backend/vk_ext.h"
+#include "vk_ext.h"
+#include <../../thirdparty/shaderc/libshaderc/include/shaderc/shaderc.h>
 #include <filesystem>
-#include <shaderc/shaderc.h>
 #include <span>
 #include <string>
 #include <vector>
@@ -34,7 +34,7 @@ enum class ShaderType {
 
 void shader_ctx_init(ShaderContext* shader_ctx);
 
-void shader_ctx_init(const ShaderContext* shader_ctx, const ExtContext* ext_ctx, VkDevice device);
+void shader_ctx_deinit(const ShaderContext* shader_ctx, const ExtContext* ext_ctx, VkDevice device);
 
 void shader_ctx_stage_shader(ShaderContext* shader_ctx, const std::filesystem::path& file_path, const std::string& name,
                              std::span<VkDescriptorSetLayout> desc_set_layouts, std::span<VkPushConstantRange> push_constant_ranges,

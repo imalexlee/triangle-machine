@@ -117,6 +117,8 @@ void backend_init(VkBackend* backend, VkInstance instance, VkSurfaceKHR surface,
     command_ctx_init(&backend->compute_cmd_ctx, backend->device_ctx.logical_device, backend->device_ctx.queues.compute_family_index,
                      VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 
+    accel_struct_ctx_init(&backend->accel_struct_ctx, backend->device_ctx.logical_device, backend->device_ctx.queues.graphics_family_index);
+
     create_grid_pipeline(backend);
 
     create_pipeline_layouts(backend);
@@ -392,18 +394,6 @@ void backend_create_imgui_resources(VkBackend* backend) {
     ImGui_ImplVulkan_Init(&init_info);
 }
 
-void backend_immediate_submit(const VkBackend* backend, std::function<void(VkCommandBuffer cmd_buf)>&& function) {
-    VK_CHECK(vkResetFences(backend->device_ctx.logical_device, 1, &backend->imm_fence));
-
-    command_ctx_begin_primary_buffer(&backend->immediate_cmd_ctx, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-
-    function(backend->immediate_cmd_ctx.primary_buffer);
-
-    command_ctx_submit_primary_buffer(&backend->immediate_cmd_ctx, backend->device_ctx.queues.graphics, nullptr, nullptr, backend->imm_fence);
-
-    VK_CHECK(vkWaitForFences(backend->device_ctx.logical_device, 1, &backend->imm_fence, VK_TRUE, vk_opts::timeout_dur));
-}
-
 void create_allocator(VkBackend* backend) {
     VmaAllocatorCreateInfo allocator_info{};
     allocator_info.device         = backend->device_ctx.logical_device;
@@ -589,8 +579,8 @@ void backend_draw(VkBackend* backend, std::span<const Entity> entities, const Sc
     VkSemaphoreSubmitInfo signal_semaphore_si =
         vk_semaphore_submit_info_create(current_frame->render_semaphore, VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT);
 
-    command_ctx_submit_primary_buffer(&current_frame->command_context, backend->device_ctx.queues.graphics, &wait_semaphore_si, &signal_semaphore_si,
-                                      current_frame->render_fence);
+    command_ctx_submit_primary_buffer(&current_frame->command_context, backend->device_ctx.queues.graphics, current_frame->render_fence,
+                                      &wait_semaphore_si, &signal_semaphore_si);
 
     VkPresentInfoKHR present_info{};
     present_info.sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -839,16 +829,17 @@ void upload_sky_box_texture(VkBackend* backend, const TextureSampler* tex_sample
         copy_regions.push_back(bufferCopyRegion);
     }
 
-    backend_immediate_submit(backend, [&](VkCommandBuffer cmd) {
-        vk_image_memory_barrier_insert(cmd, new_texture.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                       tex_sampler->layer_count);
+    command_ctx_immediate_submit(&backend->immediate_cmd_ctx, backend->device_ctx.logical_device, backend->device_ctx.queues.graphics,
+                                 backend->imm_fence, [&](VkCommandBuffer cmd) {
+                                     vk_image_memory_barrier_insert(cmd, new_texture.image, VK_IMAGE_LAYOUT_UNDEFINED,
+                                                                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, tex_sampler->layer_count);
 
-        vkCmdCopyBufferToImage(cmd, staging_buf.buffer, new_texture.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, copy_regions.size(),
-                               copy_regions.data());
+                                     vkCmdCopyBufferToImage(cmd, staging_buf.buffer, new_texture.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                                            copy_regions.size(), copy_regions.data());
 
-        vk_image_memory_barrier_insert(cmd, new_texture.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                                       tex_sampler->layer_count);
-    });
+                                     vk_image_memory_barrier_insert(cmd, new_texture.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                                                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, tex_sampler->layer_count);
+                                 });
 
     DescriptorWriter descriptor_writer;
     desc_writer_write_image_desc(&descriptor_writer, backend->sky_box_desc_binding, new_texture.image_view, tex_sampler->sampler,
@@ -914,13 +905,16 @@ uint32_t backend_upload_2d_texture(VkBackend* backend, std::span<const TextureSa
         copy_region.imageExtent.depth               = 1;
         copy_region.bufferOffset                    = texture_buf_offset;
 
-        backend_immediate_submit(backend, [&](VkCommandBuffer cmd) {
-            vk_image_memory_barrier_insert(cmd, tex_image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1);
+        command_ctx_immediate_submit(
+            &backend->immediate_cmd_ctx, backend->device_ctx.logical_device, backend->device_ctx.queues.graphics, backend->imm_fence,
+            [&](VkCommandBuffer cmd) {
+                vk_image_memory_barrier_insert(cmd, tex_image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1);
 
-            vkCmdCopyBufferToImage(cmd, staging_buf.buffer, tex_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy_region);
+                vkCmdCopyBufferToImage(cmd, staging_buf.buffer, tex_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy_region);
 
-            vk_image_memory_barrier_insert(cmd, tex_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 1);
-        });
+                vk_image_memory_barrier_insert(cmd, tex_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                               1);
+            });
 
         const uint32_t byte_size = tex_sampler.width * tex_sampler.height * tex_sampler.color_channels;
         texture_buf_offset += byte_size;
@@ -986,6 +980,12 @@ VkShaderModule load_shader_module(const VkBackend* backend, std::span<uint32_t> 
     return shader_module;
 }
 
+void backend_create_accel_struct(VkBackend* backend, std::span<const MeshBuffers> mesh_buffers, std::span<const TopLevelInstanceRef> instance_refs,
+                                 uint32_t vertex_byte_size) {
+    accel_struct_ctx_add_triangles_geometry(&backend->accel_struct_ctx, backend->device_ctx.logical_device, backend->allocator, &backend->ext_ctx,
+                                            backend->device_ctx.queues.graphics, mesh_buffers, instance_refs, vertex_byte_size);
+};
+
 void backend_finish_pending_vk_work(const VkBackend* backend) { vkDeviceWaitIdle(backend->device_ctx.logical_device); }
 
 void backend_deinit(VkBackend* backend) {
@@ -1009,7 +1009,9 @@ void backend_deinit(VkBackend* backend) {
     command_ctx_deinit(&backend->immediate_cmd_ctx, backend->device_ctx.logical_device);
     command_ctx_deinit(&backend->compute_cmd_ctx, backend->device_ctx.logical_device);
 
-    shader_ctx_init(&backend->shader_ctx, &backend->ext_ctx, backend->device_ctx.logical_device);
+    shader_ctx_deinit(&backend->shader_ctx, &backend->ext_ctx, backend->device_ctx.logical_device);
+
+    accel_struct_ctx_deinit(&backend->accel_struct_ctx, &backend->ext_ctx, backend->allocator, backend->device_ctx.logical_device);
 
     swapchain_ctx_deinit(&backend->swapchain_context, backend->device_ctx.logical_device, backend->instance);
 

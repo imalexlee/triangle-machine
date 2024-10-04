@@ -38,10 +38,10 @@ struct MeshBuffers {
 void allocated_buffer_destroy(VmaAllocator allocator, const AllocatedBuffer* allocated_buffer);
 
 /**
- * @brief Retrieves a Vulkan Device Address given an AllocatedBuffer object
+ * @brief Retrieves a Vulkan Device Address given a Vulkan Buffer
  *
  * @param device The VkDevice associated with this buffer
- * @param buffer The AllocatedBuffer object to retrieve an address for
+ * @param buffer The vulkan buffer to retrieve an address for
  * @return       A GPU memory address of the buffer
  */
-[[nodiscard]] VkDeviceAddress vk_buffer_device_address_get(VkDevice device, const AllocatedBuffer* buffer);
+[[nodiscard]] VkDeviceAddress vk_buffer_device_address_get(VkDevice device, VkBuffer buffer);

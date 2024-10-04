@@ -23,4 +23,16 @@ void ext_context_init(ExtContext* ext_ctx, VkDevice device) {
         reinterpret_cast<PFN_vkCmdSetTessellationDomainOriginEXT>(vkGetDeviceProcAddr(device, "vkCmdSetTessellationDomainOriginEXT"));
     ext_ctx->vkCmdSetPatchControlPointsEXT =
         reinterpret_cast<PFN_vkCmdSetPatchControlPointsEXT>(vkGetDeviceProcAddr(device, "vkCmdSetPatchControlPointsEXT"));
+    ext_ctx->vkCreateAccelerationStructureKHR =
+        reinterpret_cast<PFN_vkCreateAccelerationStructureKHR>(vkGetDeviceProcAddr(device, "vkCreateAccelerationStructureKHR"));
+    ext_ctx->vkBuildAccelerationStructuresKHR =
+        reinterpret_cast<PFN_vkBuildAccelerationStructuresKHR>(vkGetDeviceProcAddr(device, "vkBuildAccelerationStructuresKHR"));
+    ext_ctx->vkGetAccelerationStructureBuildSizesKHR =
+        reinterpret_cast<PFN_vkGetAccelerationStructureBuildSizesKHR>(vkGetDeviceProcAddr(device, "vkGetAccelerationStructureBuildSizesKHR"));
+    ext_ctx->vkCmdBuildAccelerationStructuresKHR =
+        reinterpret_cast<PFN_vkCmdBuildAccelerationStructuresKHR>(vkGetDeviceProcAddr(device, "vkCmdBuildAccelerationStructuresKHR"));
+    ext_ctx->vkGetAccelerationStructureDeviceAddressKHR =
+        reinterpret_cast<PFN_vkGetAccelerationStructureDeviceAddressKHR>(vkGetDeviceProcAddr(device, "vkGetAccelerationStructureDeviceAddressKHR"));
+    ext_ctx->vkDestroyAccelerationStructureKHR =
+        reinterpret_cast<PFN_vkDestroyAccelerationStructureKHR>(vkGetDeviceProcAddr(device, "vkDestroyAccelerationStructureKHR"));
 }
