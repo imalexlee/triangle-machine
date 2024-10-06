@@ -492,8 +492,18 @@ Entity load_entity(VkBackend* backend, const std::filesystem::path& path) {
 
         instance_refs.push_back(new_instance_ref);
     }
+    std::vector<BottomLevelGeometry> bottom_level_geometries;
+    bottom_level_geometries.reserve(vk_meshes.size());
+    for (size_t i = 0; i < vk_meshes.size(); i++) {
+        BottomLevelGeometry new_bottom_level_geometry{};
+        new_bottom_level_geometry.mesh_buffers  = vk_meshes[i];
+        new_bottom_level_geometry.index_count   = gltf_meshes[i].indices.size();
+        new_bottom_level_geometry.vertex_count  = gltf_meshes[i].vertices.size();
+        new_bottom_level_geometry.vertex_stride = sizeof(Vertex);
+        bottom_level_geometries.push_back(new_bottom_level_geometry);
+    }
 
-    backend_create_accel_struct(backend, vk_meshes, instance_refs, sizeof(Vertex));
+    backend_create_accel_struct(backend, bottom_level_geometries, instance_refs);
 
     Entity entity;
     for (size_t node_i = 0; node_i < gltf_mesh_nodes.size(); node_i++) {

@@ -32,6 +32,7 @@ void engine_init(Engine* engine) {
     backend_upload_frag_shader(&engine->backend, "../shaders/fragment/simple_lighting.frag", "frag shader");
 
     backend_upload_sky_box_shaders(&engine->backend, "../shaders/vertex/skybox.vert", "../shaders/fragment/skybox.frag", "skybox shaders");
+
     std::array file_names = {
         "../assets/skybox/right.jpg",  "../assets/skybox/left.jpg",  "../assets/skybox/top.jpg",
         "../assets/skybox/bottom.jpg", "../assets/skybox/front.jpg", "../assets/skybox/back.jpg",

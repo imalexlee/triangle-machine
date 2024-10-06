@@ -95,9 +95,11 @@ void desc_allocator_deinit(DescriptorAllocator* desc_allocator, VkDevice device)
 
 // 3. fill in an allocated set with actual data
 struct DescriptorWriter {
-    std::deque<VkDescriptorImageInfo>  image_infos;
-    std::deque<VkDescriptorBufferInfo> buffer_infos;
-    std::vector<VkWriteDescriptorSet>  writes;
+    std::deque<VkDescriptorImageInfo>                        image_infos;
+    std::deque<VkDescriptorBufferInfo>                       buffer_infos;
+    std::deque<VkWriteDescriptorSetAccelerationStructureKHR> accel_struct_writes;
+
+    std::vector<VkWriteDescriptorSet> writes;
 };
 
 /**
@@ -125,6 +127,9 @@ void desc_writer_write_image_desc(DescriptorWriter* desc_writer, int binding, Vk
  * @param type        The type of descriptor
  */
 void desc_writer_write_buffer_desc(DescriptorWriter* desc_writer, int binding, VkBuffer buffer, size_t size, size_t offset, VkDescriptorType type);
+
+void desc_writer_write_accel_struct_desc(DescriptorWriter* desc_writer, int binding, const VkAccelerationStructureKHR* accel_struct,
+                                         VkDescriptorType type);
 
 /**
  * @brief Writes out saved image and/or buffer descriptors in our descriptor writer to an allocated

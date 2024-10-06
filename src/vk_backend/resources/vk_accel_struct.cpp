@@ -8,19 +8,20 @@ void accel_struct_ctx_init(AccelStructContext* accel_struct_ctx, VkDevice device
 }
 
 void accel_struct_ctx_add_triangles_geometry(AccelStructContext* accel_struct_ctx, VkDevice device, VmaAllocator allocator, const ExtContext* ext_ctx,
-                                             VkQueue queue, std::span<const MeshBuffers> mesh_buffers,
-                                             std::span<const TopLevelInstanceRef> instance_refs, uint32_t vertex_byte_size) {
+                                             VkQueue queue, std::span<const BottomLevelGeometry> bottom_level_geometries,
+                                             std::span<const TopLevelInstanceRef> instance_refs) {
 
-    for (const auto& mesh_buf : mesh_buffers) {
+    for (const auto& bottom_level_geometry : bottom_level_geometries) {
 
         VkAccelerationStructureGeometryTrianglesDataKHR new_triangles_data{};
         new_triangles_data.sType                    = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
-        new_triangles_data.indexData.deviceAddress  = vk_buffer_device_address_get(device, mesh_buf.indices.buffer);
-        new_triangles_data.vertexData.deviceAddress = vk_buffer_device_address_get(device, mesh_buf.vertices.buffer);
+        new_triangles_data.indexData.deviceAddress  = vk_buffer_device_address_get(device, bottom_level_geometry.mesh_buffers.indices.buffer);
+        new_triangles_data.vertexData.deviceAddress = vk_buffer_device_address_get(device, bottom_level_geometry.mesh_buffers.vertices.buffer);
         new_triangles_data.vertexFormat             = VK_FORMAT_R32G32B32_SFLOAT; // assumes position x,y,z is first 3 floats of each vertex
         new_triangles_data.indexType                = VK_INDEX_TYPE_UINT32;
-        new_triangles_data.maxVertex                = (mesh_buf.vertices.info.size / vertex_byte_size) - 1;
-        new_triangles_data.vertexStride             = vertex_byte_size;
+        new_triangles_data.maxVertex                = bottom_level_geometry.vertex_count - 1;
+        new_triangles_data.vertexStride             = bottom_level_geometry.vertex_stride;
+        new_triangles_data.transformData            = {};
 
         VkAccelerationStructureGeometryKHR new_triangle_geometry{};
         new_triangle_geometry.sType              = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
@@ -29,7 +30,7 @@ void accel_struct_ctx_add_triangles_geometry(AccelStructContext* accel_struct_ct
         new_triangle_geometry.flags              = 0;
 
         VkAccelerationStructureBuildRangeInfoKHR new_triangle_build_range{};
-        new_triangle_build_range.primitiveCount  = mesh_buf.indices.info.size / sizeof(uint32_t) / 3;
+        new_triangle_build_range.primitiveCount  = bottom_level_geometry.index_count / 3;
         new_triangle_build_range.firstVertex     = 0;
         new_triangle_build_range.primitiveOffset = 0;
         new_triangle_build_range.transformOffset = 0;
@@ -104,7 +105,6 @@ void accel_struct_ctx_add_triangles_geometry(AccelStructContext* accel_struct_ct
         build_geometry_info->scratchData.deviceAddress = vk_buffer_device_address_get(device, scratch_buffer.buffer);
 
         command_ctx_immediate_submit(&accel_struct_ctx->cmd_ctx, device, queue, accel_struct_ctx->fence, [&](VkCommandBuffer cmd) {
-            // TODO: look into deferred operation
             ext_ctx->vkCmdBuildAccelerationStructuresKHR(cmd, 1, build_geometry_info, &build_range_info);
 
             // TODO: compact the acceleration structure
@@ -115,7 +115,7 @@ void accel_struct_ctx_add_triangles_geometry(AccelStructContext* accel_struct_ct
 
     // create instances to these mesh buffers. each instance can share bottom level structures, while having different transforms;
 
-    uint32_t reference_offset = accel_struct_ctx->triangle_geometries.size() - mesh_buffers.size();
+    uint32_t reference_offset = accel_struct_ctx->triangle_geometries.size() - bottom_level_geometries.size();
     for (const auto& ref : instance_refs) {
 
         VkAccelerationStructureDeviceAddressInfoKHR device_address_info{};
@@ -155,7 +155,7 @@ void accel_struct_ctx_add_triangles_geometry(AccelStructContext* accel_struct_ct
     new_instance_geometry.sType              = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
     new_instance_geometry.geometry.instances = new_instances_data;
     new_instance_geometry.geometryType       = VK_GEOMETRY_TYPE_INSTANCES_KHR;
-    new_instance_geometry.flags              = 0;
+    new_instance_geometry.flags              = VK_GEOMETRY_OPAQUE_BIT_KHR;
 
     VkAccelerationStructureBuildRangeInfoKHR instance_build_range_info{};
     instance_build_range_info.primitiveCount  = accel_struct_ctx->tlas_instances.size();

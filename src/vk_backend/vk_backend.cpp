@@ -280,16 +280,20 @@ void create_desc_layouts(VkBackend* backend) {
     // materials
     desc_layout_builder_add_binding(&layout_builder, backend->material_desc_binding, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                                     VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+
+    // acceleration structure
+    desc_layout_builder_add_binding(&layout_builder, backend->accel_struct_desc_binding, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
+                                    VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
     // sky box
     desc_layout_builder_add_binding(&layout_builder, backend->sky_box_desc_binding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                                     VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
     // textures
-    constexpr VkDescriptorBindingFlags binding_flags = VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT |
-                                                       VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT |
-                                                       VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT;
+    constexpr VkDescriptorBindingFlags texture_binding_flags =
+        VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT | VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
+        VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT;
 
     desc_layout_builder_add_binding(&layout_builder, backend->texture_desc_binding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                                    VK_SHADER_STAGE_FRAGMENT_BIT, binding_flags, 300);
+                                    VK_SHADER_STAGE_FRAGMENT_BIT, texture_binding_flags, 300);
 
     backend->graphics_desc_set_layout = desc_layout_builder_create_layout(&layout_builder, backend->device_ctx.logical_device);
 }
@@ -308,8 +312,11 @@ void create_scene_desc_sets(VkBackend* backend) {
 }
 
 void create_graphics_desc_set(VkBackend* backend) {
-    std::array<PoolSizeRatio, 3> pool_sizes = {
-        {{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1}, {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1}, {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 300}}
+    std::array<PoolSizeRatio, 4> pool_sizes = {
+        {{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1},
+         {VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 1},
+         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1},
+         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 300}}
     };
     desc_allocator_init(&backend->graphics_desc_allocator, backend->device_ctx.logical_device, 1, pool_sizes);
 
@@ -980,10 +987,15 @@ VkShaderModule load_shader_module(const VkBackend* backend, std::span<uint32_t> 
     return shader_module;
 }
 
-void backend_create_accel_struct(VkBackend* backend, std::span<const MeshBuffers> mesh_buffers, std::span<const TopLevelInstanceRef> instance_refs,
-                                 uint32_t vertex_byte_size) {
+void backend_create_accel_struct(VkBackend* backend, std::span<const BottomLevelGeometry> bottom_level_geometries,
+                                 std::span<const TopLevelInstanceRef> instance_refs) {
     accel_struct_ctx_add_triangles_geometry(&backend->accel_struct_ctx, backend->device_ctx.logical_device, backend->allocator, &backend->ext_ctx,
-                                            backend->device_ctx.queues.graphics, mesh_buffers, instance_refs, vertex_byte_size);
+                                            backend->device_ctx.queues.graphics, bottom_level_geometries, instance_refs);
+
+    DescriptorWriter desc_writer;
+    desc_writer_write_accel_struct_desc(&desc_writer, backend->accel_struct_desc_binding, &backend->accel_struct_ctx.top_level,
+                                        VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR);
+    desc_writer_update_desc_set(&desc_writer, backend->device_ctx.logical_device, backend->graphics_desc_set);
 };
 
 void backend_finish_pending_vk_work(const VkBackend* backend) { vkDeviceWaitIdle(backend->device_ctx.logical_device); }

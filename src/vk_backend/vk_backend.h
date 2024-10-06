@@ -7,6 +7,7 @@
 #include "vk_backend/vk_frame.h"
 #include "vk_backend/vk_shader.h"
 #include "vk_ext.h"
+#include <iostream>
 
 #include <vk_backend/vk_pipeline.h>
 #include <vk_backend/vk_scene.h>
@@ -68,9 +69,10 @@ struct VkBackend {
     SceneData                      scene_data;
     ExtContext                     ext_ctx;
     DeletionQueue                  deletion_queue;
-    static constexpr uint32_t      material_desc_binding = 0;
-    static constexpr uint32_t      sky_box_desc_binding  = 1;
-    static constexpr uint32_t      texture_desc_binding  = 2;
+    static constexpr uint32_t      material_desc_binding     = 0;
+    static constexpr uint32_t      accel_struct_desc_binding = 1;
+    static constexpr uint32_t      sky_box_desc_binding      = 2;
+    static constexpr uint32_t      texture_desc_binding      = 3;
 };
 
 VkInstance vk_instance_create(const char* app_name, const char* engine_name);
@@ -98,8 +100,8 @@ void backend_upload_sky_box(VkBackend* backend, const uint8_t* texture_data, uin
 
 [[nodiscard]] uint32_t backend_upload_2d_texture(VkBackend* backend, std::span<const TextureSampler> tex_samplers);
 
-void backend_create_accel_struct(VkBackend* backend, std::span<const MeshBuffers> mesh_buffers, std::span<const TopLevelInstanceRef> instance_refs,
-                                 uint32_t vertex_byte_size);
+void backend_create_accel_struct(VkBackend* backend, std::span<const BottomLevelGeometry> bottom_level_geometries,
+                                 std::span<const TopLevelInstanceRef> instance_refs);
 
 template <typename T>
 [[nodiscard]] MeshBuffers backend_upload_mesh(VkBackend* backend, const std::span<const uint32_t> indices, std::span<const T> vertices) {

@@ -11,9 +11,18 @@
 
 static std::string           read_file(const std::string& filename);
 static void                  flush_builder_state(ShaderBuilder* builder);
-static std::vector<uint32_t> compile_shader_spv(shaderc_compiler_t compiler, const std::string& filename, VkShaderStageFlagBits shader_stage);
+static std::vector<uint32_t> compile_shader_spv(shaderc_compiler_t compiler, shaderc_compile_options_t compile_options, const std::string& filename,
+                                                VkShaderStageFlagBits shader_stage);
 
-void shader_ctx_init(ShaderContext* shader_ctx) { shader_ctx->builder.compiler = shaderc_compiler_initialize(); }
+void shader_ctx_init(ShaderContext* shader_ctx) {
+
+    shader_ctx->builder.shader_options = shaderc_compile_options_initialize();
+
+    shaderc_compile_options_set_target_spirv(shader_ctx->builder.shader_options, shaderc_spirv_version_1_6);
+    shaderc_compile_options_set_generate_debug_info(shader_ctx->builder.shader_options);
+
+    shader_ctx->builder.compiler = shaderc_compiler_initialize();
+}
 
 void shader_ctx_deinit(const ShaderContext* shader_ctx, const ExtContext* ext_ctx, VkDevice device) {
     shaderc_compiler_release(shader_ctx->builder.compiler);
@@ -31,7 +40,7 @@ void shader_ctx_stage_shader(ShaderContext* shader_ctx, const std::filesystem::p
                              std::span<VkDescriptorSetLayout> desc_set_layouts, std::span<VkPushConstantRange> push_constant_ranges,
                              VkShaderStageFlagBits stage, VkShaderStageFlags next_stage) {
 
-    std::vector<uint32_t> shader_spv = compile_shader_spv(shader_ctx->builder.compiler, file_path, stage);
+    std::vector<uint32_t> shader_spv = compile_shader_spv(shader_ctx->builder.compiler, shader_ctx->builder.shader_options, file_path, stage);
 
     VkShaderCreateInfoEXT vk_shader_ci{};
     vk_shader_ci.sType                  = VK_STRUCTURE_TYPE_SHADER_CREATE_INFO_EXT;
@@ -138,14 +147,19 @@ std::string parse_shader_file(const std::string& filename) {
     return content;
 }
 
-std::vector<uint32_t> compile_shader_spv(shaderc_compiler_t compiler, const std::string& filename, VkShaderStageFlagBits shader_stage) {
+std::vector<uint32_t> compile_shader_spv(shaderc_compiler_t compiler, shaderc_compile_options_t compile_options, const std::string& filename,
+                                         VkShaderStageFlagBits shader_stage) {
 
     std::string shader_source = parse_shader_file(filename);
 
     auto shader_kind = static_cast<shaderc_shader_kind>(shader_stage >> 1);
 
     shaderc_compilation_result_t result =
-        shaderc_compile_into_spv(compiler, shader_source.data(), shader_source.size(), shader_kind, filename.data(), "main", nullptr);
+        shaderc_compile_into_spv(compiler, shader_source.data(), shader_source.size(), shader_kind, filename.data(), "main", compile_options);
+    if (result->num_errors > 0) {
+        std::cout << result->messages << std::endl;
+        exit(EXIT_FAILURE);
+    }
 
     std::vector<uint32_t> spv;
     spv.resize(result->output_data_size / sizeof(uint32_t));

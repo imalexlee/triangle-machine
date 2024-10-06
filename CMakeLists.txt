@@ -129,7 +129,7 @@ foreach (GLSL ${GLSL_SOURCE_FILES_VERTEX})
     message(STATUS ${GLSL})
     add_custom_command(
             OUTPUT ${SPIRV}
-            COMMAND ${GLSL_VALIDATOR} -V ${GLSL} -gVS -o ${SPIRV}
+            COMMAND ${GLSL_VALIDATOR} -V ${GLSL} --target-env vulkan1.3 -gVS -o ${SPIRV}
             DEPENDS ${GLSL})
     list(APPEND SPIRV_BINARY_FILES ${SPIRV})
 endforeach (GLSL)
@@ -144,7 +144,7 @@ foreach (GLSL ${GLSL_SOURCE_FILES_FRAGMENT})
     message(STATUS ${GLSL})
     add_custom_command(
             OUTPUT ${SPIRV}
-            COMMAND ${GLSL_VALIDATOR} -V ${GLSL} -gVS -o ${SPIRV}
+            COMMAND ${GLSL_VALIDATOR} -V ${GLSL} --target-env vulkan1.3 -gVS -o ${SPIRV}
             DEPENDS ${GLSL})
     list(APPEND SPIRV_BINARY_FILES ${SPIRV})
 endforeach (GLSL)

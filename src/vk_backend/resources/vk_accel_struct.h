@@ -13,6 +13,13 @@ struct TopLevelInstanceRef {
     uint32_t  mesh_idx;
 };
 
+struct BottomLevelGeometry {
+    MeshBuffers mesh_buffers;
+    uint32_t    vertex_stride;
+    uint32_t    vertex_count;
+    uint32_t    index_count;
+};
+
 // god awful
 struct AccelStructContext {
     VkAccelerationStructureKHR              top_level;
@@ -34,7 +41,7 @@ struct AccelStructContext {
 void accel_struct_ctx_init(AccelStructContext* accel_struct_ctx, VkDevice device, uint32_t queue_family_idx);
 
 void accel_struct_ctx_add_triangles_geometry(AccelStructContext* accel_struct_ctx, VkDevice device, VmaAllocator allocator, const ExtContext* ext_ctx,
-                                             VkQueue queue, std::span<const MeshBuffers> mesh_buffers,
-                                             std::span<const TopLevelInstanceRef> instance_refs, uint32_t vertex_byte_size);
+                                             VkQueue queue, std::span<const BottomLevelGeometry> bottom_level_geometries,
+                                             std::span<const TopLevelInstanceRef> instance_refs);
 
 void accel_struct_ctx_deinit(const AccelStructContext* accel_struct_ctx, const ExtContext* ext_ctx, VmaAllocator allocator, VkDevice device);

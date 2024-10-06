@@ -77,6 +77,27 @@ void desc_writer_write_image_desc(DescriptorWriter* desc_writer, int binding, Vk
     desc_writer->writes.push_back(write);
 }
 
+void desc_writer_write_accel_struct_desc(DescriptorWriter* desc_writer, int binding, const VkAccelerationStructureKHR* accel_struct,
+                                         VkDescriptorType type) {
+    VkWriteDescriptorSetAccelerationStructureKHR accel_struct_desc_write{};
+    accel_struct_desc_write.sType                      = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
+    accel_struct_desc_write.accelerationStructureCount = 1;
+    accel_struct_desc_write.pAccelerationStructures    = accel_struct;
+
+    desc_writer->accel_struct_writes.push_back(accel_struct_desc_write);
+
+    VkWriteDescriptorSet write{};
+    write.sType      = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.dstBinding = binding;
+    // left empty for now until we need to write it. see desc_writer_update_desc_set()
+    write.dstSet          = VK_NULL_HANDLE;
+    write.descriptorCount = 1;
+    write.descriptorType  = type;
+    write.pNext           = &desc_writer->accel_struct_writes[desc_writer->accel_struct_writes.size() - 1];
+
+    desc_writer->writes.push_back(write);
+}
+
 void desc_writer_clear(DescriptorWriter* desc_writer) {
     desc_writer->image_infos.clear();
     desc_writer->writes.clear();
