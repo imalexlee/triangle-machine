@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.22)
 
 project(triangle-machine)
 
-find_package(glfw3 REQUIRED)
+# find_package(glfw3 REQUIRED)
 find_package(Vulkan REQUIRED)
 
 if (NOT CMAKE_BUILD_TYPE)
@@ -68,6 +68,7 @@ add_subdirectory(thirdparty/fmt)
 add_subdirectory(thirdparty/fastgltf)
 add_subdirectory(thirdparty/meshoptimizer)
 add_subdirectory(thirdparty/etc2comp)
+add_subdirectory(thirdparty/glfw)
 #add_subdirectory(thirdparty/glslang)
 add_subdirectory(thirdparty/shaderc)
 add_subdirectory(thirdparty)
@@ -76,6 +77,7 @@ target_include_directories(
         ${PROJECT_NAME} SYSTEM
         PRIVATE src
         PRIVATE thirdparty/glm
+        PRIVATE thirdparty/glfw/include
         PRIVATE thirdparty/fmt/include
         PRIVATE thirdparty/stb_image
         PRIVATE thirdparty/VulkanMemoryAllocator
