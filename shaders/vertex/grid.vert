@@ -1,9 +1,13 @@
-#version 450
+#version 460
 
 #extension GL_EXT_buffer_reference: require
 #extension GL_GOOGLE_include_directive: require
 
-#include "../input_structures.glsl"
+layout (set = 0, binding = 0) uniform SceneData {
+    mat4 view;
+    mat4 proj;
+    vec4 eye_pos;
+} scene_data;
 
 
 layout (location = 0) out vec3 nearPoint;

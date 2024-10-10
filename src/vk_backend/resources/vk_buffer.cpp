@@ -31,5 +31,8 @@ VkDeviceAddress vk_buffer_device_address_get(VkDevice device, VkBuffer buffer) {
     device_address_info.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
     device_address_info.buffer = buffer;
 
-    return vkGetBufferDeviceAddress(device, &device_address_info);
+    VkDeviceAddress addr = vkGetBufferDeviceAddress(device, &device_address_info);
+    assert(addr);
+
+    return addr;
 }

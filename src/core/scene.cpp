@@ -42,14 +42,14 @@ void scene_key_callback(Scene* scene, int key, int action) {
     }
 }
 
-using namespace std::chrono;
-static auto start_time = high_resolution_clock::now();
+// using namespace std::chrono;
+// static auto start_time = high_resolution_clock::now();
 
 void scene_update(Scene* scene) {
-    auto  time_duration = duration_cast<duration<float>>(high_resolution_clock::now() - start_time);
-    float time_elapsed  = time_duration.count();
+    //  auto  time_duration = duration_cast<duration<float>>(high_resolution_clock::now() - start_time);
+    // float time_elapsed  = time_duration.count();
 
-    Entity* curr_entity = &scene->entities[scene->curr_entity_idx];
-    curr_entity->pos += scene->velocity * time_elapsed;
-    start_time = high_resolution_clock::now();
+    // Entity* curr_entity = &scene->entities[scene->curr_entity_idx];
+    // curr_entity->pos += scene->velocity * time_elapsed;
+    // start_time = high_resolution_clock::now();
 }

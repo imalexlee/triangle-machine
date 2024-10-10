@@ -2,7 +2,7 @@
 #include <vulkan/vulkan_core.h>
 
 VkRenderingInfo vk_rendering_info_create(const VkRenderingAttachmentInfo* color_attachment, const VkRenderingAttachmentInfo* depth_attachment,
-                                      VkExtent2D extent) {
+                                         VkExtent2D extent) {
 
     VkRenderingInfo rendering_info{};
     rendering_info.sType      = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -13,15 +13,15 @@ VkRenderingInfo vk_rendering_info_create(const VkRenderingAttachmentInfo* color_
 
     rendering_info.pColorAttachments    = color_attachment;
     rendering_info.colorAttachmentCount = 1;
-    rendering_info.layerCount           = 1;
-    rendering_info.pStencilAttachment   = nullptr;
     rendering_info.pDepthAttachment     = depth_attachment;
+    rendering_info.pStencilAttachment   = nullptr;
+    rendering_info.layerCount           = 1;
 
     return rendering_info;
 }
 
 VkRenderingAttachmentInfo vk_color_attachment_info_create(VkImageView view, const VkClearValue* clear, VkAttachmentLoadOp load_op,
-                                                       VkAttachmentStoreOp store_op, VkImageView resolve_img_view) {
+                                                          VkAttachmentStoreOp store_op, VkImageView resolve_img_view) {
     VkRenderingAttachmentInfo color_attachment{};
     color_attachment.sType              = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
     color_attachment.pNext              = nullptr;

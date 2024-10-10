@@ -83,7 +83,7 @@ SceneData camera_update(Camera* cam, uint32_t window_width, uint32_t window_heig
 
     projection[1][1] *= -1;
 
-    SceneData scene_data;
+    SceneData scene_data{};
     scene_data.view    = cam->view;
     scene_data.proj    = projection;
     scene_data.cam_pos = cam->position;

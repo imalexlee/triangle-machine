@@ -1,8 +1,7 @@
-cmake_minimum_required(VERSION 3.22)
+cmake_minimum_required(VERSION 3.29)
 
 project(triangle-machine)
 
-# find_package(glfw3 REQUIRED)
 find_package(Vulkan REQUIRED)
 
 if (NOT CMAKE_BUILD_TYPE)
@@ -42,8 +41,6 @@ add_executable(
         src/vk_backend/vk_shader.h
         src/vk_backend/vk_ext.cpp
         src/vk_backend/vk_ext.h
-        src/core/loaders/loader.cpp
-        src/core/loaders/loader.h
         src/vk_backend/resources/vk_accel_struct.cpp
         src/vk_backend/resources/vk_accel_struct.h
         #  src/vk_backend/resources/sudo apt-get install glslang-tools_comp.cpp
@@ -66,8 +63,8 @@ endif ()
 
 add_subdirectory(thirdparty/fmt)
 add_subdirectory(thirdparty/fastgltf)
-add_subdirectory(thirdparty/meshoptimizer)
-add_subdirectory(thirdparty/etc2comp)
+#add_subdirectory(thirdparty/meshoptimizer)
+# add_subdirectory(thirdparty/etc2comp)
 add_subdirectory(thirdparty/glfw)
 #add_subdirectory(thirdparty/glslang)
 add_subdirectory(thirdparty/shaderc)
@@ -82,10 +79,10 @@ target_include_directories(
         PRIVATE thirdparty/stb_image
         PRIVATE thirdparty/VulkanMemoryAllocator
         PRIVATE thirdparty/taskflow
-        PRIVATE thirdparty/etc2comp
-        PRIVATE thirdparty/etc2comp/EtcTool
-        PRIVATE thirdparty/etc2comp/EtcLib/Etc
-        PRIVATE thirdparty/etc2comp/EtcLib/EtcCodec
+        #       PRIVATE thirdparty/etc2comp
+        #       PRIVATE thirdparty/etc2comp/EtcTool
+        #       PRIVATE thirdparty/etc2comp/EtcLib/Etc
+        #       PRIVATE thirdparty/etc2comp/EtcLib/EtcCodec
         PRIVATE thirdparty/fastgltf/include
         PRIVATE thirdparty/shaderc/utils
 )
@@ -96,17 +93,17 @@ target_link_directories(${PROJECT_NAME} PUBLIC thirdparty/fmt/src PUBLIC
 target_link_libraries(
         ${PROJECT_NAME}
         PUBLIC glfw
-        meshoptimizer
+        #   meshoptimizer
         fastgltf
         fmt
         imgui
-        EtcLib
+        #      EtcLib
         shaderc
         shaderc_util
-        assimp
+        #  assimp
         Vulkan::Vulkan)
 
-target_sources(
+#[[target_sources(
         ${PROJECT_NAME}
         PUBLIC
         ${CMAKE_CURRENT_BINARY_DIR}/../thirdparty/etc2comp/EtcTool/EtcFile.cpp)
@@ -114,7 +111,7 @@ target_sources(
         ${PROJECT_NAME}
         PUBLIC
         ${CMAKE_CURRENT_BINARY_DIR}/../thirdparty/etc2comp/EtcTool/EtcFileHeader.cpp
-)
+)]]
 
 find_program(
         GLSL_VALIDATOR glslangValidator

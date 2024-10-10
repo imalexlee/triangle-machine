@@ -66,19 +66,19 @@ void engine_init(Engine* engine) {
 
     window_register_key_callback(&engine->window, [=](int key, int scancode, int action, int mods) {
         camera_key_callback(&engine->camera, key, scancode, action, mods);
-        scene_key_callback(&engine->scene, key, action);
+        // scene_key_callback(&engine->scene, key, action);
     });
 
     window_register_cursor_callback(&engine->window, [=](double x_pos, double y_pos) { camera_cursor_callback(&engine->camera, x_pos, y_pos); });
 }
 
 void engine_run(Engine* engine) {
-
+    SceneData scene_data{};
     while (!glfwWindowShouldClose(engine->window.glfw_window)) {
         glfwPollEvents();
 
-        SceneData scene_data = camera_update(&engine->camera, engine->window.width, engine->window.height);
-        scene_update(&engine->scene);
+        // scene_update(&engine->scene);
+        scene_data = camera_update(&engine->camera, engine->window.width, engine->window.height);
 
         ui_update(&engine->backend);
         backend_draw(&engine->backend, engine->scene.entities, &scene_data, 0, 0);

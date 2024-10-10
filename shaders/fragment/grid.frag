@@ -1,4 +1,4 @@
-#version 450
+#version 460
 
 layout (location = 0) in vec3 nearPoint;
 layout (location = 1) in vec3 farPoint;
@@ -36,7 +36,7 @@ void main() {
     if (t < 1) {
         vec4 gridColor = grid(pos);
         outColor = vec4(gridColor.xyz, gridColor.w * fadeFactor(pos));
+    } else {
+        outColor = vec4(0.0, 0.0, 0.0, 0.0);
     }
-    else
-    outColor = vec4(0.0, 0.0, 0.0, 0.0);
 }

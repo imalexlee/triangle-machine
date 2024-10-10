@@ -51,7 +51,7 @@ void vk_image_memory_barrier_insert(VkCommandBuffer cmd_buf, VkImage image, VkIm
     image_mem_barrier.pNext         = nullptr;
     image_mem_barrier.image         = image;
     image_mem_barrier.srcStageMask  = src_stages;
-    image_mem_barrier.srcAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT;
+    image_mem_barrier.srcAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT | VK_ACCESS_2_MEMORY_READ_BIT;
     image_mem_barrier.dstStageMask  = dst_stages;
     image_mem_barrier.dstAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT | VK_ACCESS_2_MEMORY_READ_BIT;
     image_mem_barrier.oldLayout     = current_layout;

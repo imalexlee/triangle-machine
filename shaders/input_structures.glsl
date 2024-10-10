@@ -32,7 +32,7 @@ layout (set = 1, binding = 3) uniform sampler2D tex_samplers[];
 struct Vertex {
     vec4 pos;
     vec4 norm;
-    vec2[2] tex_coord;
+    vec2 tex_coord[2];
 };
 
 layout (std430, buffer_reference) readonly buffer VertexBuffer {

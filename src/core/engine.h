@@ -8,11 +8,11 @@
 #include <vk_backend/vk_scene.h>
 
 struct Engine {
-    VkBackend backend;
-    Scene     scene;
-    Window    window;
-    Camera    camera;
-    UI        ui;
+    VkBackend backend{};
+    Scene     scene{};
+    Window    window{};
+    Camera    camera{};
+    UI        ui{};
 };
 
 void engine_init(Engine* engine);

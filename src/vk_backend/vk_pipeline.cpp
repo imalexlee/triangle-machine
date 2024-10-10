@@ -1,5 +1,7 @@
 #include "vk_pipeline.h"
 #include "vk_backend/vk_utils.h"
+
+#include <array>
 #include <fmt/base.h>
 #include <vulkan/vulkan_core.h>
 

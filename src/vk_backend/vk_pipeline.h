@@ -27,8 +27,8 @@ struct PipelineBuilder {
     VkFormat                                     color_attachment_format;
 };
 
-VkPipelineLayout vk_pipeline_layout_create(VkDevice device, std::span<VkDescriptorSetLayout> desc_set_layouts,
-                                           std::span<VkPushConstantRange> push_constant_ranges, VkPipelineLayoutCreateFlags flags);
+[[nodiscard]] VkPipelineLayout vk_pipeline_layout_create(VkDevice device, std::span<VkDescriptorSetLayout> desc_set_layouts,
+                                                         std::span<VkPushConstantRange> push_constant_ranges, VkPipelineLayoutCreateFlags flags);
 
 /**
  * @brief Creates a Vulkan pipeline and pipeline layout based on the state of the builder

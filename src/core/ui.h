@@ -5,8 +5,8 @@
 #include <vk_backend/vk_backend.h>
 
 struct UI {
-    ImGuiContext* imgui_ctx;
-    ImGuiIO*      imgui_io;
+    ImGuiContext* imgui_ctx{};
+    ImGuiIO*      imgui_io{};
 };
 
 void ui_init(UI* ui, VkBackend* backend, GLFWwindow* window);

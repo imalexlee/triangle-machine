@@ -2,9 +2,6 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/thirdparty/etc2comp" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/thirdparty/glslang" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/thirdparty/meshoptimizer" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/thirdparty/shaderc" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/thirdparty/taskflow" vcs="Git" />
   </component>

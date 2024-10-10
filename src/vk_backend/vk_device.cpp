@@ -4,7 +4,7 @@
 #include <iostream>
 #include <optional>
 #include <set>
-#include <strings.h>
+#include <string.h>
 #include <vector>
 
 void create_physical_device(DeviceContext* device_ctx, VkInstance instance);
@@ -138,7 +138,6 @@ void create_logical_device(DeviceContext* device_ctx) {
         VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
         VK_EXT_SHADER_OBJECT_EXTENSION_NAME,
         VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME,
-        VK_NV_INHERITED_VIEWPORT_SCISSOR_EXTENSION_NAME,
     };
 
     VkPhysicalDeviceRayQueryFeaturesKHR ray_query_features{};
@@ -155,22 +154,16 @@ void create_logical_device(DeviceContext* device_ctx) {
     vertex_input_feature.vertexInputDynamicState = VK_TRUE;
     vertex_input_feature.pNext                   = &accel_struct_features;
 
-    // Enable Shader Object
     VkPhysicalDeviceShaderObjectFeaturesEXT shader_object_feature{};
     shader_object_feature.sType        = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_OBJECT_FEATURES_EXT;
     shader_object_feature.shaderObject = VK_TRUE;
     shader_object_feature.pNext        = &vertex_input_feature;
 
-    VkPhysicalDeviceInheritedViewportScissorFeaturesNV inherited_scissor_feature{};
-    inherited_scissor_feature.sType                      = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INHERITED_VIEWPORT_SCISSOR_FEATURES_NV;
-    inherited_scissor_feature.inheritedViewportScissor2D = VK_TRUE;
-    inherited_scissor_feature.pNext                      = &shader_object_feature;
-
     VkPhysicalDeviceVulkan13Features features_1_3{};
     features_1_3.sType            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
     features_1_3.synchronization2 = VK_TRUE;
     features_1_3.dynamicRendering = VK_TRUE;
-    features_1_3.pNext            = &inherited_scissor_feature;
+    features_1_3.pNext            = &shader_object_feature;
 
     VkPhysicalDeviceVulkan12Features features_1_2{};
     features_1_2.sType                                        = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;

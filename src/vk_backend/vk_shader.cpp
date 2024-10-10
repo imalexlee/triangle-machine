@@ -3,6 +3,7 @@
 #include "../../thirdparty/shaderc/libshaderc/src/shaderc_private.h"
 #include <../../thirdparty/fmt/include/fmt/format.h>
 #include <../../thirdparty/shaderc/libshaderc/include/shaderc/shaderc.h>
+
 #include <assert.h>
 #include <fstream>
 #include <iostream>
@@ -40,7 +41,8 @@ void shader_ctx_stage_shader(ShaderContext* shader_ctx, const std::filesystem::p
                              std::span<VkDescriptorSetLayout> desc_set_layouts, std::span<VkPushConstantRange> push_constant_ranges,
                              VkShaderStageFlagBits stage, VkShaderStageFlags next_stage) {
 
-    std::vector<uint32_t> shader_spv = compile_shader_spv(shader_ctx->builder.compiler, shader_ctx->builder.shader_options, file_path, stage);
+    std::vector<uint32_t> shader_spv =
+        compile_shader_spv(shader_ctx->builder.compiler, shader_ctx->builder.shader_options, file_path.string(), stage);
 
     VkShaderCreateInfoEXT vk_shader_ci{};
     vk_shader_ci.sType                  = VK_STRUCTURE_TYPE_SHADER_CREATE_INFO_EXT;

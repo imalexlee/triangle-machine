@@ -18,8 +18,9 @@ struct ShaderBuilder {
     std::vector<std::string>           names;
     std::vector<VkShaderCreateInfoEXT> create_infos;
     std::vector<std::vector<uint32_t>> spvs;
-    shaderc_compile_options_t          shader_options;
-    shaderc_compiler_t                 compiler;
+
+    shaderc_compile_options_t shader_options;
+    shaderc_compiler_t        compiler;
 };
 
 struct ShaderContext {

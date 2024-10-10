@@ -8,9 +8,9 @@
 
 struct Window {
     GLFWwindow* glfw_window{};
-    const char* title;
-    uint32_t    width;
-    uint32_t    height;
+    const char* title{};
+    uint32_t    width{};
+    uint32_t    height{};
 
     static inline std::vector<std::function<void(int, int, int, int)>> key_callbacks;
     static inline std::vector<std::function<void(double, double)>>     cursor_callbacks;

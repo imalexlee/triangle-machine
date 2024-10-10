@@ -22,3 +22,6 @@
 [submodule "thirdparty/etc2comp"]
 	path = thirdparty/etc2comp
 	url = https://github.com/google/etc2comp.git
+[submodule "thirdparty/shaderc"]
+	path = thirdparty/shaderc
+	url = https://github.com/google/shaderc.git

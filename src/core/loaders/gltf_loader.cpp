@@ -5,7 +5,6 @@
 #include "stb_image.h"
 
 #include <fastgltf/glm_element_traits.hpp>
-#include <iostream>
 #include <string>
 #include <vector>
 #include <vk_backend/vk_backend.h>
@@ -37,12 +36,12 @@ struct TexCoordPair {
 
 struct MaterialData {
     glm::vec4 color_factors{1.f, 1.f, 1.f, 1.f};
-    float     metal_factor{};
-    float     rough_factor{};
-    uint32_t  color_tex_i{};
-    uint32_t  color_tex_coord{};
-    uint32_t  metal_rough_tex_i{};
-    uint32_t  metal_rough_tex_coord{};
+    float     metal_factor{0};
+    float     rough_factor{0};
+    uint32_t  color_tex_i{0};
+    uint32_t  color_tex_coord{0};
+    uint32_t  metal_rough_tex_i{0};
+    uint32_t  metal_rough_tex_coord{0};
     float     padding[2];
 };
 
@@ -428,9 +427,7 @@ static uint32_t upload_gltf_materials(VkBackend* backend, std::span<const GLTFMa
     // If the backend has no materials, create the default material at index 0
     if (backend->mat_count == 0) {
         MaterialData default_mat{};
-        // TODO: remove this. just a sanity check
-        assert(!default_mat.color_tex_i && !default_mat.metal_rough_tex_i && !default_mat.metal_rough_tex_coord && !default_mat.color_tex_coord);
-        std::array mat_arr = {default_mat};
+        std::vector  mat_arr = {default_mat};
 
         std::ignore = backend_upload_materials<MaterialData>(backend, mat_arr);
     }
@@ -532,6 +529,15 @@ Entity load_entity(VkBackend* backend, const std::filesystem::path& path) {
 
     entity.opaque_objs.shrink_to_fit();
     entity.transparent_objs.shrink_to_fit();
+
+    for (const auto& opaque_obj : entity.opaque_objs) {
+        // std::cout << opaque_obj.indices_start;
+        // std::cout << opaque_obj.indices_count;
+    }
+    for (const auto& trans_obj : entity.transparent_objs) {
+        // std::cout << trans_obj.indices_start;
+        // std::cout << trans_obj.indices_count;
+    }
 
     for (auto& texture : gltf_textures) {
         stbi_image_free(texture.data);

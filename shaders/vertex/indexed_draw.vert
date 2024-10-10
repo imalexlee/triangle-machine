@@ -6,10 +6,7 @@
 
 #include "../input_structures.glsl"
 
-// TODO: find another way to alter entity position
-//layout (push_constant) uniform PushConstants {
-//    vec3 pos;
-//} constants;
+
 
 //layout (location = 0) out vec3 frag_color;
 layout (location = 1) out vec2 color_uv;
@@ -26,6 +23,6 @@ void main() {
     surface_normal = v.norm.xyz;
     eye_pos = scene_data.eye_pos.xyz;
     vert_pos = v.pos.xyz;
-    uint color_tex_coord = material_buf.materials[nonuniformEXT(constants.material_i)].color_tex_coord;
+    uint color_tex_coord = material_buf.materials[constants.material_i].color_tex_coord;
     color_uv = v.tex_coord[color_tex_coord];
 }

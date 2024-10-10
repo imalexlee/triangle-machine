@@ -6,7 +6,7 @@
 struct MeshData {
     glm::mat4       local_transform{1.f};
     VkDeviceAddress vertex_buffer_address{};
-    uint32_t        mat_i{};
+    uint32_t        mat_i{0};
 };
 
 struct DrawObject {

@@ -15,12 +15,21 @@
 // #include <vulkan/vulkan_core.h>
 
 struct Stats {
-    uint64_t total_draw_time;
-    uint64_t total_frame_time;
-    uint64_t total_fps;
-    float    scene_update_time;
-    float    frame_time;
-    float    draw_time;
+    uint64_t total_draw_time{};
+    uint64_t total_frame_time{};
+    uint64_t total_fps{};
+    float    scene_update_time{};
+    float    frame_time{};
+    float    draw_time{};
+};
+
+struct ShaderIndices {
+    uint16_t geometry_vert{};
+    uint16_t geometry_frag{};
+    uint16_t grid_vert{};
+    uint16_t grid_frag{};
+    uint16_t sky_box_vert{};
+    uint16_t sky_box_frag{};
 };
 
 struct VkBackend {
@@ -36,39 +45,40 @@ struct VkBackend {
     VkSampler                      default_linear_sampler;
     VkSampler                      default_nearest_sampler;
     VkDescriptorSet                graphics_desc_set;
-    std::array<VkDescriptorSet, 3> scene_desc_sets;
+    std::array<VkDescriptorSet, 3> scene_desc_sets{};
     VkDescriptorSetLayout          scene_desc_set_layout;
     VkDescriptorSetLayout          graphics_desc_set_layout;
     VkPipelineLayout               geometry_pipeline_layout;
     VkPipelineLayout               sky_box_pipeline_layout;
+    VkPipelineLayout               grid_pipeline_layout;
     VmaAllocator                   allocator;
-    DescriptorAllocator            scene_desc_allocator;
-    DescriptorAllocator            graphics_desc_allocator;
-    DeviceContext                  device_ctx;
-    Debugger                       debugger;
-    SwapchainContext               swapchain_context;
-    PipelineInfo                   opaque_pipeline_info;
-    PipelineInfo                   transparent_pipeline_info;
-    PipelineInfo                   grid_pipeline_info;
-    ShaderContext                  shader_ctx;
-    Stats                          stats;
-    CommandContext                 immediate_cmd_ctx;
-    CommandContext                 compute_cmd_ctx;
-    AccelStructContext             accel_struct_ctx;
-    AllocatedImage                 color_image;
-    AllocatedImage                 color_resolve_image;
-    AllocatedImage                 depth_image;
-    std::vector<AllocatedImage>    tex_images;
-    AllocatedBuffer                mat_buffer;
+    DescriptorAllocator            scene_desc_allocator{};
+    DescriptorAllocator            graphics_desc_allocator{};
+    DeviceContext                  device_ctx{};
+    Debugger                       debugger{};
+    SwapchainContext               swapchain_context{};
+    PipelineInfo                   opaque_pipeline_info{};
+    PipelineInfo                   transparent_pipeline_info{};
+    ShaderContext                  shader_ctx{};
+    ShaderIndices                  shader_indices{};
+    Stats                          stats{};
+    CommandContext                 immediate_cmd_ctx{};
+    CommandContext                 compute_cmd_ctx{};
+    AccelStructContext             accel_struct_ctx{};
+    AllocatedImage                 color_image{};
+    AllocatedImage                 color_resolve_image{};
+    AllocatedImage                 depth_image{};
+    std::vector<AllocatedImage>    tex_images{};
+    AllocatedBuffer                mat_buffer{};
     uint32_t                       mat_count{0};
-    AllocatedImage                 sky_box_image;
-    AllocatedBuffer                sky_box_vert_buffer;
-    std::array<AllocatedBuffer, 3> scene_data_buffers;
+    AllocatedImage                 sky_box_image{};
+    AllocatedBuffer                sky_box_vert_buffer{};
+    std::array<AllocatedBuffer, 3> scene_data_buffers{};
     uint64_t                       frame_num{1};
-    std::array<Frame, 3>           frames;
-    SceneData                      scene_data;
-    ExtContext                     ext_ctx;
-    DeletionQueue                  deletion_queue;
+    std::array<Frame, 3>           frames{};
+    SceneData                      scene_data{};
+    ExtContext                     ext_ctx{};
+    DeletionQueue                  deletion_queue{};
     static constexpr uint32_t      material_desc_binding     = 0;
     static constexpr uint32_t      accel_struct_desc_binding = 1;
     static constexpr uint32_t      sky_box_desc_binding      = 2;
@@ -83,9 +93,7 @@ void backend_finish_pending_vk_work(const VkBackend* backend);
 
 void backend_deinit(VkBackend* backend);
 
-void backend_draw(VkBackend* backend, std::span<const Entity> entities, const SceneData* scene_data, size_t vert_shader, size_t frag_shader);
-
-// void backend_immediate_submit(const VkBackend* backend, std::function<void(VkCommandBuffer cmd)>&& function);
+void backend_draw(VkBackend* backend, std::vector<Entity>& entities, const SceneData* scene_data, size_t vert_shader, size_t frag_shader);
 
 void backend_create_imgui_resources(VkBackend* backend);
 
@@ -154,34 +162,37 @@ template <typename T>
     return new_mesh_buffer;
 }
 
-template <typename T> [[nodiscard]] uint32_t backend_upload_materials(VkBackend* backend, std::span<const T> materials) {
+template <typename T> [[nodiscard]] uint32_t backend_upload_materials(VkBackend* backend, std::vector<T>& materials) {
     // save to return later
     const uint32_t curr_mat_offset = backend->mat_count;
 
-    const uint32_t material_bytes = materials.size() * sizeof(T);
+    const uint32_t new_material_bytes = materials.size() * sizeof(T);
 
-    AllocatedBuffer staging_buf = allocated_buffer_create(backend->allocator, material_bytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+    AllocatedBuffer staging_buf = allocated_buffer_create(backend->allocator, new_material_bytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                                                           VMA_MEMORY_USAGE_AUTO_PREFER_HOST, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
 
-    vmaCopyMemoryToAllocation(backend->allocator, materials.data(), staging_buf.allocation, 0, material_bytes);
+    vmaCopyMemoryToAllocation(backend->allocator, materials.data(), staging_buf.allocation, 0, new_material_bytes);
 
     AllocatedBuffer new_mat_buf;
     if (backend->mat_count > 0) {
         // already had previous material data in the buffer
+
+        const uint32_t old_material_bytes = backend->mat_count * sizeof(T);
+
         new_mat_buf =
-            allocated_buffer_create(backend->allocator, material_bytes + backend->mat_buffer.info.size,
+            allocated_buffer_create(backend->allocator, new_material_bytes + old_material_bytes,
                                     VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                                     VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE, 0);
 
         VkBufferCopy old_materials_region{};
-        old_materials_region.size      = backend->mat_buffer.info.size;
+        old_materials_region.size      = old_material_bytes;
         old_materials_region.srcOffset = 0;
         old_materials_region.dstOffset = 0;
 
         VkBufferCopy new_materials_region{};
-        new_materials_region.size      = staging_buf.info.size;
+        new_materials_region.size      = new_material_bytes;
         new_materials_region.srcOffset = 0;
-        new_materials_region.dstOffset = backend->mat_buffer.info.size;
+        new_materials_region.dstOffset = old_material_bytes;
 
         command_ctx_immediate_submit(&backend->immediate_cmd_ctx, backend->device_ctx.logical_device, backend->device_ctx.queues.graphics,
                                      backend->imm_fence, [&](VkCommandBuffer cmd) {
@@ -193,12 +204,12 @@ template <typename T> [[nodiscard]] uint32_t backend_upload_materials(VkBackend*
     } else {
         // this is the first material allocation
         new_mat_buf =
-            allocated_buffer_create(backend->allocator, material_bytes,
+            allocated_buffer_create(backend->allocator, new_material_bytes,
                                     VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                                     VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE, 0);
 
         VkBufferCopy new_materials_region{};
-        new_materials_region.size      = staging_buf.info.size;
+        new_materials_region.size      = new_material_bytes;
         new_materials_region.srcOffset = 0;
         new_materials_region.dstOffset = 0;
 
@@ -209,14 +220,14 @@ template <typename T> [[nodiscard]] uint32_t backend_upload_materials(VkBackend*
     allocated_buffer_destroy(backend->allocator, &staging_buf);
 
     backend->mat_buffer = new_mat_buf;
+    backend->mat_count += materials.size();
 
     // update the material descriptor
     DescriptorWriter descriptor_writer;
-    desc_writer_write_buffer_desc(&descriptor_writer, backend->material_desc_binding, backend->mat_buffer.buffer, backend->mat_buffer.info.size, 0,
+    desc_writer_write_buffer_desc(&descriptor_writer, backend->material_desc_binding, backend->mat_buffer.buffer, backend->mat_count * sizeof(T), 0,
                                   VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
 
     desc_writer_update_desc_set(&descriptor_writer, backend->device_ctx.logical_device, backend->graphics_desc_set);
 
-    backend->mat_count += materials.size();
     return curr_mat_offset;
 }
