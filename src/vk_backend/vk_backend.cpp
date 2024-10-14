@@ -336,7 +336,7 @@ void create_default_data(VkBackend* backend) {
     std::vector<TextureSampler> tex_samplers = {default_tex_sampler};
 
     // default texture will always be assumed to be at index 0
-    std::ignore = backend_upload_2d_texture(backend, tex_samplers);
+    std::ignore = backend_upload_2d_textures(backend, tex_samplers);
 }
 
 void backend_create_imgui_resources(VkBackend* backend) {
@@ -899,25 +899,35 @@ void upload_sky_box_texture(VkBackend* backend, const TextureSampler* tex_sample
         [=] { allocated_image_destroy(backend->device_ctx.logical_device, backend->allocator, &backend->sky_box_image); });
 }
 
-[[nodiscard]] std::vector<void*> compress_2d_color_textures(std::span<const TextureSampler> tex_samplers, uint32_t* compressed_data_size) {
+struct UniqueImageInstance {
+    const uint8_t* data;
+    uint32_t       color_channels;
+    uint32_t       height;
+    uint32_t       width;
+};
 
+[[nodiscard]] static std::vector<void*> compress_2d_color_textures(std::span<const UniqueImageInstance> image_instances,
+                                                                   uint32_t* total_compressed_size, uint32_t* largest_img_size) {
+
+    *largest_img_size = 0;
     std::vector<void*> compressed_data_bufs;
-    compressed_data_bufs.reserve(tex_samplers.size());
+    compressed_data_bufs.reserve(image_instances.size());
     uint32_t total_byte_size = 0;
-    for (const auto& tex_sampler : tex_samplers) {
-        assert(tex_sampler.color_channels == 4);
-        assert(tex_sampler.layer_count == 1 && tex_sampler.view_type == VK_IMAGE_VIEW_TYPE_2D);
+    for (const auto& image : image_instances) {
+        assert(image.color_channels == 4);
 
         nvtt::RefImage new_ref_image{};
-        new_ref_image.data         = tex_sampler.data;
-        new_ref_image.num_channels = tex_sampler.color_channels;
-        new_ref_image.height       = tex_sampler.height;
-        new_ref_image.width        = tex_sampler.width;
+        new_ref_image.data         = image.data;
+        new_ref_image.num_channels = image.color_channels;
+        new_ref_image.height       = image.height;
+        new_ref_image.width        = image.width;
         new_ref_image.depth        = 1;
 
         nvtt::CPUInputBuffer input_buf(&new_ref_image, nvtt::UINT8);
 
         const uint32_t compressed_data_bytes = input_buf.NumTiles() * 16;
+
+        *largest_img_size = (compressed_data_bytes > *largest_img_size) ? compressed_data_bytes : *largest_img_size;
 
         void* compressed_data = malloc(compressed_data_bytes); // BC7 uses 16 bytes/tile
 
@@ -930,57 +940,72 @@ void upload_sky_box_texture(VkBackend* backend, const TextureSampler* tex_sample
         total_byte_size += compressed_data_bytes;
     }
 
-    *compressed_data_size = total_byte_size;
+    *total_compressed_size = total_byte_size;
     return compressed_data_bufs;
 }
 
-uint32_t backend_upload_2d_texture(VkBackend* backend, std::vector<TextureSampler>& tex_samplers) {
-
+uint32_t backend_upload_2d_textures(VkBackend* backend, std::vector<TextureSampler>& tex_samplers) {
     // we will return this at the end of the function. It signifies an offset for
     // materials accessing these textures by their index.
     // For instance, if a gltf mesh is trying to access texture index 3, and this function passes
     // back the number 5, then the mesh should point to texture index 8 since this is where the
     // descriptor for this texture will actually be found in the shader
-    const uint32_t descriptor_index_offset = backend->tex_images.size();
+    const uint32_t descriptor_index_offset = backend->tex_sampler_desc_count;
 
-    uint32_t           total_byte_size      = 0;
-    std::vector<void*> compressed_data_bufs = compress_2d_color_textures(tex_samplers, &total_byte_size);
+    std::vector<UniqueImageInstance> unique_image_instances;
+    unique_image_instances.reserve(tex_samplers.size());
+    for (const auto& tex_sampler : tex_samplers) {
+        UniqueImageInstance new_image{};
+        new_image.data           = tex_sampler.data;
+        new_image.height         = tex_sampler.height;
+        new_image.width          = tex_sampler.width;
+        new_image.color_channels = tex_sampler.color_channels;
 
-    AllocatedBuffer staging_buf = allocated_buffer_create(backend->allocator, total_byte_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                                                          VMA_MEMORY_USAGE_AUTO_PREFER_HOST, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
-
-    // fill the staging buffer with the images
-    uint32_t staging_buf_offset = 0;
-    for (size_t i = 0; i < tex_samplers.size(); i++) {
-        const TextureSampler* tex_sampler = &tex_samplers[i];
-
-        const uint32_t byte_size = tex_sampler->width * tex_sampler->height; // BC7 uses 1 byte per pixel
-        vmaCopyMemoryToAllocation(backend->allocator, compressed_data_bufs[i], staging_buf.allocation, staging_buf_offset, byte_size);
-        staging_buf_offset += byte_size;
+        bool is_unique = true;
+        for (const auto& curr_image : unique_image_instances) {
+            // isn't unique if the data and dimensions differ
+            if (new_image.data == curr_image.data && new_image.height == curr_image.height && new_image.width == curr_image.width) {
+                is_unique = false;
+                break;
+            }
+        }
+        if (is_unique) {
+            unique_image_instances.push_back(new_image);
+        }
     }
 
+    uint32_t           total_byte_size      = 0;
+    uint32_t           largest_image_size   = 0;
+    std::vector<void*> compressed_data_bufs = compress_2d_color_textures(unique_image_instances, &total_byte_size, &largest_image_size);
+
+    // use the largest image size for our staging buffer, then just reuse it for all images
+    AllocatedBuffer staging_buf = allocated_buffer_create(backend->allocator, largest_image_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                                                          VMA_MEMORY_USAGE_AUTO_PREFER_HOST, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
+
     DescriptorWriter descriptor_writer{};
-    uint32_t         texture_buf_offset = 0;
-    for (const auto& tex_sampler : tex_samplers) {
+    for (size_t i = 0; i < unique_image_instances.size(); i++) {
+        const UniqueImageInstance* image = &unique_image_instances[i];
 
         VkExtent2D extent = {
-            .width  = tex_sampler.width,
-            .height = tex_sampler.height,
+            .width  = image->width,
+            .height = image->height,
         };
+
+        vmaCopyMemoryToAllocation(backend->allocator, compressed_data_bufs[i], staging_buf.allocation, 0, image->height * image->width);
 
         AllocatedImage tex_image = allocated_image_create(backend->device_ctx.logical_device, backend->allocator,
                                                           VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_VIEW_TYPE_2D, extent,
                                                           VK_FORMAT_BC7_SRGB_BLOCK);
 
-        VkBufferImageCopy copy_region               = {};
+        VkBufferImageCopy copy_region{};
         copy_region.imageSubresource.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
         copy_region.imageSubresource.mipLevel       = 0;
         copy_region.imageSubresource.baseArrayLayer = 0;
         copy_region.imageSubresource.layerCount     = 1;
-        copy_region.imageExtent.width               = tex_sampler.width;
-        copy_region.imageExtent.height              = tex_sampler.height;
+        copy_region.imageExtent.width               = image->width;
+        copy_region.imageExtent.height              = image->height;
         copy_region.imageExtent.depth               = 1;
-        copy_region.bufferOffset                    = texture_buf_offset;
+        copy_region.bufferOffset                    = 0;
 
         command_ctx_immediate_submit(
             &backend->immediate_cmd_ctx, backend->device_ctx.logical_device, backend->device_ctx.queues.graphics, backend->imm_fence,
@@ -993,15 +1018,30 @@ uint32_t backend_upload_2d_texture(VkBackend* backend, std::vector<TextureSample
                                                1);
             });
 
-        const uint32_t byte_size = tex_sampler.width * tex_sampler.height;
-        texture_buf_offset += byte_size;
+        backend->tex_images.push_back(tex_image);
+    }
+
+    // this is going to be a bit ugly :/...
+    for (const auto& tex_sampler : tex_samplers) {
+        // find which index of unique images this tex_sampler refers to
+        uint32_t image_i = 0;
+        for (size_t i = 0; i < unique_image_instances.size(); i++) {
+            if (tex_sampler.data == unique_image_instances[i].data) {
+                image_i = i;
+                break;
+            }
+        }
+
+        // find index into our GPU allocated texture images based on this
+        uint32_t tex_img_i = backend->tex_images.size() - unique_image_instances.size() + image_i;
+
+        AllocatedImage tex_image = backend->tex_images[tex_img_i];
 
         desc_writer_write_image_desc(&descriptor_writer, backend->texture_desc_binding, tex_image.image_view, tex_sampler.sampler,
-                                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, backend->tex_images.size());
+                                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                                     backend->tex_sampler_desc_count++);
         desc_writer_update_desc_set(&descriptor_writer, backend->device_ctx.logical_device, backend->graphics_desc_set);
         desc_writer_clear(&descriptor_writer);
-
-        backend->tex_images.push_back(tex_image);
     }
 
     for (void* data : compressed_data_bufs) {

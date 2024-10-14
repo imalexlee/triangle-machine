@@ -69,6 +69,7 @@ struct VkBackend {
     AllocatedImage                 color_resolve_image{};
     AllocatedImage                 depth_image{};
     std::vector<AllocatedImage>    tex_images{};
+    uint32_t                       tex_sampler_desc_count;
     AllocatedBuffer                mat_buffer{};
     uint32_t                       mat_count{0};
     AllocatedImage                 sky_box_image{};
@@ -106,7 +107,7 @@ void backend_upload_sky_box_shaders(VkBackend* backend, const std::filesystem::p
 
 void backend_upload_sky_box(VkBackend* backend, const uint8_t* texture_data, uint32_t color_channels, uint32_t width, uint32_t height);
 
-[[nodiscard]] uint32_t backend_upload_2d_texture(VkBackend* backend, std::vector<TextureSampler>& tex_samplers);
+[[nodiscard]] uint32_t backend_upload_2d_textures(VkBackend* backend, std::vector<TextureSampler>& tex_samplers);
 
 void backend_create_accel_struct(VkBackend* backend, std::span<const BottomLevelGeometry> bottom_level_geometries,
                                  std::span<const TopLevelInstanceRef> instance_refs);

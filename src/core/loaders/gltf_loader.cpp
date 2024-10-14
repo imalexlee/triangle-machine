@@ -20,13 +20,15 @@ struct Vertex {
         {0, 0}
     };
 };
-
+struct GLTFImage {
+    uint8_t* data{};
+    uint32_t width{};
+    uint32_t height{};
+    uint32_t color_channels{};
+};
 struct GLTFTexture {
-    uint8_t*                data{};
     std::optional<uint32_t> sampler_i{};
-    uint32_t                width{};
-    uint32_t                height{};
-    uint32_t                color_channels{};
+    uint32_t                image_i{};
 };
 
 struct TexCoordPair {
@@ -88,11 +90,27 @@ constexpr TexCoordPair default_tex_coord_pair = {
 static std::vector<GLTFTexture> load_gltf_textures(const fastgltf::Asset* asset) {
     std::vector<GLTFTexture> gltf_textures{};
     gltf_textures.reserve(asset->textures.size());
-    int width, height, channel_count;
 
     for (const auto& texture : asset->textures) {
-        GLTFTexture            new_tex{};
-        const fastgltf::Image* image = &asset->images[texture.imageIndex.value()];
+
+        GLTFTexture new_texture{};
+        if (texture.samplerIndex.has_value()) {
+            new_texture.sampler_i = texture.samplerIndex.value();
+        }
+        new_texture.image_i = texture.imageIndex.value_or(0);
+
+        gltf_textures.push_back(new_texture);
+    }
+    return gltf_textures;
+}
+
+static std::vector<GLTFImage> load_gltf_images(const fastgltf::Asset* asset) {
+    std::vector<GLTFImage> gltf_images;
+    gltf_images.reserve(asset->images.size());
+
+    int width, height, channel_count;
+    for (const auto& gltf_image : asset->images) {
+        GLTFImage new_image{};
 
         std::visit(fastgltf::visitor{
                        []([[maybe_unused]] auto& arg) {},
@@ -102,13 +120,13 @@ static std::vector<GLTFTexture> load_gltf_textures(const fastgltf::Asset* asset)
 
                            const std::string path(file_path.uri.path().begin(), file_path.uri.path().end());
 
-                           new_tex.data = stbi_load(path.c_str(), &width, &height, &channel_count, 4);
-                           assert(new_tex.data);
+                           new_image.data = stbi_load(path.c_str(), &width, &height, &channel_count, 4);
+                           assert(new_image.data);
                        },
                        [&](const fastgltf::sources::Array& vector) {
-                           new_tex.data =
+                           new_image.data =
                                stbi_load_from_memory(vector.bytes.data(), static_cast<int>(vector.bytes.size()), &width, &height, &channel_count, 4);
-                           assert(new_tex.data);
+                           assert(new_image.data);
                        },
                        [&](const fastgltf::sources::BufferView& view) {
                            auto& buffer_view = asset->bufferViews[view.bufferViewIndex];
@@ -116,27 +134,23 @@ static std::vector<GLTFTexture> load_gltf_textures(const fastgltf::Asset* asset)
 
                            std::visit(fastgltf::visitor{[]([[maybe_unused]] auto& arg) {},
                                                         [&](const fastgltf::sources::Array& vector) {
-                                                            new_tex.data = stbi_load_from_memory(vector.bytes.data() + buffer_view.byteOffset,
-                                                                                                 static_cast<int>(buffer_view.byteLength), &width,
-                                                                                                 &height, &channel_count, 4);
-                                                            assert(new_tex.data);
+                                                            new_image.data = stbi_load_from_memory(vector.bytes.data() + buffer_view.byteOffset,
+                                                                                                   static_cast<int>(buffer_view.byteLength), &width,
+                                                                                                   &height, &channel_count, 4);
+                                                            assert(new_image.data);
                                                         }},
                                       buffer.data);
                        },
                    },
-                   image->data);
+                   gltf_image.data);
 
-        new_tex.width          = width;
-        new_tex.height         = height;
-        new_tex.color_channels = 4;
+        new_image.width          = width;
+        new_image.height         = height;
+        new_image.color_channels = 4;
 
-        if (texture.samplerIndex.has_value()) {
-            new_tex.sampler_i = texture.samplerIndex.value();
-        }
-
-        gltf_textures.push_back(new_tex);
+        gltf_images.push_back(new_image);
     }
-    return gltf_textures;
+    return gltf_images;
 }
 
 std::vector<GLTFMaterial> load_gltf_materials(const fastgltf::Asset* asset) {
@@ -383,27 +397,34 @@ static std::vector<VkSampler> upload_gltf_samplers(VkBackend* backend, std::span
     return vk_samplers;
 }
 
-static uint32_t upload_gltf_textures(VkBackend* backend, std::span<const GLTFTexture> textures, std::span<const fastgltf::Sampler> samplers) {
+static uint32_t upload_gltf_textures(VkBackend* backend, std::span<const GLTFImage> images, std::span<const GLTFTexture> textures,
+                                     std::span<const fastgltf::Sampler> samplers) {
     const std::vector<VkSampler> vk_samplers = upload_gltf_samplers(backend, samplers);
     std::vector<TextureSampler>  tex_samplers;
-    tex_samplers.reserve(tex_samplers.size());
-    for (const auto& texture : textures) {
+
+    tex_samplers.reserve(textures.size());
+
+    for (size_t i = 0; i < textures.size(); i++) {
+        const GLTFTexture* texture = &textures[i];
+        const GLTFImage*   image   = &images[texture->image_i];
+
         TextureSampler new_tex_sampler{};
         new_tex_sampler.view_type      = VK_IMAGE_VIEW_TYPE_2D;
-        new_tex_sampler.width          = texture.width;
-        new_tex_sampler.height         = texture.height;
+        new_tex_sampler.width          = image->width;
+        new_tex_sampler.height         = image->height;
         new_tex_sampler.layer_count    = 1;
-        new_tex_sampler.color_channels = texture.color_channels;
-        new_tex_sampler.data           = texture.data;
-        if (texture.sampler_i.has_value()) {
-            new_tex_sampler.sampler = vk_samplers[texture.sampler_i.value()];
+        new_tex_sampler.color_channels = image->color_channels;
+        new_tex_sampler.data           = image->data;
+
+        if (texture->sampler_i.has_value()) {
+            new_tex_sampler.sampler = vk_samplers[texture->sampler_i.value()];
         } else {
             new_tex_sampler.sampler = backend->default_nearest_sampler;
         }
         tex_samplers.push_back(new_tex_sampler);
     }
 
-    return backend_upload_2d_texture(backend, tex_samplers);
+    return backend_upload_2d_textures(backend, tex_samplers);
 }
 
 static std::vector<MeshBuffers> upload_gltf_mesh_buffers(VkBackend* backend, std::span<const GLTFMesh> meshes) {
@@ -464,13 +485,14 @@ Entity load_entity(VkBackend* backend, const std::filesystem::path& path) {
     fastgltf::Asset asset;
     asset = std::move(load.get());
 
+    const std::vector<GLTFImage>    gltf_images     = load_gltf_images(&asset);
     const std::vector<GLTFTexture>  gltf_textures   = load_gltf_textures(&asset);
     const std::vector<GLTFMaterial> gltf_materials  = load_gltf_materials(&asset);
     const std::vector<GLTFMesh>     gltf_meshes     = load_gltf_meshes(&asset);
     const std::vector<GLTFNode>     gltf_mesh_nodes = load_gltf_mesh_nodes(&asset);
 
     const std::vector<MeshBuffers> vk_meshes       = upload_gltf_mesh_buffers(backend, gltf_meshes);
-    const uint32_t                 tex_desc_offset = upload_gltf_textures(backend, gltf_textures, asset.samplers);
+    const uint32_t                 tex_desc_offset = upload_gltf_textures(backend, gltf_images, gltf_textures, asset.samplers);
     const uint32_t                 mat_desc_offset = upload_gltf_materials(backend, gltf_materials, tex_desc_offset);
 
     const std::vector<MeshData> mesh_data = create_mesh_data(backend, gltf_mesh_nodes, vk_meshes);
@@ -527,8 +549,8 @@ Entity load_entity(VkBackend* backend, const std::filesystem::path& path) {
     entity.opaque_objs.shrink_to_fit();
     entity.transparent_objs.shrink_to_fit();
 
-    for (auto& texture : gltf_textures) {
-        stbi_image_free(texture.data);
+    for (auto& image : gltf_images) {
+        stbi_image_free(image.data);
     }
 
     return entity;

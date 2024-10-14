@@ -16,7 +16,7 @@ struct Camera {
 
     float pitch_theta{};
     float yaw_theta{};
-    float movement_speed = 5.f;
+    float movement_speed = 15.f;
 
     double cursor_x{};
     double cursor_y{};
