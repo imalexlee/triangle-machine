@@ -44,8 +44,8 @@ VkDescriptorSetLayout desc_layout_builder_create_layout(const DescriptorLayoutBu
 }
 
 void desc_writer_write_buffer_desc(DescriptorWriter* desc_writer, int binding, VkBuffer buffer, size_t size, size_t offset, VkDescriptorType type) {
-    const VkDescriptorBufferInfo& info =
-        desc_writer->buffer_infos.emplace_back(VkDescriptorBufferInfo{.buffer = buffer, .offset = offset, .range = size});
+    const VkDescriptorBufferInfo* info =
+        &desc_writer->buffer_infos.emplace_back(VkDescriptorBufferInfo{.buffer = buffer, .offset = offset, .range = size});
 
     VkWriteDescriptorSet write = {.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
 
@@ -54,7 +54,7 @@ void desc_writer_write_buffer_desc(DescriptorWriter* desc_writer, int binding, V
     write.dstSet          = VK_NULL_HANDLE;
     write.descriptorCount = 1;
     write.descriptorType  = type;
-    write.pBufferInfo     = &info;
+    write.pBufferInfo     = info;
 
     desc_writer->writes.push_back(write);
 }
@@ -146,7 +146,7 @@ VkDescriptorSet desc_allocator_allocate_desc_set(DescriptorAllocator* desc_alloc
         alloc_info.pNext = &variable_info;
     }
 
-    VkDescriptorSet new_set;
+    VkDescriptorSet new_set{};
     VkResult        result = vkAllocateDescriptorSets(device, &alloc_info, &new_set);
     if (result == VK_ERROR_OUT_OF_POOL_MEMORY || result == VK_ERROR_FRAGMENTED_POOL) {
         desc_allocator->full_pools.push_back(pool);
@@ -163,10 +163,10 @@ VkDescriptorSet desc_allocator_allocate_desc_set(DescriptorAllocator* desc_alloc
 
 void desc_allocator_reset_desc_pools(DescriptorAllocator* desc_allocator, VkDevice device) {
     for (auto p : desc_allocator->ready_pools) {
-        vkResetDescriptorPool(device, p, 0);
+        VK_CHECK(vkResetDescriptorPool(device, p, 0));
     }
     for (auto p : desc_allocator->full_pools) {
-        vkResetDescriptorPool(device, p, 0);
+        VK_CHECK(vkResetDescriptorPool(device, p, 0));
         desc_allocator->ready_pools.push_back(p);
     }
     desc_allocator->full_pools.clear();

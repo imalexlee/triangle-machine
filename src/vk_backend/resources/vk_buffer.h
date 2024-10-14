@@ -6,12 +6,12 @@
 struct AllocatedBuffer {
     VkBuffer          buffer;
     VmaAllocation     allocation;
-    VmaAllocationInfo info;
+    VmaAllocationInfo info{};
 };
 
 struct MeshBuffers {
-    AllocatedBuffer indices;
-    AllocatedBuffer vertices;
+    AllocatedBuffer indices{};
+    AllocatedBuffer vertices{};
 };
 
 /**

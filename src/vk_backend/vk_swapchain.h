@@ -14,7 +14,7 @@ struct SwapchainContext {
     VkExtent2D               extent;
     VkFormat                 format;
     VkSurfaceKHR             surface;
-    SwapchainSupportDetails  support_details;
+    SwapchainSupportDetails  support_details{};
     VkPresentModeKHR         present_mode;
     std::vector<VkImage>     images;
     std::vector<VkImageView> image_views;

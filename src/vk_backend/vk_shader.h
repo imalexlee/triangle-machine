@@ -19,14 +19,14 @@ struct ShaderBuilder {
     std::vector<VkShaderCreateInfoEXT> create_infos;
     std::vector<std::vector<uint32_t>> spvs;
 
-    shaderc_compile_options_t shader_options;
-    shaderc_compiler_t        compiler;
+    shaderc_compile_options_t shader_options{};
+    shaderc_compiler_t        compiler{};
 };
 
 struct ShaderContext {
     std::vector<Shader> vert_shaders;
     std::vector<Shader> frag_shaders;
-    ShaderBuilder       builder;
+    ShaderBuilder       builder{};
 };
 
 enum class ShaderType {

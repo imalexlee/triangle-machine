@@ -9,28 +9,28 @@
 #include <vulkan/vulkan_core.h>
 
 struct TopLevelInstanceRef {
-    glm::mat4 transform;
-    uint32_t  mesh_idx;
+    glm::mat4 transform{};
+    uint32_t  mesh_idx{};
 };
 
 struct BottomLevelGeometry {
-    MeshBuffers mesh_buffers;
-    uint32_t    vertex_stride;
-    uint32_t    vertex_count;
-    uint32_t    index_count;
+    MeshBuffers mesh_buffers{};
+    uint32_t    vertex_stride{};
+    uint32_t    vertex_count{};
+    uint32_t    index_count{};
 };
 
 // god awful
 struct AccelStructContext {
-    VkAccelerationStructureKHR              top_level;
+    VkAccelerationStructureKHR              top_level{};
     std::vector<VkAccelerationStructureKHR> bottom_levels;
 
-    CommandContext cmd_ctx;
+    CommandContext cmd_ctx{};
     VkFence        fence;
 
-    AllocatedBuffer              instance_buf;
-    AllocatedBuffer              tlas_buffer;
-    std::vector<AllocatedBuffer> blas_buffers;
+    AllocatedBuffer              instance_buf{};
+    AllocatedBuffer              tlas_buffer{};
+    std::vector<AllocatedBuffer> blas_buffers{};
 
     std::vector<VkAccelerationStructureGeometryKHR> triangle_geometries;
     std::vector<VkAccelerationStructureInstanceKHR> tlas_instances;

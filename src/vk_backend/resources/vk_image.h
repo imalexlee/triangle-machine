@@ -11,13 +11,13 @@ struct AllocatedImage {
 };
 
 struct TextureSampler {
-    const uint8_t*  data;
-    VkSampler       sampler;
-    VkImageViewType view_type;
-    uint32_t        layer_count;
-    uint32_t        color_channels;
-    uint32_t        width;
-    uint32_t        height;
+    const uint8_t*  data{};
+    VkSampler       sampler{};
+    VkImageViewType view_type{};
+    uint32_t        layer_count{};
+    uint32_t        color_channels{};
+    uint32_t        width{};
+    uint32_t        height{};
 };
 
 /**

@@ -98,11 +98,11 @@ void backend_init(VkBackend* backend, VkInstance instance, VkSurfaceKHR surface,
 
     backend->color_resolve_image = allocated_image_create(backend->device_ctx.logical_device, backend->allocator,
                                                           VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                                                          VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_B8G8R8A8_UNORM, 1);
+                                                          VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
 
     backend->color_image = allocated_image_create(
         backend->device_ctx.logical_device, backend->allocator, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
-        VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_B8G8R8A8_UNORM, backend->device_ctx.raster_samples);
+        VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, backend->device_ctx.raster_samples);
 
     backend->depth_image =
         allocated_image_create(backend->device_ctx.logical_device, backend->allocator, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
@@ -144,13 +144,14 @@ static void create_compute_resources(VkBackend* backend) {
 
 void set_scene_data(const VkBackend* backend, const SceneData* scene_data) {
     uint32_t curr_frame_idx = get_curr_frame_idx(backend);
+    assert(scene_data);
     assert(curr_frame_idx < backend->scene_data_buffers.size());
     VkDescriptorSet        curr_scene_desc_set = backend->scene_desc_sets[curr_frame_idx];
     const AllocatedBuffer* curr_scene_buf      = &backend->scene_data_buffers[curr_frame_idx];
 
-    vmaCopyMemoryToAllocation(backend->allocator, scene_data, curr_scene_buf->allocation, 0, sizeof(SceneData));
+    VK_CHECK(vmaCopyMemoryToAllocation(backend->allocator, scene_data, curr_scene_buf->allocation, 0, sizeof(SceneData)));
 
-    DescriptorWriter desc_writer;
+    DescriptorWriter desc_writer{};
     desc_writer_write_buffer_desc(&desc_writer, 0, curr_scene_buf->buffer, sizeof(SceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
     desc_writer_update_desc_set(&desc_writer, backend->device_ctx.logical_device, curr_scene_desc_set);
 }
@@ -252,7 +253,6 @@ void create_desc_layouts(VkBackend* backend) {
     desc_layout_builder_clear(&layout_builder);
 
     // materials
-
     desc_layout_builder_add_binding(&layout_builder, backend->material_desc_binding, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                                     VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 
@@ -334,7 +334,7 @@ void create_default_data(VkBackend* backend) {
     default_tex_sampler.sampler        = backend->default_linear_sampler;
     default_tex_sampler.view_type      = VK_IMAGE_VIEW_TYPE_2D;
 
-    TextureSampler tex_samplers[1] = {default_tex_sampler};
+    std::vector<TextureSampler> tex_samplers = {default_tex_sampler};
 
     // default texture will always be assumed to be at index 0
     std::ignore = backend_upload_2d_texture(backend, tex_samplers);
@@ -562,11 +562,11 @@ void backend_draw(VkBackend* backend, std::vector<Entity>& entities, const Scene
 
     set_render_state(backend, cmd_buffer);
 
-    render_sky_box(backend, cmd_buffer);
+    // render_sky_box(backend, cmd_buffer);
 
     render_geometry(backend, cmd_buffer, entities);
 
-    render_grid(backend, cmd_buffer);
+    // render_grid(backend, cmd_buffer);
 
     render_ui(cmd_buffer);
 
@@ -691,6 +691,18 @@ void render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf, std::vector<En
             .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
             .alphaBlendOp        = VK_BLEND_OP_ADD,
         };
+
+        /*
+                blend_equation = {
+                    .srcColorBlendFactor = VK_BLEND_FACTOR_ONE,
+                    .dstColorBlendFactor = VK_BLEND_FACTOR_DST_ALPHA,
+                    .colorBlendOp        = VK_BLEND_OP_ADD,
+                    .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+                    .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+                    .alphaBlendOp        = VK_BLEND_OP_ADD,
+                };
+                */
+
         backend->ext_ctx.vkCmdSetColorBlendEquationEXT(cmd_buf, 0, 1, &blend_equation);
 
         VkBool32 color_blend_enabled[] = {VK_TRUE};
@@ -888,7 +900,7 @@ void upload_sky_box_texture(VkBackend* backend, const TextureSampler* tex_sample
         [=] { allocated_image_destroy(backend->device_ctx.logical_device, backend->allocator, &backend->sky_box_image); });
 }
 
-uint32_t backend_upload_2d_texture(VkBackend* backend, std::span<const TextureSampler> tex_samplers) {
+uint32_t backend_upload_2d_texture(VkBackend* backend, std::vector<TextureSampler>& tex_samplers) {
 
     // we will return this at the end of the function. It signifies an offset for
     // materials accessing these textures by their index.
@@ -900,6 +912,7 @@ uint32_t backend_upload_2d_texture(VkBackend* backend, std::span<const TextureSa
     // find how much memory to allocate
     uint32_t total_byte_size = 0;
     for (const auto& tex_sampler : tex_samplers) {
+        assert(tex_sampler.color_channels == 2 || tex_sampler.color_channels == 4);
         assert(tex_sampler.layer_count == 1 && tex_sampler.view_type == VK_IMAGE_VIEW_TYPE_2D);
         const uint32_t byte_size = tex_sampler.width * tex_sampler.height * tex_sampler.color_channels;
         total_byte_size += byte_size;
@@ -916,7 +929,7 @@ uint32_t backend_upload_2d_texture(VkBackend* backend, std::span<const TextureSa
         staging_buf_offset += byte_size;
     }
 
-    DescriptorWriter descriptor_writer;
+    DescriptorWriter descriptor_writer{};
     uint32_t         texture_buf_offset = 0;
     for (const auto& tex_sampler : tex_samplers) {
 
@@ -924,10 +937,22 @@ uint32_t backend_upload_2d_texture(VkBackend* backend, std::span<const TextureSa
             .width  = tex_sampler.width,
             .height = tex_sampler.height,
         };
+        VkFormat image_format;
+        switch (tex_sampler.color_channels) {
+        case 2:
+            image_format = VK_FORMAT_R8G8_UNORM;
+            break;
+        case 4:
+            image_format = VK_FORMAT_R8G8B8A8_SRGB;
+            break;
+        default:
+            // unreachable
+            exit(EXIT_FAILURE);
+        }
 
-        AllocatedImage tex_image = allocated_image_create(backend->device_ctx.logical_device, backend->allocator,
-                                                          VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_VIEW_TYPE_2D, extent,
-                                                          VK_FORMAT_R8G8B8A8_UNORM);
+        AllocatedImage tex_image =
+            allocated_image_create(backend->device_ctx.logical_device, backend->allocator,
+                                   VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_VIEW_TYPE_2D, extent, image_format);
 
         VkBufferImageCopy copy_region               = {};
         copy_region.imageSubresource.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;

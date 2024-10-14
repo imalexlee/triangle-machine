@@ -88,12 +88,12 @@ constexpr TexCoordPair default_tex_coord_pair = {
 static std::vector<GLTFTexture> load_gltf_textures(const fastgltf::Asset* asset) {
     std::vector<GLTFTexture> gltf_textures{};
     gltf_textures.reserve(asset->textures.size());
-    int width, height, nr_channels;
+    int width, height, channel_count;
 
     for (const auto& texture : asset->textures) {
         GLTFTexture            new_tex{};
         const fastgltf::Image* image = &asset->images[texture.imageIndex.value()];
-        new_tex.color_channels       = 4;
+
         std::visit(fastgltf::visitor{
                        []([[maybe_unused]] auto& arg) {},
                        [&](const fastgltf::sources::URI& file_path) {
@@ -102,19 +102,13 @@ static std::vector<GLTFTexture> load_gltf_textures(const fastgltf::Asset* asset)
 
                            const std::string path(file_path.uri.path().begin(), file_path.uri.path().end());
 
-                           new_tex.data = stbi_load(path.c_str(), &width, &height, &nr_channels, new_tex.color_channels);
+                           new_tex.data = stbi_load(path.c_str(), &width, &height, &channel_count, 4);
                            assert(new_tex.data);
-
-                           new_tex.width  = width;
-                           new_tex.height = height;
                        },
                        [&](const fastgltf::sources::Array& vector) {
-                           new_tex.data = stbi_load_from_memory(vector.bytes.data(), static_cast<int>(vector.bytes.size()), &width, &height,
-                                                                &nr_channels, new_tex.color_channels);
-
+                           new_tex.data =
+                               stbi_load_from_memory(vector.bytes.data(), static_cast<int>(vector.bytes.size()), &width, &height, &channel_count, 4);
                            assert(new_tex.data);
-                           new_tex.width  = width;
-                           new_tex.height = height;
                        },
                        [&](const fastgltf::sources::BufferView& view) {
                            auto& buffer_view = asset->bufferViews[view.bufferViewIndex];
@@ -124,16 +118,17 @@ static std::vector<GLTFTexture> load_gltf_textures(const fastgltf::Asset* asset)
                                                         [&](const fastgltf::sources::Array& vector) {
                                                             new_tex.data = stbi_load_from_memory(vector.bytes.data() + buffer_view.byteOffset,
                                                                                                  static_cast<int>(buffer_view.byteLength), &width,
-                                                                                                 &height, &nr_channels, new_tex.color_channels);
+                                                                                                 &height, &channel_count, 4);
                                                             assert(new_tex.data);
-
-                                                            new_tex.width  = width;
-                                                            new_tex.height = height;
                                                         }},
                                       buffer.data);
                        },
                    },
                    image->data);
+
+        new_tex.width          = width;
+        new_tex.height         = height;
+        new_tex.color_channels = 4;
 
         if (texture.samplerIndex.has_value()) {
             new_tex.sampler_i = texture.samplerIndex.value();
@@ -484,8 +479,10 @@ Entity load_entity(VkBackend* backend, const std::filesystem::path& path) {
     instance_refs.reserve(gltf_mesh_nodes.size());
     for (const auto& node : gltf_mesh_nodes) {
         TopLevelInstanceRef new_instance_ref{};
-        new_instance_ref.mesh_idx  = node.mesh_i;
-        new_instance_ref.transform = node.transform;
+        new_instance_ref.mesh_idx = node.mesh_i;
+        // Transposing since vulkan acceleration structure instances expect a row-major matrix
+        // and we are in column major
+        new_instance_ref.transform = glm::transpose(node.transform);
 
         instance_refs.push_back(new_instance_ref);
     }
@@ -529,15 +526,6 @@ Entity load_entity(VkBackend* backend, const std::filesystem::path& path) {
 
     entity.opaque_objs.shrink_to_fit();
     entity.transparent_objs.shrink_to_fit();
-
-    for (const auto& opaque_obj : entity.opaque_objs) {
-        // std::cout << opaque_obj.indices_start;
-        // std::cout << opaque_obj.indices_count;
-    }
-    for (const auto& trans_obj : entity.transparent_objs) {
-        // std::cout << trans_obj.indices_start;
-        // std::cout << trans_obj.indices_count;
-    }
 
     for (auto& texture : gltf_textures) {
         stbi_image_free(texture.data);

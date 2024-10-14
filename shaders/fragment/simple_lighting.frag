@@ -9,39 +9,42 @@ layout (location = 0) out vec4 out_color;
 layout (location = 1) in vec2 color_uv;
 layout (location = 2) in vec3 surface_normal;
 
-layout (location = 4) in vec3 vert_pos;
+layout (location = 4) in vec4 vert_pos;
 
 
 void main() {
-
+    PBR_Material mat = material_buf.materials[nonuniformEXT(constants.material_i)];
+    vec4 color = mat.color_factors * texture(tex_samplers[nonuniformEXT(mat.color_tex_i)], color_uv);
+    vec3 light_color = vec3(1.0);
+    // ambient
+    vec3 ambient = 0.15 * light_color;
+    // diffuse
+    vec3 normal = normalize(surface_normal);
     vec3 light_dir = normalize(vec3(1, 1, 0));
-
-    float light_value = max(dot(surface_normal, light_dir), 0.1f);
-
-    PBR_Material mat = material_buf.materials[constants.material_i];
-
-    vec4 color = mat.color_factors * texture(tex_samplers[mat.color_tex_i], color_uv);
-    //vec4 color = mat_data.color_factors * texture(color_tex, color_uv);
-    vec4 ambient = color * vec4(0.3, 0.3, 0.3, 1.0);
-
-
-    float infinity = 1.0 / 0.0;
+    float diffuse_factor = max(dot(normal, light_dir), 0.1);
+    vec3 diffuse = diffuse_factor * light_color;
+    //vec3 diffuse = light_color;
+    // specular
+    vec3 view_dir = normalize(scene_data.eye_pos.xyz - vert_pos.xyz);
+    float specular_factor = 0.0;
+    vec3 halfway_dir = normalize(light_dir + view_dir);
+    specular_factor = pow(max(dot(normal, halfway_dir), 0.0), 64.0);
+    vec3 specular = specular_factor * light_color;
 
     rayQueryEXT rq;
-
-    vec3 ray_dir = vert_pos - scene_data.eye_pos.xyz;
-    rayQueryInitializeEXT(rq, accel_struct, gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, vert_pos, 0.1, light_dir, 100000000.0);
+    //vec3 ray_dir = vert_pos - scene_data.eye_pos.xyz;
+    float infinity = 1.0 / 0;
+    rayQueryInitializeEXT(rq, accel_struct, gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, vert_pos.xyz, 0.1, light_dir, infinity);
     rayQueryProceedEXT(rq);
 
-    if (rayQueryGetIntersectionTypeEXT(rq, true) == gl_RayQueryCommittedIntersectionNoneEXT) {
-        // not in shadow
-        out_color = color + ambient;
-    } else {
+    // 1.0 for occluded (in shadow) and 0.0 for not occluded
+    float occlued = 0.0;
+    if (rayQueryGetIntersectionTypeEXT(rq, true) != gl_RayQueryCommittedIntersectionNoneEXT) {
         // in shadow
-        //        out_color = color * vec4(0.1, 0.1, 0.1, 1.0);
-        out_color = vec4(0.0, 0, 1.0, 1.0);
+        occlued = 1.0;
     }
 
-    out_color = color + ambient;
+    out_color = vec4(ambient + (1.0 - occlued) * (diffuse + specular), 1.0) * color;
+
 
 }

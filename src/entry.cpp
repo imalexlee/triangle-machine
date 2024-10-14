@@ -1,7 +1,7 @@
 #include "core/engine.h"
 
 int main() {
-    Engine engine;
+    Engine engine{};
     engine_init(&engine);
 
     engine_run(&engine);

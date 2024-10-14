@@ -8,7 +8,7 @@
 
 struct PoolSizeRatio {
     VkDescriptorType type;
-    uint32_t         desc_per_set;
+    uint32_t         desc_per_set{};
 };
 
 // 1. create the layout of a descriptor set

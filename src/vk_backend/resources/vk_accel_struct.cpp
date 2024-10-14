@@ -27,7 +27,7 @@ void accel_struct_ctx_add_triangles_geometry(AccelStructContext* accel_struct_ct
         new_triangle_geometry.sType              = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
         new_triangle_geometry.geometry.triangles = new_triangles_data;
         new_triangle_geometry.geometryType       = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
-        new_triangle_geometry.flags              = 0;
+        new_triangle_geometry.flags              = VK_GEOMETRY_OPAQUE_BIT_KHR;
 
         VkAccelerationStructureBuildRangeInfoKHR new_triangle_build_range{};
         new_triangle_build_range.primitiveCount  = bottom_level_geometry.index_count / 3;
@@ -67,7 +67,7 @@ void accel_struct_ctx_add_triangles_geometry(AccelStructContext* accel_struct_ct
         VkAccelerationStructureBuildSizesInfoKHR new_build_sizes_info{};
         new_build_sizes_info.sType         = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
         const uint32_t max_primitive_count = build_range_info->primitiveCount;
-        ext_ctx->vkGetAccelerationStructureBuildSizesKHR(device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_HOST_KHR, &new_build_geo_info,
+        ext_ctx->vkGetAccelerationStructureBuildSizesKHR(device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &new_build_geo_info,
                                                          &max_primitive_count, &new_build_sizes_info);
 
         build_sizes_infos.push_back(new_build_sizes_info);
@@ -76,9 +76,9 @@ void accel_struct_ctx_add_triangles_geometry(AccelStructContext* accel_struct_ct
         as_total_size += new_build_sizes_info.accelerationStructureSize;
     }
 
-    AllocatedBuffer scratch_buffer = allocated_buffer_create(
-        allocator, max_scratch_buf_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-        VMA_MEMORY_USAGE_AUTO_PREFER_HOST, VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
+    AllocatedBuffer scratch_buffer =
+        allocated_buffer_create(allocator, max_scratch_buf_size, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                                VMA_MEMORY_USAGE_AUTO, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
 
     for (size_t i = 0; i < build_geometry_infos.size(); i++) {
         VkAccelerationStructureBuildGeometryInfoKHR*    build_geometry_info = &build_geometry_infos[i];
@@ -139,28 +139,26 @@ void accel_struct_ctx_add_triangles_geometry(AccelStructContext* accel_struct_ct
         accel_struct_ctx->tlas_instances.push_back(new_triangle_instance);
     }
 
+    const uint32_t instance_buf_bytes = accel_struct_ctx->tlas_instances.size() * sizeof(VkAccelerationStructureInstanceKHR);
+
     accel_struct_ctx->instance_buf =
-        allocated_buffer_create(allocator, accel_struct_ctx->tlas_instances.size() * sizeof(VkAccelerationStructureKHR),
+        allocated_buffer_create(allocator, instance_buf_bytes,
                                 VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
                                 VMA_MEMORY_USAGE_AUTO, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
 
-    vmaCopyMemoryToAllocation(allocator, accel_struct_ctx->tlas_instances.data(), accel_struct_ctx->instance_buf.allocation, 0,
-                              accel_struct_ctx->tlas_instances.size() * sizeof(VkAccelerationStructureInstanceKHR));
+    VK_CHECK(vmaCopyMemoryToAllocation(allocator, accel_struct_ctx->tlas_instances.data(), accel_struct_ctx->instance_buf.allocation, 0,
+                                       instance_buf_bytes));
 
     VkAccelerationStructureGeometryInstancesDataKHR new_instances_data{};
     new_instances_data.sType              = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
     new_instances_data.data.deviceAddress = vk_buffer_device_address_get(device, accel_struct_ctx->instance_buf.buffer);
+    new_instances_data.arrayOfPointers    = VK_FALSE;
 
     VkAccelerationStructureGeometryKHR new_instance_geometry{};
     new_instance_geometry.sType              = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
     new_instance_geometry.geometry.instances = new_instances_data;
     new_instance_geometry.geometryType       = VK_GEOMETRY_TYPE_INSTANCES_KHR;
-
-    VkAccelerationStructureBuildRangeInfoKHR instance_build_range_info{};
-    instance_build_range_info.primitiveCount  = accel_struct_ctx->tlas_instances.size();
-    instance_build_range_info.primitiveOffset = 0;
-    instance_build_range_info.firstVertex     = 0;
-    instance_build_range_info.transformOffset = 0;
+    new_instance_geometry.flags              = VK_GEOMETRY_OPAQUE_BIT_KHR;
 
     VkAccelerationStructureBuildGeometryInfoKHR instance_build_geo_info{};
     instance_build_geo_info.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
@@ -174,15 +172,15 @@ void accel_struct_ctx_add_triangles_geometry(AccelStructContext* accel_struct_ct
     VkAccelerationStructureBuildSizesInfoKHR instance_build_sizes_info{};
     instance_build_sizes_info.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
     const uint32_t instance_count   = accel_struct_ctx->tlas_instances.size();
-    ext_ctx->vkGetAccelerationStructureBuildSizesKHR(device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_HOST_KHR, &instance_build_geo_info, &instance_count,
-                                                     &instance_build_sizes_info);
+    ext_ctx->vkGetAccelerationStructureBuildSizesKHR(device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &instance_build_geo_info,
+                                                     &instance_count, &instance_build_sizes_info);
 
     // make a larger scratch buffer if needed
     if (instance_build_sizes_info.buildScratchSize > scratch_buffer.info.size) {
         allocated_buffer_destroy(allocator, &scratch_buffer);
-        scratch_buffer = allocated_buffer_create(
-            allocator, instance_build_sizes_info.buildScratchSize, VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-            VMA_MEMORY_USAGE_AUTO_PREFER_HOST, VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
+        scratch_buffer = allocated_buffer_create(allocator, instance_build_sizes_info.buildScratchSize,
+                                                 VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                                                 VMA_MEMORY_USAGE_AUTO, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
     }
 
     accel_struct_ctx->tlas_buffer = allocated_buffer_create(
@@ -200,6 +198,12 @@ void accel_struct_ctx_add_triangles_geometry(AccelStructContext* accel_struct_ct
 
     instance_build_geo_info.dstAccelerationStructure  = tlas;
     instance_build_geo_info.scratchData.deviceAddress = vk_buffer_device_address_get(device, scratch_buffer.buffer);
+
+    VkAccelerationStructureBuildRangeInfoKHR instance_build_range_info{};
+    instance_build_range_info.primitiveCount  = accel_struct_ctx->tlas_instances.size();
+    instance_build_range_info.primitiveOffset = 0;
+    instance_build_range_info.firstVertex     = 0;
+    instance_build_range_info.transformOffset = 0;
 
     const VkAccelerationStructureBuildRangeInfoKHR* p_range_info = &instance_build_range_info;
 

@@ -54,12 +54,11 @@ void engine_init(Engine* engine) {
     backend_upload_sky_box(&engine->backend, skybox_data.data(), 4, width, height);
 
     /*
-    std::array gltf_paths = {
-        "../assets/gltf/main_sponza/pkg_a_Curtains/NewSponza_Curtains_glTF.gltf",
-        "../assets/gltf/main_sponza/pkg_b_ivy/NewSponza_IvyGrowth_glTF.gltf",
-        "../assets/gltf/main_sponza/pkg_c_trees/NewSponza_CypressTree_glTF.gltf",
-        "../assets/gltf/main_sponza/Main.1_Sponza/NewSponza_Main_glTF_002.gltf"};
-    */
+    std::array gltf_paths = {// "../assets/gltf/main_sponza/pkg_a_Curtains/NewSponza_Curtains_glTF.gltf",
+                             // "../assets/gltf/main_sponza/pkg_b_ivy/NewSponza_IvyGrowth_glTF.gltf",
+                             // "../assets/gltf/main_sponza/pkg_c_trees/NewSponza_CypressTree_glTF.gltf",
+                             "../assets/gltf/main_sponza/Main1_Sponza/NewSponza_Main_glTF_003.gltf"};
+                             */
 
     std::array gltf_paths = {"../assets/glb/porsche.glb"};
     scene_load(&engine->scene, &engine->backend, gltf_paths);

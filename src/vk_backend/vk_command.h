@@ -5,8 +5,8 @@
 #include <vulkan/vulkan_core.h>
 
 struct CommandContext {
-    VkCommandBuffer primary_buffer;
-    VkCommandPool   primary_pool;
+    VkCommandBuffer primary_buffer{};
+    VkCommandPool   primary_pool{};
 };
 
 /**

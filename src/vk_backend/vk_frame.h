@@ -8,11 +8,11 @@
 struct SceneData {
     glm::mat4 view{1.f};
     glm::mat4 proj{1.f};
-    glm::vec4 cam_pos;
+    glm::vec4 cam_pos{};
 };
 
 struct Frame {
-    CommandContext command_context;
+    CommandContext command_context{};
     VkSemaphore    render_semaphore;
     VkSemaphore    present_semaphore;
     VkFence        render_fence;
