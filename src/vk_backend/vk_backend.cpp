@@ -5,9 +5,13 @@
 #define GLFW_INCLUDE_NONE
 #include "global_utils.h"
 #include "imgui.h"
+#include "imgui_impl_vulkan.h"
 #include "vk_backend/resources/vk_descriptor.h"
+#include "vk_backend/vk_backend.h"
 #include "vk_backend/vk_pipeline.h"
+#include "vk_backend/vk_sync.h"
 #include "vk_init.h"
+#include "vk_options.h"
 #include <GLFW/glfw3.h>
 #include <cassert>
 #include <chrono>
@@ -15,6 +19,7 @@
 #include <fmt/base.h>
 #include <fmt/format.h>
 #include <fstream>
+#include <nvtt/nvtt.h>
 #include <string>
 #include <vk_backend/vk_command.h>
 #include <vk_backend/vk_debug.h>
@@ -24,12 +29,6 @@
 #include <vk_backend/vk_utils.h>
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan_core.h>
-
-#include "vk_backend/vk_backend.h"
-
-#include "imgui_impl_vulkan.h"
-#include "vk_backend/vk_sync.h"
-#include "vk_options.h"
 
 #include <set>
 
@@ -900,6 +899,41 @@ void upload_sky_box_texture(VkBackend* backend, const TextureSampler* tex_sample
         [=] { allocated_image_destroy(backend->device_ctx.logical_device, backend->allocator, &backend->sky_box_image); });
 }
 
+[[nodiscard]] std::vector<void*> compress_2d_color_textures(std::span<const TextureSampler> tex_samplers, uint32_t* compressed_data_size) {
+
+    std::vector<void*> compressed_data_bufs;
+    compressed_data_bufs.reserve(tex_samplers.size());
+    uint32_t total_byte_size = 0;
+    for (const auto& tex_sampler : tex_samplers) {
+        assert(tex_sampler.color_channels == 4);
+        assert(tex_sampler.layer_count == 1 && tex_sampler.view_type == VK_IMAGE_VIEW_TYPE_2D);
+
+        nvtt::RefImage new_ref_image{};
+        new_ref_image.data         = tex_sampler.data;
+        new_ref_image.num_channels = tex_sampler.color_channels;
+        new_ref_image.height       = tex_sampler.height;
+        new_ref_image.width        = tex_sampler.width;
+        new_ref_image.depth        = 1;
+
+        nvtt::CPUInputBuffer input_buf(&new_ref_image, nvtt::UINT8);
+
+        const uint32_t compressed_data_bytes = input_buf.NumTiles() * 16;
+
+        void* compressed_data = malloc(compressed_data_bytes); // BC7 uses 16 bytes/tile
+
+        const auto settings =
+            nvtt::EncodeSettings().SetFormat(nvtt::Format_BC7).SetQuality(nvtt::Quality_Normal).SetUseGPU(true).SetOutputToGPUMem(false);
+        bool encoding_successful = nvtt_encode(input_buf, compressed_data, settings);
+        assert(encoding_successful);
+
+        compressed_data_bufs.push_back(compressed_data);
+        total_byte_size += compressed_data_bytes;
+    }
+
+    *compressed_data_size = total_byte_size;
+    return compressed_data_bufs;
+}
+
 uint32_t backend_upload_2d_texture(VkBackend* backend, std::vector<TextureSampler>& tex_samplers) {
 
     // we will return this at the end of the function. It signifies an offset for
@@ -909,23 +943,19 @@ uint32_t backend_upload_2d_texture(VkBackend* backend, std::vector<TextureSample
     // descriptor for this texture will actually be found in the shader
     const uint32_t descriptor_index_offset = backend->tex_images.size();
 
-    // find how much memory to allocate
-    uint32_t total_byte_size = 0;
-    for (const auto& tex_sampler : tex_samplers) {
-        assert(tex_sampler.color_channels == 2 || tex_sampler.color_channels == 4);
-        assert(tex_sampler.layer_count == 1 && tex_sampler.view_type == VK_IMAGE_VIEW_TYPE_2D);
-        const uint32_t byte_size = tex_sampler.width * tex_sampler.height * tex_sampler.color_channels;
-        total_byte_size += byte_size;
-    }
+    uint32_t           total_byte_size      = 0;
+    std::vector<void*> compressed_data_bufs = compress_2d_color_textures(tex_samplers, &total_byte_size);
 
     AllocatedBuffer staging_buf = allocated_buffer_create(backend->allocator, total_byte_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                                                           VMA_MEMORY_USAGE_AUTO_PREFER_HOST, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
 
     // fill the staging buffer with the images
     uint32_t staging_buf_offset = 0;
-    for (const auto& tex_sampler : tex_samplers) {
-        const uint32_t byte_size = tex_sampler.width * tex_sampler.height * tex_sampler.color_channels;
-        vmaCopyMemoryToAllocation(backend->allocator, tex_sampler.data, staging_buf.allocation, staging_buf_offset, byte_size);
+    for (size_t i = 0; i < tex_samplers.size(); i++) {
+        const TextureSampler* tex_sampler = &tex_samplers[i];
+
+        const uint32_t byte_size = tex_sampler->width * tex_sampler->height; // BC7 uses 1 byte per pixel
+        vmaCopyMemoryToAllocation(backend->allocator, compressed_data_bufs[i], staging_buf.allocation, staging_buf_offset, byte_size);
         staging_buf_offset += byte_size;
     }
 
@@ -937,22 +967,10 @@ uint32_t backend_upload_2d_texture(VkBackend* backend, std::vector<TextureSample
             .width  = tex_sampler.width,
             .height = tex_sampler.height,
         };
-        VkFormat image_format;
-        switch (tex_sampler.color_channels) {
-        case 2:
-            image_format = VK_FORMAT_R8G8_UNORM;
-            break;
-        case 4:
-            image_format = VK_FORMAT_R8G8B8A8_SRGB;
-            break;
-        default:
-            // unreachable
-            exit(EXIT_FAILURE);
-        }
 
-        AllocatedImage tex_image =
-            allocated_image_create(backend->device_ctx.logical_device, backend->allocator,
-                                   VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_VIEW_TYPE_2D, extent, image_format);
+        AllocatedImage tex_image = allocated_image_create(backend->device_ctx.logical_device, backend->allocator,
+                                                          VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_VIEW_TYPE_2D, extent,
+                                                          VK_FORMAT_BC7_SRGB_BLOCK);
 
         VkBufferImageCopy copy_region               = {};
         copy_region.imageSubresource.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -975,7 +993,7 @@ uint32_t backend_upload_2d_texture(VkBackend* backend, std::vector<TextureSample
                                                1);
             });
 
-        const uint32_t byte_size = tex_sampler.width * tex_sampler.height * tex_sampler.color_channels;
+        const uint32_t byte_size = tex_sampler.width * tex_sampler.height;
         texture_buf_offset += byte_size;
 
         desc_writer_write_image_desc(&descriptor_writer, backend->texture_desc_binding, tex_image.image_view, tex_sampler.sampler,
@@ -984,6 +1002,10 @@ uint32_t backend_upload_2d_texture(VkBackend* backend, std::vector<TextureSample
         desc_writer_clear(&descriptor_writer);
 
         backend->tex_images.push_back(tex_image);
+    }
+
+    for (void* data : compressed_data_bufs) {
+        free(data);
     }
     allocated_buffer_destroy(backend->allocator, &staging_buf);
 

@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.29)
 
-project(triangle-machine)
+include(CMakePrintHelpers)
 
+project(triangle-machine)
 find_package(Vulkan REQUIRED)
 
 if (NOT CMAKE_BUILD_TYPE)
@@ -43,7 +44,6 @@ add_executable(
         src/vk_backend/vk_ext.h
         src/vk_backend/resources/vk_accel_struct.cpp
         src/vk_backend/resources/vk_accel_struct.h
-        #  src/vk_backend/resources/sudo apt-get install glslang-tools_comp.cpp
 )
 
 target_compile_options(
@@ -61,10 +61,10 @@ if (APPLE)
     enable_language(OBJC)
 endif ()
 
+
 add_subdirectory(thirdparty/fmt)
 add_subdirectory(thirdparty/fastgltf)
 #add_subdirectory(thirdparty/meshoptimizer)
-# add_subdirectory(thirdparty/etc2comp)
 add_subdirectory(thirdparty/glfw)
 #add_subdirectory(thirdparty/glslang)
 add_subdirectory(thirdparty/shaderc)
@@ -79,16 +79,77 @@ target_include_directories(
         PRIVATE thirdparty/stb_image
         PRIVATE thirdparty/VulkanMemoryAllocator
         PRIVATE thirdparty/taskflow
-        #       PRIVATE thirdparty/etc2comp
-        #       PRIVATE thirdparty/etc2comp/EtcTool
-        #       PRIVATE thirdparty/etc2comp/EtcLib/Etc
-        #       PRIVATE thirdparty/etc2comp/EtcLib/EtcCodec
         PRIVATE thirdparty/fastgltf/include
         PRIVATE thirdparty/shaderc/utils
 )
 
 target_link_directories(${PROJECT_NAME} PUBLIC thirdparty/fmt/src PUBLIC
         thirdparty/fastgltf/src)
+
+# Find NVTT.
+if (NOT NVTT_DIR)
+    set(_SEARCH_PATHS "$ENV{NVTT_DIR}" "${CMAKE_CURRENT_LIST_DIR}" "${CMAKE_CURRENT_LIST_DIR}/.." "${CMAKE_CURRENT_LIST_DIR}/../nvtt" "C:/Program Files/NVIDIA Corporation/NVIDIA Texture Tools")
+
+    foreach (_PATH ${_SEARCH_PATHS})
+        file(GLOB _DLL_POSSIBILITIES "${_PATH}/nvtt*.dll" "${_PATH}/libnvtt.so.*")
+        if (_DLL_POSSIBILITIES) # If this folder contains a DLL matching the NVTT DLL pattern
+            set(NVTT_DIR "${_PATH}")
+            break()
+        endif ()
+    endforeach ()
+
+    if (NOT NVTT_DIR)
+        message(WARNING "NVTT not found! Please install NVTT from https://developer.nvidia.com/nvidia-texture-tools-exporter and set the CMake NVTT_DIR variable to the folder containing nvtt*.dll (e.g. C:\\Program Files\\NVIDIA Corporation\\NVIDIA Texture Tools).")
+        return()
+    endif ()
+endif ()
+
+# Get the NVTT shared library name.
+file(GLOB _NVTT_SL_POSSIBILITIES "${NVTT_DIR}/nvtt*.dll" "${NVTT_DIR}/libnvtt.so.*")
+if (NOT _NVTT_SL_POSSIBILITIES)
+    message(WARNING "NVTT_DIR didn't contain an NVTT shared library of the form nvtt*.dll or libnvtt.so.*! Is NVTT_DIR set correctly? NVTT_DIR was ${NVTT_DIR}")
+    return()
+else ()
+    list(LENGTH _NVTT_SL_POSSIBILITIES _NVTT_SL_POSSIBILITIES_LEN)
+    math(EXPR _NVTT_SL_IDX ${_NVTT_SL_POSSIBILITIES_LEN}-1)
+    list(GET _NVTT_SL_POSSIBILITIES ${_NVTT_SL_IDX} _NVTT_SL)
+endif ()
+
+# Find the NVTT linker library on Windows.
+if (WIN32)
+    if (NOT NVTT_LIB)
+        file(GLOB _NVTT_LIB_ALL "${NVTT_DIR}/lib/x64-v*/nvtt*.lib")
+        if (NOT _NVTT_LIB_ALL)
+            message(WARNING "Found nvtt.dll in ${NVTT_DIR}, but was unable to find nvtt.lib in ${NVTT_DIR}/lib/... ! Please check the NVTT directory and this CMake script to see if the path is correct.")
+            return()
+        endif ()
+        list(LENGTH _NVTT_LIB_ALL _NVTT_LIB_LEN)
+        math(EXPR _NVTT_LIB_IDX ${_NVTT_LIB_LEN}-1)
+        list(GET _NVTT_LIB_ALL ${_NVTT_LIB_IDX} NVTT_LIB)
+    endif ()
+endif ()
+
+# Print out information to help with error reports.
+message(STATUS "NVTT Shared Library: ${_NVTT_SL}")
+message(STATUS "NVTT .lib (Windows): ${NVTT_LIB}")
+
+# Link with NVTT
+if (WIN32)
+    target_link_libraries("${PROJECT_NAME}" PRIVATE "${NVTT_LIB}")
+else ()
+    target_link_libraries("${PROJECT_NAME}" PRIVATE "${_NVTT_SL}")
+endif ()
+
+target_include_directories("${PROJECT_NAME}"
+        PRIVATE
+        "${NVTT_DIR}/include"
+)
+
+# Copy NVTT to the output directory.
+add_custom_command(
+        TARGET "${PROJECT_NAME}"
+        POST_BUILD
+        COMMAND cmake -E copy_if_different "${_NVTT_SL}" "$<TARGET_FILE_DIR:${PROJECT_NAME}>")
 
 target_link_libraries(
         ${PROJECT_NAME}
@@ -97,21 +158,10 @@ target_link_libraries(
         fastgltf
         fmt
         imgui
-        #      EtcLib
         shaderc
         shaderc_util
-        #  assimp
         Vulkan::Vulkan)
 
-#[[target_sources(
-        ${PROJECT_NAME}
-        PUBLIC
-        ${CMAKE_CURRENT_BINARY_DIR}/../thirdparty/etc2comp/EtcTool/EtcFile.cpp)
-target_sources(
-        ${PROJECT_NAME}
-        PUBLIC
-        ${CMAKE_CURRENT_BINARY_DIR}/../thirdparty/etc2comp/EtcTool/EtcFileHeader.cpp
-)]]
 
 find_program(
         GLSL_VALIDATOR glslangValidator
