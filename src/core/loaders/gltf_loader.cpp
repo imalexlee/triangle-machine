@@ -40,9 +40,9 @@ struct MaterialData {
     glm::vec4 color_factors{1.f, 1.f, 1.f, 1.f};
     float     metal_factor{0};
     float     rough_factor{0};
-    uint32_t  color_tex_i{0};
+    int32_t   color_tex_i{-1}; // -1 represents no texture
     uint32_t  color_tex_coord{0};
-    uint32_t  metal_rough_tex_i{0};
+    int32_t   metal_rough_tex_i{-1};
     uint32_t  metal_rough_tex_coord{0};
     float     padding[2];
 };
@@ -164,7 +164,6 @@ std::vector<GLTFMaterial> load_gltf_materials(const fastgltf::Asset* asset) {
             new_mat.mat_data.color_tex_i     = base_color_tex->textureIndex;
         } else {
             new_mat.mat_data.color_tex_coord = 0;
-            new_mat.mat_data.color_tex_i     = 0;
         }
         if (material.pbrData.metallicRoughnessTexture.has_value()) {
             const auto metal_rough_tex             = &material.pbrData.metallicRoughnessTexture.value();
@@ -172,7 +171,6 @@ std::vector<GLTFMaterial> load_gltf_materials(const fastgltf::Asset* asset) {
             new_mat.mat_data.metal_rough_tex_i     = metal_rough_tex->textureIndex;
         } else {
             new_mat.mat_data.metal_rough_tex_coord = 0;
-            new_mat.mat_data.metal_rough_tex_i     = 0;
         }
         new_mat.mat_data.metal_factor  = material.pbrData.metallicFactor;
         new_mat.mat_data.rough_factor  = material.pbrData.roughnessFactor;
@@ -443,7 +441,10 @@ static uint32_t upload_gltf_materials(VkBackend* backend, std::span<const GLTFMa
     // If the backend has no materials, create the default material at index 0
     if (backend->mat_count == 0) {
         MaterialData default_mat{};
-        std::vector  mat_arr = {default_mat};
+        default_mat.color_tex_i       = 0;
+        default_mat.metal_rough_tex_i = 0;
+
+        std::vector mat_arr = {default_mat};
 
         std::ignore = backend_upload_materials<MaterialData>(backend, mat_arr);
     }
@@ -451,9 +452,17 @@ static uint32_t upload_gltf_materials(VkBackend* backend, std::span<const GLTFMa
     std::vector<MaterialData> materials;
     materials.reserve(gltf_materials.size());
     for (const auto& gltf_mat : gltf_materials) {
-        MaterialData new_mat_data      = gltf_mat.mat_data;
-        new_mat_data.color_tex_i       = gltf_mat.mat_data.color_tex_i + tex_desc_offset;
-        new_mat_data.metal_rough_tex_i = gltf_mat.mat_data.metal_rough_tex_i + tex_desc_offset;
+        MaterialData new_mat_data = gltf_mat.mat_data;
+        if (gltf_mat.mat_data.color_tex_i >= 0) {
+            new_mat_data.color_tex_i = gltf_mat.mat_data.color_tex_i + tex_desc_offset;
+        } else {
+            new_mat_data.color_tex_i = 0;
+        }
+        if (gltf_mat.mat_data.metal_rough_tex_i >= 0) {
+            new_mat_data.metal_rough_tex_i = gltf_mat.mat_data.metal_rough_tex_i + tex_desc_offset;
+        } else {
+            new_mat_data.metal_rough_tex_i = 0;
+        }
         materials.push_back(new_mat_data);
     }
 
@@ -521,7 +530,7 @@ Entity load_entity(VkBackend* backend, const std::filesystem::path& path) {
 
     backend_create_accel_struct(backend, bottom_level_geometries, instance_refs);
 
-    Entity entity;
+    Entity entity{};
     for (size_t node_i = 0; node_i < gltf_mesh_nodes.size(); node_i++) {
         const GLTFNode* node = &gltf_mesh_nodes[node_i];
         const GLTFMesh* mesh = &gltf_meshes[node->mesh_i];

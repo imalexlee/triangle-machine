@@ -323,13 +323,16 @@ void create_default_data(VkBackend* backend) {
 
     backend->default_nearest_sampler = vk_sampler_create(backend->device_ctx.logical_device, VK_FILTER_NEAREST, VK_FILTER_NEAREST);
 
-    uint32_t       white = 0xFFFFFFFF;
+    uint32_t white_data[16];
+    for (size_t i = 0; i < 16; i++) {
+        white_data[i] = 0xFFFFFFFF;
+    }
     TextureSampler default_tex_sampler{};
-    default_tex_sampler.width          = 1;
-    default_tex_sampler.height         = 1;
+    default_tex_sampler.width          = 4;
+    default_tex_sampler.height         = 4;
     default_tex_sampler.color_channels = 4;
     default_tex_sampler.layer_count    = 1;
-    default_tex_sampler.data           = reinterpret_cast<const uint8_t*>(&white);
+    default_tex_sampler.data           = reinterpret_cast<const uint8_t*>(&white_data);
     default_tex_sampler.sampler        = backend->default_linear_sampler;
     default_tex_sampler.view_type      = VK_IMAGE_VIEW_TYPE_2D;
 

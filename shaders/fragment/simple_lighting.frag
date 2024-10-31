@@ -5,10 +5,13 @@
 #include "../input_structures.glsl"
 
 layout (location = 0) out vec4 out_color;
-layout (location = 1) in vec2 color_uv;
-layout (location = 2) in vec3 surface_normal;
 
+layout (location = 1) in vec2 color_uv;
+layout (location = 2) in vec2 metal_rough_uv;
+layout (location = 3) in vec3 surface_normal;
 layout (location = 4) in vec4 vert_pos;
+
+
 
 void main() {
     PBR_Material mat = material_buf.materials[nonuniformEXT(constants.material_i)];
@@ -41,6 +44,4 @@ void main() {
     }
 
     out_color = vec4(ambient + (1.0 - occlued) * (diffuse + specular), 1.0) * color;
-
-
 }
