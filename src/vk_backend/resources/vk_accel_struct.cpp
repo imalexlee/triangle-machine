@@ -43,15 +43,16 @@ void accel_struct_ctx_add_triangles_geometry(AccelStructContext* accel_struct_ct
     std::vector<VkAccelerationStructureBuildGeometryInfoKHR> build_geometry_infos;
     std::vector<VkAccelerationStructureBuildSizesInfoKHR>    build_sizes_infos;
 
-    build_geometry_infos.reserve(accel_struct_ctx->triangle_geometries.size());
-    build_sizes_infos.reserve(accel_struct_ctx->triangle_geometries.size());
+    build_geometry_infos.reserve(bottom_level_geometries.size());
+    build_sizes_infos.reserve(bottom_level_geometries.size());
 
     uint32_t max_scratch_buf_size = 0;
-    uint32_t as_total_size        = 0;
+    // uint32_t as_total_size        = 0;
 
-    for (size_t i = 0; i < accel_struct_ctx->triangle_geometries.size(); i++) {
-        const VkAccelerationStructureGeometryKHR*       geometry         = &accel_struct_ctx->triangle_geometries[i];
-        const VkAccelerationStructureBuildRangeInfoKHR* build_range_info = &accel_struct_ctx->triangle_build_ranges[i];
+    for (size_t i = 0; i < bottom_level_geometries.size(); i++) {
+        uint32_t                                        offset   = accel_struct_ctx->triangle_geometries.size() - bottom_level_geometries.size() + i;
+        const VkAccelerationStructureGeometryKHR*       geometry = &accel_struct_ctx->triangle_geometries[offset];
+        const VkAccelerationStructureBuildRangeInfoKHR* build_range_info = &accel_struct_ctx->triangle_build_ranges[offset];
 
         VkAccelerationStructureBuildGeometryInfoKHR new_build_geo_info{};
         new_build_geo_info.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
@@ -72,8 +73,9 @@ void accel_struct_ctx_add_triangles_geometry(AccelStructContext* accel_struct_ct
 
         build_sizes_infos.push_back(new_build_sizes_info);
 
+        // TODO: maybe we shouldn't add here, but just record the largest one
         max_scratch_buf_size += new_build_sizes_info.buildScratchSize;
-        as_total_size += new_build_sizes_info.accelerationStructureSize;
+        // as_total_size += new_build_sizes_info.accelerationStructureSize;
     }
 
     AllocatedBuffer scratch_buffer =
@@ -83,7 +85,9 @@ void accel_struct_ctx_add_triangles_geometry(AccelStructContext* accel_struct_ct
     for (size_t i = 0; i < build_geometry_infos.size(); i++) {
         VkAccelerationStructureBuildGeometryInfoKHR*    build_geometry_info = &build_geometry_infos[i];
         const VkAccelerationStructureBuildSizesInfoKHR* build_sizes_info    = &build_sizes_infos[i];
-        const VkAccelerationStructureBuildRangeInfoKHR* build_range_info    = &accel_struct_ctx->triangle_build_ranges[i];
+
+        uint32_t                                        offset = accel_struct_ctx->triangle_geometries.size() - bottom_level_geometries.size() + i;
+        const VkAccelerationStructureBuildRangeInfoKHR* build_range_info = &accel_struct_ctx->triangle_build_ranges[offset];
 
         AllocatedBuffer blas_buffer =
             allocated_buffer_create(allocator, build_sizes_info->accelerationStructureSize,
@@ -114,7 +118,6 @@ void accel_struct_ctx_add_triangles_geometry(AccelStructContext* accel_struct_ct
     }
 
     // create instances to these mesh buffers. each instance can share bottom level structures, while having different transforms;
-    // TODO: it's fucked up here on down. fix it
 
     uint32_t reference_offset = accel_struct_ctx->triangle_geometries.size() - bottom_level_geometries.size();
     for (const auto& ref : instance_refs) {

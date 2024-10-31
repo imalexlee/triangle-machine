@@ -705,16 +705,10 @@ void render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf, std::vector<En
         for (const DrawObject& obj : entity.opaque_objs) {
             record_obj(&obj);
         }
-        VkColorBlendEquationEXT blend_equation = {};
+    }
 
-        blend_equation = {
-            .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
-            .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-            .colorBlendOp        = VK_BLEND_OP_ADD,
-            .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
-            .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
-            .alphaBlendOp        = VK_BLEND_OP_ADD,
-        };
+    for (const auto& entity : entities) {
+        VkColorBlendEquationEXT blend_equation = {};
 
         /*
                 blend_equation = {
@@ -725,8 +719,16 @@ void render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf, std::vector<En
                     .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
                     .alphaBlendOp        = VK_BLEND_OP_ADD,
                 };
-                */
+        */
 
+        blend_equation = {
+            .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+            .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+            .colorBlendOp        = VK_BLEND_OP_ADD,
+            .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+            .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+            .alphaBlendOp        = VK_BLEND_OP_ADD,
+        };
         backend->ext_ctx.vkCmdSetColorBlendEquationEXT(cmd_buf, 0, 1, &blend_equation);
 
         VkBool32 color_blend_enabled[] = {VK_TRUE};

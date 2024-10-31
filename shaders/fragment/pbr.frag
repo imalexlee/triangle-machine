@@ -96,6 +96,5 @@ void main() {
 
     out_color = vec4(final_color.rgb, tex_color.a);
 
-    out_color = vec4(1, 1, 1, 1);
 
 }

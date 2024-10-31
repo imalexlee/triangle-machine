@@ -60,7 +60,10 @@ void engine_init(Engine* engine) {
                              "../assets/gltf/main_sponza/Main1_Sponza/NewSponza_Main_glTF_003.gltf"};
                              */
 
-    std::array gltf_paths = {"../assets/glb/porsche.glb"};
+    std::array gltf_paths = {
+        "../assets/glb/porsche.glb",
+        "../assets/glb/structure.glb",
+    };
     scene_load(&engine->scene, &engine->backend, gltf_paths);
 
     window_register_key_callback(&engine->window, [=](int key, int scancode, int action, int mods) {
