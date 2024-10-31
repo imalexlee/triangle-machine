@@ -1,14 +1,14 @@
-#include "ui.h"
+#include "editor.h"
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_vulkan.h>
 
-void ui_init(UI* ui, VkBackend* backend, GLFWwindow* window) {
-    ui->imgui_ctx = ImGui::CreateContext();
+void editor_init(Editor* editor, VkBackend* backend, GLFWwindow* window) {
+    editor->imgui_ctx = ImGui::CreateContext();
 
-    ui->imgui_io = &ImGui::GetIO();
-    ui->imgui_io->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    editor->imgui_io = &ImGui::GetIO();
+    editor->imgui_io->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
-    ui->imgui_io->ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+    editor->imgui_io->ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
 
     ImGui_ImplGlfw_InitForVulkan(window, true);
 
@@ -17,7 +17,7 @@ void ui_init(UI* ui, VkBackend* backend, GLFWwindow* window) {
     backend_create_imgui_resources(backend);
 }
 
-void ui_update(const VkBackend* backend) {
+void editor_update(const VkBackend* backend) {
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplGlfw_NewFrame();
 
@@ -40,10 +40,18 @@ void ui_update(const VkBackend* backend) {
     ImGui::Render();
 }
 
-void ui_deinit(const UI* ui) {
+void editor_deinit(const Editor* editor) {
 
     ImGui_ImplGlfw_Shutdown();
     ImGui_ImplVulkan_Shutdown();
 
-    ImGui::DestroyContext(ui->imgui_ctx);
+    ImGui::DestroyContext(editor->imgui_ctx);
+}
+
+void editor_key_callback(Editor* editor, int key, int scancode, int action, int mods) {
+    if (action == GLFW_PRESS) {
+        if (key == GLFW_KEY_R) {
+            editor->should_recompile_shaders = true;
+        }
+    }
 }

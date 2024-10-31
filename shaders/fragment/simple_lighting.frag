@@ -44,4 +44,5 @@ void main() {
     }
 
     out_color = vec4(ambient + (1.0 - occlued) * (diffuse + specular), 1.0) * color;
+    //  out_color = vec4(1);
 }

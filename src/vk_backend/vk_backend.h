@@ -86,7 +86,7 @@ struct VkBackend {
     static constexpr uint32_t      texture_desc_binding      = 3;
 };
 
-VkInstance vk_instance_create(const char* app_name, const char* engine_name);
+[[nodiscard]] VkInstance vk_instance_create(const char* app_name, const char* engine_name);
 
 void backend_init(VkBackend* backend, VkInstance instance, VkSurfaceKHR surface, uint32_t width, uint32_t height);
 
@@ -106,6 +106,8 @@ void backend_upload_sky_box_shaders(VkBackend* backend, const std::filesystem::p
                                     const std::string& name);
 
 void backend_upload_sky_box(VkBackend* backend, const uint8_t* texture_data, uint32_t color_channels, uint32_t width, uint32_t height);
+
+void backend_recompile_frag_shader(VkBackend* backend, uint32_t shader_idx);
 
 [[nodiscard]] uint32_t backend_upload_2d_textures(VkBackend* backend, std::vector<TextureSampler>& tex_samplers);
 

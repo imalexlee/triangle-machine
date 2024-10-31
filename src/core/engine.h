@@ -3,7 +3,7 @@
 #include "camera.h"
 #include "scene.h"
 #include "vk_backend/vk_backend.h"
-#include <core/ui.h>
+#include <core/editor.h>
 #include <fastgltf/types.hpp>
 #include <vk_backend/vk_scene.h>
 
@@ -12,7 +12,7 @@ struct Engine {
     Scene     scene{};
     Window    window{};
     Camera    camera{};
-    UI        ui{};
+    Editor    editor{};
 };
 
 void engine_init(Engine* engine);

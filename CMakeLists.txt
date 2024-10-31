@@ -23,7 +23,7 @@ add_executable(
         src/core/window.cpp
         src/core/camera.cpp
         src/core/scene.cpp
-        src/core/ui.cpp
+        src/core/editor.cpp
         src/core/loaders/gltf_loader.cpp
         src/vk_backend/vk_backend.cpp
         src/vk_backend/vk_debug.cpp

@@ -59,7 +59,6 @@ void main() {
 
     PBR_Material mat = material_buf.materials[nonuniformEXT(constants.material_i)];
     vec4 tex_color = mat.color_factors * texture(tex_samplers[nonuniformEXT(mat.color_tex_i)], color_uv);
-    //vec3 color = pow(tex_color.rgb, vec3(2.2));
     vec3 color = tex_color.rgb;
 
     float metallic = mat.metal_factor * texture(tex_samplers[nonuniformEXT(mat.metal_rough_tex_i)], metal_rough_uv).b;
@@ -89,18 +88,14 @@ void main() {
     float specular_denom = 4.0 * n_dot_v * n_dot_l + 0.0001;
     vec3 specular_brdf = specular_nom / specular_denom;
 
-    //vec3 lambert = metallic < 0.5 ? color.rgb : vec3(0);
     vec3 lambert = mix(color.rgb, color.rgb * vec3(0.0001), metallic);
 
     vec3 diffuse_brdf = k_d * color.rgb / PI;
 
     vec3 final_color = (diffuse_brdf + specular_brdf) * light_intensity * n_dot_l;
-    // final_color /= (final_color + vec3(1.0));
-    // final_color = pow(final_color, vec3(1.0 / 2.2));
 
     out_color = vec4(final_color.rgb, tex_color.a);
 
-    //out_color = vec4(vec3(dot(normal, light_dir)), 1);
-
+    out_color = vec4(1, 1, 1, 1);
 
 }

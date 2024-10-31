@@ -428,6 +428,28 @@ VkInstance vk_instance_create(const char* app_name, const char* engine_name) {
     return instance;
 }
 
+void backend_recompile_frag_shader(VkBackend* backend, uint32_t shader_idx) {
+    assert(shader_idx < backend->shader_ctx.frag_shaders.size());
+    VK_CHECK(vkDeviceWaitIdle(backend->device_ctx.logical_device));
+
+    DEBUG_PRINT("recompiling shaders\n");
+    std::array<VkPushConstantRange, 1> push_constant_ranges{{{
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+        .offset     = 0,
+        .size       = sizeof(MeshData),
+    }}};
+
+    std::array set_layouts{
+        backend->scene_desc_set_layout,
+        backend->graphics_desc_set_layout,
+    };
+    Shader* shader = &backend->shader_ctx.frag_shaders[shader_idx];
+
+    shader_ctx_stage_shader(&backend->shader_ctx, shader->path, shader->name, set_layouts, push_constant_ranges, VK_SHADER_STAGE_FRAGMENT_BIT, 0);
+
+    shader_ctx_replace_shader(&backend->shader_ctx, &backend->ext_ctx, backend->device_ctx.logical_device, ShaderType::unlinked, shader_idx);
+}
+
 void backend_upload_grid_shaders(VkBackend* backend, const std::filesystem::path& vert_path, const std::filesystem::path& frag_path,
                                  const std::string& name) {
 
@@ -568,7 +590,7 @@ void backend_draw(VkBackend* backend, std::vector<Entity>& entities, const Scene
 
     render_geometry(backend, cmd_buffer, entities);
 
-    // render_grid(backend, cmd_buffer);
+    render_grid(backend, cmd_buffer);
 
     render_ui(cmd_buffer);
 

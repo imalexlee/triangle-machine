@@ -10,14 +10,17 @@
 
 struct Shader {
     VkShaderEXT           shader = VK_NULL_HANDLE;
-    std::string           name   = "shader";
+    std::string           name   = "unnamed shader";
+    std::string           path;
     VkShaderStageFlagBits stage;
+    VkShaderCreateInfoEXT shader_ci;
 };
 
 struct ShaderBuilder {
-    std::vector<std::string>           names;
     std::vector<VkShaderCreateInfoEXT> create_infos;
     std::vector<std::vector<uint32_t>> spvs;
+    std::vector<std::string>           names;
+    std::vector<std::string>           paths;
 
     shaderc_compile_options_t shader_options{};
     shaderc_compiler_t        compiler{};
@@ -43,3 +46,5 @@ void shader_ctx_stage_shader(ShaderContext* shader_ctx, const std::filesystem::p
                              VkShaderStageFlagBits stage, VkShaderStageFlags next_stage);
 
 void shader_ctx_commit_shaders(ShaderContext* shader_ctx, const ExtContext* ext_ctx, VkDevice device, ShaderType shader_type);
+
+void shader_ctx_replace_shader(ShaderContext* shader_ctx, const ExtContext* ext_ctx, VkDevice device, ShaderType shader_type, uint32_t shader_idx);

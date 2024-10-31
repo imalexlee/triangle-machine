@@ -4,8 +4,8 @@
 #include <GLFW/glfw3.h>
 #include <array>
 #include <core/camera.h>
+#include <core/editor.h>
 #include <core/scene.h>
-#include <core/ui.h>
 #include <core/window.h>
 #include <stb_image.h>
 
@@ -27,9 +27,9 @@ void engine_init(Engine* engine) {
     const VkSurfaceKHR surface  = vk_surface_get(&engine->window, instance);
 
     backend_init(&engine->backend, instance, surface, engine->window.width, engine->window.height);
-    ui_init(&engine->ui, &engine->backend, engine->window.glfw_window);
+    editor_init(&engine->editor, &engine->backend, engine->window.glfw_window);
     backend_upload_vert_shader(&engine->backend, "../shaders/vertex/indexed_draw.vert", "vert shader");
-    backend_upload_frag_shader(&engine->backend, "../shaders/fragment/simple_lighting.frag", "frag shader");
+    backend_upload_frag_shader(&engine->backend, "../shaders/fragment/pbr.frag", "frag shader");
 
     backend_upload_sky_box_shaders(&engine->backend, "../shaders/vertex/skybox.vert", "../shaders/fragment/skybox.frag", "skybox shaders");
 
@@ -65,6 +65,7 @@ void engine_init(Engine* engine) {
 
     window_register_key_callback(&engine->window, [=](int key, int scancode, int action, int mods) {
         camera_key_callback(&engine->camera, key, scancode, action, mods);
+        editor_key_callback(&engine->editor, key, scancode, action, mods);
         // scene_key_callback(&engine->scene, key, action);
     });
 
@@ -79,7 +80,13 @@ void engine_run(Engine* engine) {
         // scene_update(&engine->scene);
         scene_data = camera_update(&engine->camera, engine->window.width, engine->window.height);
 
-        ui_update(&engine->backend);
+        if (engine->editor.should_recompile_shaders) {
+            // TODO: don't hardcode the index
+            backend_recompile_frag_shader(&engine->backend, 1);
+            engine->editor.should_recompile_shaders = false;
+        }
+
+        editor_update(&engine->backend);
         backend_draw(&engine->backend, engine->scene.entities, &scene_data, 0, 0);
     }
 }
@@ -87,7 +94,7 @@ void engine_run(Engine* engine) {
 void engine_deinit(Engine* engine) {
     backend_finish_pending_vk_work(&engine->backend);
 
-    ui_deinit(&engine->ui);
+    editor_deinit(&engine->editor);
     window_deinit(&engine->window);
     backend_deinit(&engine->backend);
 }
