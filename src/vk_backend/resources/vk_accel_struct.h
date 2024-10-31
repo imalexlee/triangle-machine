@@ -22,7 +22,7 @@ struct BottomLevelGeometry {
 
 // god awful
 struct AccelStructContext {
-    VkAccelerationStructureKHR              top_level{};
+    VkAccelerationStructureKHR              top_level = nullptr;
     std::vector<VkAccelerationStructureKHR> bottom_levels;
 
     CommandContext cmd_ctx{};

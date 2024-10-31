@@ -144,6 +144,10 @@ void accel_struct_ctx_add_triangles_geometry(AccelStructContext* accel_struct_ct
 
     const uint32_t instance_buf_bytes = accel_struct_ctx->tlas_instances.size() * sizeof(VkAccelerationStructureInstanceKHR);
 
+    if (accel_struct_ctx->instance_buf.info.size > 0) {
+        allocated_buffer_destroy(allocator, &accel_struct_ctx->instance_buf);
+    }
+
     accel_struct_ctx->instance_buf =
         allocated_buffer_create(allocator, instance_buf_bytes,
                                 VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
@@ -186,6 +190,10 @@ void accel_struct_ctx_add_triangles_geometry(AccelStructContext* accel_struct_ct
                                                  VMA_MEMORY_USAGE_AUTO, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
     }
 
+    if (accel_struct_ctx->tlas_buffer.info.size > 0) {
+        allocated_buffer_destroy(allocator, &accel_struct_ctx->tlas_buffer);
+    }
+
     accel_struct_ctx->tlas_buffer = allocated_buffer_create(
         allocator, instance_build_sizes_info.accelerationStructureSize,
         VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_AUTO, 0);
@@ -216,6 +224,9 @@ void accel_struct_ctx_add_triangles_geometry(AccelStructContext* accel_struct_ct
 
     // TODO: compact tlas
 
+    if (accel_struct_ctx->top_level != nullptr) {
+        ext_ctx->vkDestroyAccelerationStructureKHR(device, accel_struct_ctx->top_level, nullptr);
+    }
     accel_struct_ctx->top_level = tlas;
 
     allocated_buffer_destroy(allocator, &scratch_buffer);

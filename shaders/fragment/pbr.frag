@@ -75,7 +75,7 @@ void main() {
 
     float v_dot_h = max(dot(view_dir, halfway), 0.0);
     float n_dot_v = max(dot(normal, view_dir), 0.0);
-    float n_dot_l = max(dot(normal, l), 0.2);
+    float n_dot_l = max(dot(normal, l), 0.1);
 
     vec3 f = fresnel_schlick(v_dot_h, color.rgb, metallic);
     vec3 k_s = f;
@@ -94,7 +94,22 @@ void main() {
 
     vec3 final_color = (diffuse_brdf + specular_brdf) * light_intensity * n_dot_l;
 
+
     out_color = vec4(final_color.rgb, tex_color.a);
+
+/** rayQueryEXT rq;
+    float infinity = 1.0 / 0;
+    rayQueryInitializeEXT(rq, accel_struct, gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, vert_pos.xyz, 0.1, light_dir, infinity);
+    rayQueryProceedEXT(rq);
+
+    // 1.0 for occluded (in shadow) and 0.0 for not occluded
+    float occlued = 0.0;
+    if (rayQueryGetIntersectionTypeEXT(rq, true) != gl_RayQueryCommittedIntersectionNoneEXT) {
+        // in shadow
+        occlued = 1.0;
+        out_color = vec4(final_color.rgb * vec3(0.2), tex_color.a);
+
+    }*/
 
 
 }
