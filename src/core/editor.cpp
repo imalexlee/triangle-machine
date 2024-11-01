@@ -17,7 +17,7 @@ void editor_init(Editor* editor, VkBackend* backend, GLFWwindow* window) {
     backend_create_imgui_resources(backend);
 }
 
-void editor_update(const VkBackend* backend) {
+void editor_update(Editor* editor, const VkBackend* backend) {
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplGlfw_NewFrame();
 
@@ -34,6 +34,8 @@ void editor_update(const VkBackend* backend) {
     ImGui::Text("Host buffer recording: %.3f us", backend->stats.draw_time);
     ImGui::Text("Frame time: %.3f ms (%.1f FPS)", backend->stats.frame_time, 1000.f / backend->stats.frame_time);
     ImGui::Text("Scene update time: %.3f us", backend->stats.scene_update_time);
+
+    ImGui::InputInt("Entity Selected", &editor->selected_entity);
 
     ImGui::End();
 

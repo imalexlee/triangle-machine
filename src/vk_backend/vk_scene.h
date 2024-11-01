@@ -4,6 +4,7 @@
 #include <vulkan/vulkan_core.h>
 
 struct MeshData {
+    glm::mat4       global_transform{1.f};
     glm::mat4       local_transform{1.f};
     VkDeviceAddress vertex_buffer_address{};
     uint32_t        mat_i{0};
@@ -23,5 +24,6 @@ struct Entity {
 };
 
 struct EntityPushConstants {
-    glm::vec3 pos{};
+    // glm::vec3 pos{};
+    glm::mat4 global_transform{1.f};
 };

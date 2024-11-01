@@ -5,7 +5,7 @@
 #include "vk_command.h"
 
 // contains per-frame shader information
-struct SceneData {
+struct WorldData {
     glm::mat4 view{1.f};
     glm::mat4 proj{1.f};
     glm::vec4 cam_pos{};

@@ -61,7 +61,7 @@ void camera_cursor_callback(Camera* cam, double x_pos, double y_pos) {
 using namespace std::chrono;
 static auto start_time = high_resolution_clock::now();
 
-SceneData camera_update(Camera* cam, uint32_t window_width, uint32_t window_height) {
+WorldData camera_update(Camera* cam, uint32_t window_width, uint32_t window_height) {
     auto  time_duration = duration_cast<duration<float>>(high_resolution_clock::now() - start_time);
     float time_elapsed  = time_duration.count();
 
@@ -83,7 +83,7 @@ SceneData camera_update(Camera* cam, uint32_t window_width, uint32_t window_heig
 
     projection[1][1] *= -1;
 
-    SceneData scene_data{};
+    WorldData scene_data{};
     scene_data.view    = cam->view;
     scene_data.proj    = projection;
     scene_data.cam_pos = cam->position;

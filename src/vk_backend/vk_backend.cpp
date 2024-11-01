@@ -51,7 +51,7 @@ static VkShaderModule load_shader_module(const VkBackend* backend, std::span<uin
 // state update
 static void resize(VkBackend* backend);
 static void set_render_state(VkBackend* backend, VkCommandBuffer cmd_buf);
-static void set_scene_data(const VkBackend* backend, const SceneData* scene_data);
+static void set_scene_data(const VkBackend* backend, const WorldData* scene_data);
 // rendering
 void        render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf, std::vector<Entity>& entities);
 static void render_ui(VkCommandBuffer cmd_buf);
@@ -88,7 +88,7 @@ void backend_init(VkBackend* backend, VkInstance instance, VkSurfaceKHR surface,
         Frame* frame = &backend->frames[i];
         frame_init(frame, backend->device_ctx.logical_device, backend->allocator, backend->device_ctx.queues.graphics_family_index);
         backend->scene_data_buffers[i] =
-            allocated_buffer_create(backend->allocator, sizeof(SceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_AUTO,
+            allocated_buffer_create(backend->allocator, sizeof(WorldData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_AUTO,
                                     VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
     }
 
@@ -141,17 +141,17 @@ static void create_compute_resources(VkBackend* backend) {
     // TODO: create resources
 }
 
-void set_scene_data(const VkBackend* backend, const SceneData* scene_data) {
+void set_scene_data(const VkBackend* backend, const WorldData* scene_data) {
     uint32_t curr_frame_idx = get_curr_frame_idx(backend);
     assert(scene_data);
     assert(curr_frame_idx < backend->scene_data_buffers.size());
     VkDescriptorSet        curr_scene_desc_set = backend->scene_desc_sets[curr_frame_idx];
     const AllocatedBuffer* curr_scene_buf      = &backend->scene_data_buffers[curr_frame_idx];
 
-    VK_CHECK(vmaCopyMemoryToAllocation(backend->allocator, scene_data, curr_scene_buf->allocation, 0, sizeof(SceneData)));
+    VK_CHECK(vmaCopyMemoryToAllocation(backend->allocator, scene_data, curr_scene_buf->allocation, 0, sizeof(WorldData)));
 
     DescriptorWriter desc_writer{};
-    desc_writer_write_buffer_desc(&desc_writer, 0, curr_scene_buf->buffer, sizeof(SceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    desc_writer_write_buffer_desc(&desc_writer, 0, curr_scene_buf->buffer, sizeof(WorldData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
     desc_writer_update_desc_set(&desc_writer, backend->device_ctx.logical_device, curr_scene_desc_set);
 }
 
@@ -193,11 +193,13 @@ void create_pipeline_layouts(VkBackend* backend) {
 
     std::array set_layouts = {backend->scene_desc_set_layout, backend->graphics_desc_set_layout};
 
-    std::array<VkPushConstantRange, 1> push_constant_ranges = {{{
-        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-        .offset     = 0,
-        .size       = sizeof(MeshData),
-    }}};
+    std::array push_constant_ranges = {
+        VkPushConstantRange{
+                            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                            .offset     = 0,
+                            .size       = sizeof(MeshData),
+                            }
+    };
 
     backend->geometry_pipeline_layout = vk_pipeline_layout_create(backend->device_ctx.logical_device, set_layouts, push_constant_ranges, 0);
 
@@ -433,11 +435,13 @@ void backend_recompile_frag_shader(VkBackend* backend, uint32_t shader_idx) {
     VK_CHECK(vkDeviceWaitIdle(backend->device_ctx.logical_device));
 
     DEBUG_PRINT("recompiling shaders\n");
-    std::array<VkPushConstantRange, 1> push_constant_ranges{{{
-        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-        .offset     = 0,
-        .size       = sizeof(MeshData),
-    }}};
+    std::array push_constant_ranges = {
+        VkPushConstantRange{
+                            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                            .offset     = 0,
+                            .size       = sizeof(MeshData),
+                            }
+    };
 
     std::array set_layouts{
         backend->scene_desc_set_layout,
@@ -469,11 +473,13 @@ void backend_upload_grid_shaders(VkBackend* backend, const std::filesystem::path
 void backend_upload_vert_shader(VkBackend* backend, const std::filesystem::path& file_path, const std::string& name) {
     ShaderBuilder builder;
 
-    std::array<VkPushConstantRange, 1> push_constant_ranges{{{
-        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-        .offset     = 0,
-        .size       = sizeof(MeshData),
-    }}};
+    std::array push_constant_ranges = {
+        VkPushConstantRange{
+                            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                            .offset     = 0,
+                            .size       = sizeof(MeshData),
+                            }
+    };
 
     std::array set_layouts{
         backend->scene_desc_set_layout,
@@ -492,11 +498,13 @@ void backend_upload_vert_shader(VkBackend* backend, const std::filesystem::path&
 void backend_upload_frag_shader(VkBackend* backend, const std::filesystem::path& file_path, const std::string& name) {
     ShaderBuilder builder;
 
-    std::array<VkPushConstantRange, 1> push_constant_ranges{{{
-        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-        .offset     = 0,
-        .size       = sizeof(MeshData),
-    }}};
+    std::array push_constant_ranges = {
+        VkPushConstantRange{
+                            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                            .offset     = 0,
+                            .size       = sizeof(MeshData),
+                            }
+    };
 
     std::array set_layouts{
         backend->scene_desc_set_layout,
@@ -550,7 +558,7 @@ std::vector<const char*> get_instance_extensions() {
     return extensions;
 }
 
-void backend_draw(VkBackend* backend, std::vector<Entity>& entities, const SceneData* scene_data, size_t vert_shader, size_t frag_shader) {
+void backend_draw(VkBackend* backend, std::vector<Entity>& entities, const WorldData* scene_data, size_t vert_shader, size_t frag_shader) {
     auto start_frame_time = system_clock::now();
 
     Frame*          current_frame = &backend->frames[get_curr_frame_idx(backend)];

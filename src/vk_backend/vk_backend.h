@@ -77,7 +77,7 @@ struct VkBackend {
     std::array<AllocatedBuffer, 3> scene_data_buffers{};
     uint64_t                       frame_num{1};
     std::array<Frame, 3>           frames{};
-    SceneData                      scene_data{};
+    WorldData                      scene_data{};
     ExtContext                     ext_ctx{};
     DeletionQueue                  deletion_queue{};
     static constexpr uint32_t      material_desc_binding     = 0;
@@ -94,7 +94,7 @@ void backend_finish_pending_vk_work(const VkBackend* backend);
 
 void backend_deinit(VkBackend* backend);
 
-void backend_draw(VkBackend* backend, std::vector<Entity>& entities, const SceneData* scene_data, size_t vert_shader, size_t frag_shader);
+void backend_draw(VkBackend* backend, std::vector<Entity>& entities, const WorldData* scene_data, size_t vert_shader, size_t frag_shader);
 
 void backend_create_imgui_resources(VkBackend* backend);
 

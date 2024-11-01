@@ -7,6 +7,7 @@
 struct Editor {
     ImGuiContext* imgui_ctx{};
     ImGuiIO*      imgui_io{};
+    int           selected_entity{};
     // Notifies consumer of user requesting recompilation but doesn't mandate it.
     // Therefore, this flag should be turned off by the consumer once/if it's handled.
     bool should_recompile_shaders;
@@ -14,7 +15,7 @@ struct Editor {
 
 void editor_init(Editor* editor, VkBackend* backend, GLFWwindow* window);
 
-void editor_update(const VkBackend* backend);
+void editor_update(Editor* editor, const VkBackend* backend);
 
 void editor_deinit(const Editor* editor);
 
