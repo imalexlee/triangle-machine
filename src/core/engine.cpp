@@ -61,7 +61,7 @@ void engine_init(Engine* engine) {
                              */
 
     std::array gltf_paths = {
-        "../assets/glb/porsche.glb",
+        // "../assets/glb/porsche.glb",
         "../assets/glb/structure.glb",
     };
     scene_load(&engine->scene, &engine->backend, gltf_paths);
@@ -73,6 +73,11 @@ void engine_init(Engine* engine) {
     });
 
     window_register_cursor_callback(&engine->window, [=](double x_pos, double y_pos) { camera_cursor_callback(&engine->camera, x_pos, y_pos); });
+
+    /*
+    window_register_resize_callback(
+        &engine->window, [=](int window_width, int window_height) { editor_resize_callback(&engine->editor, window_width, window_height); });
+    */
 }
 
 void engine_run(Engine* engine) {
@@ -88,9 +93,18 @@ void engine_run(Engine* engine) {
             engine->editor.should_recompile_shaders = false;
         }
 
-        editor_update(&engine->editor, &engine->backend);
+        editor_update(&engine->editor, &engine->backend, &engine->window);
         scene_update(&engine->scene, &engine->editor);
 
+        if (engine->editor.ui_resized) {
+            RenderArea render_area{};
+            render_area.top_left.x           = engine->editor.window_width;
+            render_area.scissor_dimensions.x = engine->window.width - engine->editor.window_width;
+            render_area.scissor_dimensions.y = engine->window.height;
+
+            backend_update_render_area(&engine->backend, &render_area);
+            engine->editor.ui_resized = false;
+        }
         backend_draw(&engine->backend, engine->scene.entities, &world_data, 0, 0);
     }
 }

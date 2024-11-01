@@ -32,6 +32,12 @@ struct ShaderIndices {
     uint16_t sky_box_frag{};
 };
 
+struct RenderArea {
+    glm::vec2 top_left{0};
+    // {width, height}
+    glm::vec2 scissor_dimensions{0};
+};
+
 struct VkBackend {
     VkInstance                     instance;
     VkSurfaceKHR                   surface;
@@ -52,6 +58,7 @@ struct VkBackend {
     VkPipelineLayout               sky_box_pipeline_layout;
     VkPipelineLayout               grid_pipeline_layout;
     VmaAllocator                   allocator{};
+    RenderArea                     render_area{};
     DescriptorAllocator            scene_desc_allocator{};
     DescriptorAllocator            graphics_desc_allocator{};
     DeviceContext                  device_ctx{};
@@ -97,6 +104,8 @@ void backend_deinit(VkBackend* backend);
 void backend_draw(VkBackend* backend, std::vector<Entity>& entities, const WorldData* scene_data, size_t vert_shader, size_t frag_shader);
 
 void backend_create_imgui_resources(VkBackend* backend);
+
+void backend_update_render_area(VkBackend* backend, const RenderArea* render_area);
 
 void backend_upload_vert_shader(VkBackend* backend, const std::filesystem::path& file_path, const std::string& name);
 

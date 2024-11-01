@@ -2,8 +2,6 @@
 
 #include "loaders/gltf_loader.h"
 
-#include <fmt/base.h>
-
 void scene_load(Scene* scene, VkBackend* backend, std::span<const char*> gltf_paths) {
     scene->entities.reserve(gltf_paths.size());
     for (const auto& path : gltf_paths) {

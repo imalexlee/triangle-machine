@@ -8,6 +8,7 @@
 #include <vk_backend/vk_debug.h>
 
 static void cursor_callback(GLFWwindow* window, double x_pos, double y_pos);
+static void resize_callback(GLFWwindow* window, int width, int height);
 static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
 static void error_callback(int error, const char* description);
 
@@ -42,6 +43,7 @@ void window_init(Window* window, uint32_t width, uint32_t height, const char* ti
     glfwSetErrorCallback(error_callback);
     glfwSetKeyCallback(window->glfw_window, key_callback);
     glfwSetCursorPosCallback(window->glfw_window, cursor_callback);
+    glfwSetWindowSizeCallback(window->glfw_window, resize_callback);
 }
 
 void window_deinit(const Window* window) {
@@ -60,6 +62,8 @@ void window_register_key_callback(Window* window, std::function<void(int, int, i
 
 void window_register_cursor_callback(Window* window, std::function<void(double, double)>&& fn_ptr) { window->cursor_callbacks.push_back(fn_ptr); }
 
+void window_register_resize_callback(Window* window, std::function<void(int, int)>&& fn_ptr) { window->resize_callbacks.push_back(fn_ptr); }
+
 void key_callback(GLFWwindow* window, int key, [[maybe_unused]] int scancode, int action, [[maybe_unused]] int mods) {
 
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
@@ -75,6 +79,14 @@ void cursor_callback([[maybe_unused]] GLFWwindow* window, double x_pos, double y
     for (auto& callback : Window::cursor_callbacks) {
         callback(x_pos, y_pos);
     }
+}
+
+static void resize_callback([[maybe_unused]] GLFWwindow* window, int width, int height) {
+    for (auto& callback : Window::resize_callbacks) {
+        callback(width, height);
+    }
+    Window::width  = width;
+    Window::height = height;
 }
 
 void error_callback([[maybe_unused]] int error, const char* description) { fmt::println("GLFW errow: {}", description); }

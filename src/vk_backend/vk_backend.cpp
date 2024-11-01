@@ -95,6 +95,11 @@ void backend_init(VkBackend* backend, VkInstance instance, VkSurfaceKHR surface,
     backend->image_extent.width  = width;
     backend->image_extent.height = height;
 
+    RenderArea initial_render_area{};
+    initial_render_area.scissor_dimensions = glm::vec2{width, height};
+
+    backend->render_area = initial_render_area;
+
     backend->color_resolve_image = allocated_image_create(backend->device_ctx.logical_device, backend->allocator,
                                                           VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
                                                           VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
@@ -379,6 +384,7 @@ void backend_create_imgui_resources(VkBackend* backend) {
 
     ImGui_ImplVulkan_Init(&init_info);
 }
+void backend_update_render_area(VkBackend* backend, const RenderArea* render_area) { backend->render_area = *render_area; }
 
 void create_allocator(VkBackend* backend) {
     VmaAllocatorCreateInfo allocator_info{};
@@ -660,6 +666,9 @@ void resize(VkBackend* backend) {
     backend->image_extent.width  = backend->swapchain_context.extent.width;
     backend->image_extent.height = backend->swapchain_context.extent.height;
 
+    backend->render_area.scissor_dimensions.x += backend->image_extent.width - backend->render_area.scissor_dimensions.x;
+    backend->render_area.scissor_dimensions.y += backend->image_extent.height - backend->render_area.scissor_dimensions.y;
+
     allocated_image_destroy(backend->device_ctx.logical_device, backend->allocator, &backend->color_resolve_image);
     backend->color_resolve_image = allocated_image_create(backend->device_ctx.logical_device, backend->allocator,
                                                           VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
@@ -798,9 +807,17 @@ void set_render_state(VkBackend* backend, VkCommandBuffer cmd_buf) {
     viewport.minDepth = 0.0f;
     viewport.maxDepth = 1.0f;
 
+    VkExtent2D scissor_extent{};
+    scissor_extent.width  = backend->render_area.scissor_dimensions.x;
+    scissor_extent.height = backend->render_area.scissor_dimensions.y;
+
+    VkOffset2D scissor_offset{};
+    scissor_offset.x = backend->render_area.top_left.x;
+    scissor_offset.y = backend->render_area.top_left.y;
+
     VkRect2D scissor{};
-    scissor.extent = backend->image_extent;
-    scissor.offset = {0, 0};
+    scissor.extent = scissor_extent;
+    scissor.offset = scissor_offset;
 
     vkCmdSetViewportWithCount(cmd_buf, 1, &viewport);
 

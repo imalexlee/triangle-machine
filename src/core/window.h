@@ -7,10 +7,10 @@
 #include <vulkan/vulkan_core.h>
 
 struct Window {
-    GLFWwindow* glfw_window{};
-    const char* title{};
-    uint32_t    width{};
-    uint32_t    height{};
+    GLFWwindow*            glfw_window{};
+    const char*            title{};
+    static inline uint32_t width{};
+    static inline uint32_t height{};
 
     static inline std::vector<std::function<void(int, int, int, int)>> key_callbacks;
     static inline std::vector<std::function<void(double, double)>>     cursor_callbacks;
@@ -26,3 +26,5 @@ void window_deinit(const Window* window);
 void window_register_key_callback(Window* window, std::function<void(int, int, int, int)>&& fn_ptr);
 
 void window_register_cursor_callback(Window* window, std::function<void(double, double)>&& fn_ptr);
+
+void window_register_resize_callback(Window* window, std::function<void(int, int)>&& fn_ptr);
