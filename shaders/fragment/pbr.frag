@@ -59,6 +59,7 @@ void main() {
 
     PBR_Material mat = material_buf.materials[nonuniformEXT(constants.material_i)];
     vec4 tex_color = mat.color_factors * texture(tex_samplers[nonuniformEXT(mat.color_tex_i)], color_uv);
+    //tex_color = pow(tex_color, vec4(1 / 2.2));
     vec3 color = tex_color.rgb;
 
     float metallic = mat.metal_factor * texture(tex_samplers[nonuniformEXT(mat.metal_rough_tex_i)], metal_rough_uv).b;
@@ -95,7 +96,8 @@ void main() {
     vec3 final_color = (diffuse_brdf + specular_brdf) * light_intensity * n_dot_l;
 
 
-    out_color = vec4(final_color.rgb, tex_color.a);
+
+    out_color = vec4(final_color, tex_color.a);
 
     rayQueryEXT rq;
     float infinity = 1.0 / 0;

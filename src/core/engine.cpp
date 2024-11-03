@@ -61,7 +61,7 @@ void engine_init(Engine* engine) {
                              */
 
     std::array gltf_paths = {
-        //"../assets/glb/porsche.glb",
+        "../assets/glb/porsche.glb",
         "../assets/glb/structure.glb",
     };
     scene_load(&engine->scene, &engine->backend, gltf_paths);

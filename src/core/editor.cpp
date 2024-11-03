@@ -12,8 +12,9 @@
 void editor_init(Editor* editor, VkBackend* backend, GLFWwindow* window) {
     editor->imgui_ctx = ImGui::CreateContext();
 
-    editor->imgui_io              = &ImGui::GetIO();
-    editor->imgui_io->ConfigFlags = ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NavEnableGamepad | ImGuiConfigFlags_DockingEnable;
+    editor->imgui_io = &ImGui::GetIO();
+    editor->imgui_io->ConfigFlags =
+        ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NavEnableGamepad | ImGuiConfigFlags_DockingEnable | ImGuiConfigFlags_IsSRGB;
 
     ImGui_ImplGlfw_InitForVulkan(window, true);
 
@@ -45,8 +46,25 @@ void editor_update_viewport(Editor* editor, const VkBackend* backend, const Wind
     editor->viewport_width  = viewport_panel_size.x;
     editor->viewport_height = viewport_panel_size.y;
 
-    bool yeah = true;
-    ImGui::ShowDemoWindow(&yeah);
+    // bool yeah = true;
+    // ImGui::ShowDemoWindow(&yeah);
+
+    if (editor->selected_entity >= 0) {
+
+        Entity* entity = &scene->entities[editor->selected_entity];
+
+        if (ImGuizmo::IsUsing()) {
+            scene_request_update(scene);
+        }
+        ImGuizmo::SetOrthographic(false);
+        ImGuizmo::SetDrawlist();
+
+        float window_width  = (float)ImGui::GetWindowWidth();
+        float window_height = (float)ImGui::GetWindowHeight();
+        ImGuizmo::SetRect(ImGui::GetWindowPos().x, ImGui::GetWindowPos().y, window_width, window_height);
+        ImGuizmo::Manipulate(glm::value_ptr(camera->view), glm::value_ptr(camera->proj), ImGuizmo::OPERATION::TRANSLATE, ImGuizmo::WORLD,
+                             glm::value_ptr(entity->transform));
+    }
 
     editor->imgui_io = &ImGui::GetIO();
 

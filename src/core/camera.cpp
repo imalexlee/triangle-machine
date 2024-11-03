@@ -78,7 +78,7 @@ WorldData camera_update(Camera* cam, uint32_t viewport_width, uint32_t viewport_
     cam->view      = cam_rotation * cam_translation;
     cam->direction = cam_rotation * glm::vec4{0, 0, -1.f, 0};
 
-    cam->proj = glm::perspective(glm::radians(55.f), static_cast<float>(viewport_width) / static_cast<float>(viewport_height), 10000.0f, 0.1f);
+    cam->proj = glm::perspective(glm::radians(45.f), static_cast<float>(viewport_width) / static_cast<float>(viewport_height), 10000.0f, 0.1f);
     cam->proj[1][1] *= -1; // correcting for Vulkans inverted Y coordinate
 
     WorldData scene_data{};

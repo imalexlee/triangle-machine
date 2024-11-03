@@ -116,7 +116,7 @@ void backend_init(VkBackend* backend, VkInstance instance, VkSurfaceKHR surface,
     for (size_t i = 0; i < backend->swapchain_context.images.size(); i++) {
         AllocatedImage new_viewport_image = allocated_image_create(backend->device_ctx.logical_device, backend->allocator,
                                                                    VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                                                                   VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R8G8B8A8_SRGB, 1);
+                                                                   VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
         backend->viewport_images.push_back(new_viewport_image);
     }
 
@@ -326,13 +326,10 @@ void configure_render_resources(VkBackend* backend) {
     backend->scene_rendering_info =
         vk_rendering_info_create(&backend->scene_color_attachment, &backend->scene_depth_attachment, backend->image_extent);
 
-    backend->ui_color_attachment = vk_color_attachment_info_create(backend->color_resolve_image.image_view, nullptr, VK_ATTACHMENT_LOAD_OP_LOAD,
-                                                                   VK_ATTACHMENT_STORE_OP_DONT_CARE);
+    backend->ui_color_attachment =
+        vk_color_attachment_info_create(backend->color_resolve_image.image_view, nullptr, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_STORE_OP_STORE);
 
-    backend->ui_depth_attachment =
-        vk_depth_attachment_info_create(backend->depth_image.image_view, VK_ATTACHMENT_LOAD_OP_DONT_CARE, VK_ATTACHMENT_STORE_OP_DONT_CARE);
-
-    backend->ui_rendering_info = vk_rendering_info_create(&backend->scene_color_attachment, &backend->scene_depth_attachment, backend->image_extent);
+    backend->ui_rendering_info = vk_rendering_info_create(&backend->ui_color_attachment, nullptr, backend->image_extent);
 }
 
 void create_default_data(VkBackend* backend) {
@@ -391,7 +388,7 @@ void backend_create_imgui_resources(VkBackend* backend) {
 
     VkPipelineRenderingCreateInfoKHR pipeline_info{};
     pipeline_info.sType                   = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
-    pipeline_info.pColorAttachmentFormats = &backend->color_image.image_format;
+    pipeline_info.pColorAttachmentFormats = &backend->color_resolve_image.image_format;
     pipeline_info.colorAttachmentCount    = 1;
     pipeline_info.depthAttachmentFormat   = backend->depth_image.image_format;
 
@@ -405,7 +402,7 @@ void backend_create_imgui_resources(VkBackend* backend) {
     init_info.ImageCount                  = 3;
     init_info.UseDynamicRendering         = true;
     init_info.PipelineRenderingCreateInfo = pipeline_info;
-    init_info.MSAASamples                 = static_cast<VkSampleCountFlagBits>(backend->device_ctx.raster_samples);
+    init_info.MSAASamples                 = VK_SAMPLE_COUNT_1_BIT;
 
     ImGui_ImplVulkan_Init(&init_info);
 
@@ -636,7 +633,7 @@ void backend_draw(VkBackend* backend, std::vector<Entity>& entities, const World
 
     render_geometry(backend, cmd_buffer, entities);
 
-    render_grid(backend, cmd_buffer);
+    // render_grid(backend, cmd_buffer);
 
     vkCmdEndRendering(cmd_buffer);
 
@@ -737,7 +734,7 @@ void resize(VkBackend* backend) {
         allocated_image_destroy(backend->device_ctx.logical_device, backend->allocator, &backend->viewport_images[i]);
         AllocatedImage new_viewport_image = allocated_image_create(backend->device_ctx.logical_device, backend->allocator,
                                                                    VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                                                                   VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R8G8B8A8_SRGB, 1);
+                                                                   VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
         backend->viewport_images[i]       = new_viewport_image;
     }
 
@@ -807,8 +804,8 @@ void render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf, std::vector<En
             .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
             .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
             .colorBlendOp        = VK_BLEND_OP_ADD,
-            .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
-            .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+            .srcAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+            .dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
             .alphaBlendOp        = VK_BLEND_OP_ADD,
         };
         backend->ext_ctx.vkCmdSetColorBlendEquationEXT(cmd_buf, 0, 1, &blend_equation);
