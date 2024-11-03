@@ -75,24 +75,16 @@ WorldData camera_update(Camera* cam, uint32_t window_width, uint32_t window_heig
     glm::mat4 cam_translation = glm::translate(glm::mat4{1.f}, glm::vec3(cam->position));
 
     cam->position += glm::vec4(cam->velocity * time_elapsed, 0.f) * cam_rotation;
-    cam->view = cam_rotation * cam_translation;
-    // cam->view      = glm::mat4(glm::mat3(cam->view));
+    cam->view      = cam_rotation * cam_translation;
     cam->direction = cam_rotation * glm::vec4{0, 0, -1.f, 0};
 
-    glm::mat4 projection = glm::perspective(glm::radians(60.f), static_cast<float>(window_width) / static_cast<float>(window_height), 10000.0f, 0.1f);
-
-    projection[1][1] *= -1;
+    cam->proj = glm::perspective(glm::radians(60.f), static_cast<float>(window_width) / static_cast<float>(window_height), 10000.0f, 0.1f);
+    cam->proj[1][1] *= -1; // correcting for Vulkans inverted Y coordinate
 
     WorldData scene_data{};
     scene_data.view    = cam->view;
-    scene_data.proj    = projection;
+    scene_data.proj    = cam->proj;
     scene_data.cam_pos = cam->position;
-
-    // auto end_time = system_clock::now();
-    // auto dur      = duration<float>(end_time - start_time);
-    // if (backend->frame_num % 60 == 0) {
-    //     backend->stats.scene_update_time = duration_cast<nanoseconds>(dur).count() / 1000.f;
-    // }
 
     start_time = high_resolution_clock::now();
     return scene_data;

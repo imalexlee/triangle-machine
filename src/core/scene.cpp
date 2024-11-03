@@ -10,7 +10,7 @@ void scene_load(Scene* scene, VkBackend* backend, std::span<const char*> gltf_pa
 }
 
 void scene_key_callback(Scene* scene, int key, int action) {
-    if (action == GLFW_PRESS) {
+    /*if (action == GLFW_PRESS) {
         if (key == GLFW_KEY_UP) {
             scene->velocity.z = -scene->movement_speed;
         }
@@ -41,8 +41,10 @@ void scene_key_callback(Scene* scene, int key, int action) {
         if (scene->velocity == glm::vec3(0)) {
             scene->update_requested = false;
         }
-    }
+    }*/
 }
+
+void scene_request_update(Scene* scene) { scene->update_requested = true; }
 
 using namespace std::chrono;
 static auto start_time = high_resolution_clock::now();
@@ -57,15 +59,16 @@ void scene_update(Scene* scene, const Editor* editor) {
     float time_elapsed  = time_duration.count();
 
     Entity* curr_entity = &scene->entities[editor->selected_entity];
-    curr_entity->pos += scene->velocity * time_elapsed;
 
     glm::mat4 translation = glm::translate(glm::mat4{1.f}, scene->velocity * time_elapsed);
+    curr_entity->transform *= translation;
     for (DrawObject& obj : curr_entity->opaque_objs) {
         obj.mesh_data.global_transform *= translation;
     }
     for (DrawObject& obj : curr_entity->transparent_objs) {
         obj.mesh_data.global_transform *= translation;
     }
+    scene->velocity = glm::vec3(0);
 
     start_time = high_resolution_clock::now();
 }

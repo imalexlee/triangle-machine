@@ -16,6 +16,7 @@
 [submodule "thirdparty/imgui"]
 	path = thirdparty/imgui
 	url = https://github.com/ocornut/imgui.git
+	branch = docking
 [submodule "thirdparty/taskflow"]
 	path = thirdparty/taskflow
 	url = https://github.com/taskflow/taskflow.git
@@ -25,3 +26,6 @@
 [submodule "thirdparty/shaderc"]
 	path = thirdparty/shaderc
 	url = https://github.com/google/shaderc.git
+[submodule "thirdparty/ImGuizmo"]
+	path = thirdparty/ImGuizmo
+	url = https://github.com/CedricGuillemet/ImGuizmo.git

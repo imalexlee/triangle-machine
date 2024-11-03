@@ -61,7 +61,7 @@ void engine_init(Engine* engine) {
                              */
 
     std::array gltf_paths = {
-        // "../assets/glb/porsche.glb",
+        //"../assets/glb/porsche.glb",
         "../assets/glb/structure.glb",
     };
     scene_load(&engine->scene, &engine->backend, gltf_paths);
@@ -93,8 +93,7 @@ void engine_run(Engine* engine) {
             engine->editor.should_recompile_shaders = false;
         }
 
-        editor_update(&engine->editor, &engine->backend, &engine->window);
-        scene_update(&engine->scene, &engine->editor);
+        editor_update(&engine->editor, &engine->backend, &engine->window, &engine->camera, &engine->scene);
 
         if (engine->editor.ui_resized) {
             RenderArea render_area{};
@@ -105,6 +104,7 @@ void engine_run(Engine* engine) {
             backend_update_render_area(&engine->backend, &render_area);
             engine->editor.ui_resized = false;
         }
+        scene_update(&engine->scene, &engine->editor);
         backend_draw(&engine->backend, engine->scene.entities, &world_data, 0, 0);
     }
 }

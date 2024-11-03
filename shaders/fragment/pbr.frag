@@ -97,7 +97,7 @@ void main() {
 
     out_color = vec4(final_color.rgb, tex_color.a);
 
-/** rayQueryEXT rq;
+    rayQueryEXT rq;
     float infinity = 1.0 / 0;
     rayQueryInitializeEXT(rq, accel_struct, gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, vert_pos.xyz, 0.1, light_dir, infinity);
     rayQueryProceedEXT(rq);
@@ -109,7 +109,7 @@ void main() {
         occlued = 1.0;
         out_color = vec4(final_color.rgb * vec3(0.2), tex_color.a);
 
-    }*/
+    }
 
 
 }

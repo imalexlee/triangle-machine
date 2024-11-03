@@ -44,6 +44,9 @@ add_executable(
         src/vk_backend/vk_ext.h
         src/vk_backend/resources/vk_accel_struct.cpp
         src/vk_backend/resources/vk_accel_struct.h
+
+        thirdparty/ImGuizmo/ImGuizmo.cpp
+        thirdparty/ImGuizmo/ImGuizmo.h
 )
 
 target_compile_options(
@@ -74,6 +77,7 @@ target_include_directories(
         ${PROJECT_NAME} SYSTEM
         PRIVATE src
         PRIVATE thirdparty/glm
+        PRIVATE thirdparty/ImGuizmo
         PRIVATE thirdparty/glfw/include
         PRIVATE thirdparty/fmt/include
         PRIVATE thirdparty/stb_image

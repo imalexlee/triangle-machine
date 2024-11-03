@@ -23,15 +23,17 @@ VkRenderingInfo vk_rendering_info_create(const VkRenderingAttachmentInfo* color_
 VkRenderingAttachmentInfo vk_color_attachment_info_create(VkImageView view, const VkClearValue* clear, VkAttachmentLoadOp load_op,
                                                           VkAttachmentStoreOp store_op, VkImageView resolve_img_view) {
     VkRenderingAttachmentInfo color_attachment{};
-    color_attachment.sType              = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    color_attachment.pNext              = nullptr;
-    color_attachment.imageView          = view;
-    color_attachment.imageLayout        = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    color_attachment.loadOp             = load_op;
-    color_attachment.storeOp            = store_op;
-    color_attachment.resolveMode        = VK_RESOLVE_MODE_AVERAGE_BIT;
-    color_attachment.resolveImageView   = resolve_img_view;
-    color_attachment.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    color_attachment.sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+    color_attachment.pNext       = nullptr;
+    color_attachment.imageView   = view;
+    color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    color_attachment.loadOp      = load_op;
+    color_attachment.storeOp     = store_op;
+    if (resolve_img_view) {
+        color_attachment.resolveMode        = VK_RESOLVE_MODE_AVERAGE_BIT;
+        color_attachment.resolveImageView   = resolve_img_view;
+        color_attachment.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    }
 
     if (clear) {
         color_attachment.clearValue = *clear;

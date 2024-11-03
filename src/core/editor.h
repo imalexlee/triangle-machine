@@ -11,7 +11,7 @@ struct Editor {
     ImGuiIO*      imgui_io{};
     ImGuiStyle*   imgui_style{};
     ImDrawData*   imgui_draw_data{};
-    int           selected_entity{};
+    int           selected_entity{-1};
     int           window_width{};
     // Notifies consumer of user requesting recompilation but doesn't mandate it.
     // Therefore, this flag should be turned off by the consumer once/if it's handled.
@@ -21,7 +21,7 @@ struct Editor {
 
 void editor_init(Editor* editor, VkBackend* backend, GLFWwindow* window);
 
-void editor_update(Editor* editor, const VkBackend* backend, const Window* window);
+void editor_update(Editor* editor, const VkBackend* backend, const Window* window, const struct Camera* camera, struct Scene* scene);
 
 void editor_deinit(const Editor* editor);
 

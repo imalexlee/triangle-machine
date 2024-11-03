@@ -17,6 +17,8 @@ struct Scene {
 
 void scene_load(Scene* scene, VkBackend* backend, std::span<const char*> gltf_paths);
 
+void scene_request_update(Scene* scene);
+
 void scene_update(Scene* scene, const Editor* editor);
 
 void scene_key_callback(Scene* scene, int key, int action);

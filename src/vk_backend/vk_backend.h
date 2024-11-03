@@ -47,6 +47,8 @@ struct VkBackend {
     VkRenderingAttachmentInfo      scene_depth_attachment;
     VkRenderingInfo                scene_rendering_info;
     VkDescriptorPool               imm_descriptor_pool;
+    std::vector<VkDescriptorSet>   viewport_desc_sets;
+    std::vector<AllocatedImage>    viewport_images;
     VkFence                        imm_fence;
     VkSampler                      default_linear_sampler;
     VkSampler                      default_nearest_sampler;
@@ -83,6 +85,7 @@ struct VkBackend {
     AllocatedBuffer                sky_box_vert_buffer{};
     std::array<AllocatedBuffer, 3> scene_data_buffers{};
     uint64_t                       frame_num{1};
+    uint8_t                        current_frame_i{};
     std::array<Frame, 3>           frames{};
     WorldData                      scene_data{};
     ExtContext                     ext_ctx{};
