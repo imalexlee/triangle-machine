@@ -85,7 +85,7 @@ void engine_run(Engine* engine) {
     while (!glfwWindowShouldClose(engine->window.glfw_window)) {
         glfwPollEvents();
 
-        world_data = camera_update(&engine->camera, engine->window.width, engine->window.height);
+        world_data = camera_update(&engine->camera, engine->editor.viewport_width, engine->editor.viewport_height);
 
         if (engine->editor.should_recompile_shaders) {
             // TODO: don't hardcode the index

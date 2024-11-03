@@ -61,7 +61,7 @@ void camera_cursor_callback(Camera* cam, double x_pos, double y_pos) {
 using namespace std::chrono;
 static auto start_time = high_resolution_clock::now();
 
-WorldData camera_update(Camera* cam, uint32_t window_width, uint32_t window_height) {
+WorldData camera_update(Camera* cam, uint32_t viewport_width, uint32_t viewport_height) {
     auto  time_duration = duration_cast<duration<float>>(high_resolution_clock::now() - start_time);
     float time_elapsed  = time_duration.count();
 
@@ -78,7 +78,7 @@ WorldData camera_update(Camera* cam, uint32_t window_width, uint32_t window_heig
     cam->view      = cam_rotation * cam_translation;
     cam->direction = cam_rotation * glm::vec4{0, 0, -1.f, 0};
 
-    cam->proj = glm::perspective(glm::radians(60.f), static_cast<float>(window_width) / static_cast<float>(window_height), 10000.0f, 0.1f);
+    cam->proj = glm::perspective(glm::radians(55.f), static_cast<float>(viewport_width) / static_cast<float>(viewport_height), 10000.0f, 0.1f);
     cam->proj[1][1] *= -1; // correcting for Vulkans inverted Y coordinate
 
     WorldData scene_data{};

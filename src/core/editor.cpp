@@ -13,7 +13,7 @@ void editor_init(Editor* editor, VkBackend* backend, GLFWwindow* window) {
     editor->imgui_ctx = ImGui::CreateContext();
 
     editor->imgui_io              = &ImGui::GetIO();
-    editor->imgui_io->ConfigFlags = ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NavEnableGamepad;
+    editor->imgui_io->ConfigFlags = ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NavEnableGamepad | ImGuiConfigFlags_DockingEnable;
 
     ImGui_ImplGlfw_InitForVulkan(window, true);
 
@@ -22,6 +22,7 @@ void editor_init(Editor* editor, VkBackend* backend, GLFWwindow* window) {
     editor->imgui_style = &ImGui::GetStyle();
     // gamma corrected
     editor->imgui_style->Colors[ImGuiCol_WindowBg] = ImVec4(pow(56.f / 255, 2.2), pow(56.f / 255, 2.2), pow(56.f / 255, 2.2), 1.0);
+    // editor->imgui_style->Colors[ImGuiCol_WindowBg].w = 1.0f;
 
     backend_create_imgui_resources(backend);
 }
@@ -33,19 +34,21 @@ void editor_update_viewport(Editor* editor, const VkBackend* backend, const Wind
 
     ImGui::NewFrame();
 
+    ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport());
     // ImGuizmo::BeginFrame();
 
     ImGui::Begin("Viewport");
+    ImVec2 viewport_panel_size = ImGui::GetContentRegionAvail();
+    ImGui::Image((ImTextureID)backend->viewport_desc_sets[backend->current_frame_i], ImVec2{viewport_panel_size.x, viewport_panel_size.y});
+    ImGui::End();
 
-    /*
-    ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
-    ImGui::Image(backend->viewport_desc_sets[backend->current_frame_i], ImVec2{viewportPanelSize.x, viewportPanelSize.y});
-    */
+    editor->viewport_width  = viewport_panel_size.x;
+    editor->viewport_height = viewport_panel_size.y;
 
     bool yeah = true;
     ImGui::ShowDemoWindow(&yeah);
 
-    ImGui::End();
+    editor->imgui_io = &ImGui::GetIO();
 
     ImGui::Render();
 }
@@ -208,8 +211,8 @@ void editor_update(Editor* editor, const VkBackend* backend, const Window* windo
 
     ImGui::Begin("Viewport");
 
-    ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
-    ImGui::Image((ImTextureID)backend->viewport_desc_sets[backend->current_frame_i], ImVec2{viewportPanelSize.x, viewportPanelSize.y});
+    ImVec2 viewport_panel_size = ImGui::GetContentRegionAvail();
+    ImGui::Image((ImTextureID)backend->viewport_desc_sets[backend->current_frame_i], ImVec2{viewport_panel_size.x, viewport_panel_size.y});
 
     // Gizmos
     if (editor->selected_entity >= 0) {

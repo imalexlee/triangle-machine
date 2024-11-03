@@ -318,13 +318,21 @@ void configure_render_resources(VkBackend* backend) {
 
     backend->scene_color_attachment =
         vk_color_attachment_info_create(backend->color_image.image_view, &backend->scene_clear_value, VK_ATTACHMENT_LOAD_OP_CLEAR,
-                                        VK_ATTACHMENT_STORE_OP_DONT_CARE, backend->color_resolve_image.image_view);
+                                        VK_ATTACHMENT_STORE_OP_STORE, backend->color_resolve_image.image_view);
 
     backend->scene_depth_attachment =
         vk_depth_attachment_info_create(backend->depth_image.image_view, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_DONT_CARE);
 
     backend->scene_rendering_info =
         vk_rendering_info_create(&backend->scene_color_attachment, &backend->scene_depth_attachment, backend->image_extent);
+
+    backend->ui_color_attachment = vk_color_attachment_info_create(backend->color_resolve_image.image_view, nullptr, VK_ATTACHMENT_LOAD_OP_LOAD,
+                                                                   VK_ATTACHMENT_STORE_OP_DONT_CARE);
+
+    backend->ui_depth_attachment =
+        vk_depth_attachment_info_create(backend->depth_image.image_view, VK_ATTACHMENT_LOAD_OP_DONT_CARE, VK_ATTACHMENT_STORE_OP_DONT_CARE);
+
+    backend->ui_rendering_info = vk_rendering_info_create(&backend->scene_color_attachment, &backend->scene_depth_attachment, backend->image_extent);
 }
 
 void create_default_data(VkBackend* backend) {
@@ -358,13 +366,23 @@ void create_default_data(VkBackend* backend) {
 
 void backend_create_imgui_resources(VkBackend* backend) {
 
-    std::array<VkDescriptorPoolSize, 1> pool_sizes = {
-        {{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 10}},
+    std::array<VkDescriptorPoolSize, 11> pool_sizes = {
+        {{VK_DESCRIPTOR_TYPE_SAMPLER, 1000},
+         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000},
+         {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000},
+         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000},
+         {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000},
+         {VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000},
+         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000},
+         {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000},
+         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000},
+         {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000},
+         {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000}}
     };
 
     VkDescriptorPoolCreateInfo pool_ci{};
     pool_ci.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    pool_ci.maxSets       = 10;
+    pool_ci.maxSets       = 1000;
     pool_ci.pPoolSizes    = pool_sizes.data();
     pool_ci.poolSizeCount = pool_sizes.size();
     pool_ci.flags         = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
@@ -620,6 +638,24 @@ void backend_draw(VkBackend* backend, std::vector<Entity>& entities, const World
 
     render_grid(backend, cmd_buffer);
 
+    vkCmdEndRendering(cmd_buffer);
+
+    vk_image_memory_barrier_insert(cmd_buffer, backend->color_resolve_image.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+
+    // save image for UI viewport rendering into a dedicated image
+    VkImage curr_viewport_img = backend->viewport_images[backend->current_frame_i].image;
+    vk_image_memory_barrier_insert(cmd_buffer, curr_viewport_img, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+    vk_image_blit(cmd_buffer, backend->color_resolve_image.image, curr_viewport_img, backend->swapchain_context.extent, backend->image_extent, 1, 1);
+
+    vk_image_memory_barrier_insert(cmd_buffer, curr_viewport_img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+    vk_image_memory_barrier_insert(cmd_buffer, backend->color_resolve_image.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+    vkCmdBeginRendering(cmd_buffer, &backend->ui_rendering_info);
+
     render_ui(cmd_buffer);
 
     vkCmdEndRendering(cmd_buffer);
@@ -627,19 +663,11 @@ void backend_draw(VkBackend* backend, std::vector<Entity>& entities, const World
     vk_image_memory_barrier_insert(cmd_buffer, backend->color_resolve_image.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
-    // TODO: may not need to worry about swapchain image during editor sessions
     vk_image_memory_barrier_insert(cmd_buffer, swapchain_image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-
-    VkImage curr_viewport_img = backend->viewport_images[backend->current_frame_i].image;
-    vk_image_memory_barrier_insert(cmd_buffer, curr_viewport_img, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
     vk_image_blit(cmd_buffer, backend->color_resolve_image.image, swapchain_image, backend->swapchain_context.extent, backend->image_extent, 1, 1);
 
-    vk_image_blit(cmd_buffer, backend->color_resolve_image.image, curr_viewport_img, backend->swapchain_context.extent, backend->image_extent, 1, 1);
-
     vk_image_memory_barrier_insert(cmd_buffer, swapchain_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
-
-    vk_image_memory_barrier_insert(cmd_buffer, curr_viewport_img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
     VkSemaphoreSubmitInfo wait_semaphore_si =
         vk_semaphore_submit_info_create(current_frame->present_semaphore, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
@@ -704,6 +732,20 @@ void resize(VkBackend* backend) {
     backend->depth_image =
         allocated_image_create(backend->device_ctx.logical_device, backend->allocator, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
                                VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_D32_SFLOAT, backend->device_ctx.raster_samples);
+
+    for (size_t i = 0; i < backend->swapchain_context.images.size(); i++) {
+        allocated_image_destroy(backend->device_ctx.logical_device, backend->allocator, &backend->viewport_images[i]);
+        AllocatedImage new_viewport_image = allocated_image_create(backend->device_ctx.logical_device, backend->allocator,
+                                                                   VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                                                                   VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R8G8B8A8_SRGB, 1);
+        backend->viewport_images[i]       = new_viewport_image;
+    }
+
+    for (size_t i = 0; i < backend->viewport_images.size(); i++) {
+        VkDescriptorSet new_viewport_ds = ImGui_ImplVulkan_AddTexture(backend->default_linear_sampler, backend->viewport_images[i].image_view,
+                                                                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        backend->viewport_desc_sets[i]  = new_viewport_ds;
+    }
 
     configure_render_resources(backend);
 
@@ -1226,6 +1268,10 @@ void backend_deinit(VkBackend* backend) {
     allocated_image_destroy(backend->device_ctx.logical_device, backend->allocator, &backend->color_image);
     allocated_image_destroy(backend->device_ctx.logical_device, backend->allocator, &backend->depth_image);
     allocated_image_destroy(backend->device_ctx.logical_device, backend->allocator, &backend->color_resolve_image);
+
+    for (const auto& image : backend->viewport_images) {
+        allocated_image_destroy(backend->device_ctx.logical_device, backend->allocator, &image);
+    }
 
     for (const auto& scene_buf : backend->scene_data_buffers) {
         allocated_buffer_destroy(backend->allocator, &scene_buf);

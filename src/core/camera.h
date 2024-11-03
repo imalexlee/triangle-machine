@@ -26,7 +26,7 @@ struct Camera {
 
 void camera_init(Camera* cam, const Window* window, glm::vec4 initial_pos, float init_pitch_theta = 0.f, float init_yaw_theta = 0.f);
 
-WorldData camera_update(Camera* cam, uint32_t window_width, uint32_t window_height);
+WorldData camera_update(Camera* cam, uint32_t viewport_width, uint32_t viewport_height);
 
 void camera_key_callback(Camera* cam, int key, int scancode, int action, int mods);
 

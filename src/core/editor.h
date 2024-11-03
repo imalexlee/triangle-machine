@@ -11,6 +11,8 @@ struct Editor {
     ImGuiIO*      imgui_io{};
     ImGuiStyle*   imgui_style{};
     ImDrawData*   imgui_draw_data{};
+    int           viewport_width{16};
+    int           viewport_height{9};
     int           selected_entity{-1};
     int           window_width{};
     // Notifies consumer of user requesting recompilation but doesn't mandate it.

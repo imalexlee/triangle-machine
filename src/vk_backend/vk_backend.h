@@ -46,6 +46,9 @@ struct VkBackend {
     VkRenderingAttachmentInfo      scene_color_attachment;
     VkRenderingAttachmentInfo      scene_depth_attachment;
     VkRenderingInfo                scene_rendering_info;
+    VkRenderingAttachmentInfo      ui_color_attachment;
+    VkRenderingAttachmentInfo      ui_depth_attachment;
+    VkRenderingInfo                ui_rendering_info;
     VkDescriptorPool               imm_descriptor_pool;
     std::vector<VkDescriptorSet>   viewport_desc_sets;
     std::vector<AllocatedImage>    viewport_images;
