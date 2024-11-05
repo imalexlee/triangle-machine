@@ -19,11 +19,15 @@ struct Editor {
     // Therefore, this flag should be turned off by the consumer once/if it's handled.
     bool should_recompile_shaders;
     bool ui_resized{true};
+
+    // editor options
+    int gizmo_mode{};
+    int gizmo_op{};
 };
 
 void editor_init(Editor* editor, VkBackend* backend, GLFWwindow* window);
 
-void editor_update(Editor* editor, const VkBackend* backend, const Window* window, const struct Camera* camera, struct Scene* scene);
+void editor_update(Editor* editor, const VkBackend* backend, const Window* window, struct Camera* camera, struct Scene* scene);
 
 void editor_deinit(const Editor* editor);
 

@@ -50,7 +50,7 @@ using namespace std::chrono;
 static auto start_time = high_resolution_clock::now();
 
 void scene_update(Scene* scene, const Editor* editor) {
-    if (!scene->update_requested) {
+    if (!scene->update_requested || editor->selected_entity < 0) {
         start_time = high_resolution_clock::now();
         return;
     }
@@ -60,13 +60,13 @@ void scene_update(Scene* scene, const Editor* editor) {
 
     Entity* curr_entity = &scene->entities[editor->selected_entity];
 
-    glm::mat4 translation = glm::translate(glm::mat4{1.f}, scene->velocity * time_elapsed);
-    curr_entity->transform *= translation;
+    // glm::mat4 translation = glm::translate(glm::mat4{1.f}, scene->velocity * time_elapsed);
+    // curr_entity->transform *= translation;
     for (DrawObject& obj : curr_entity->opaque_objs) {
-        obj.mesh_data.global_transform *= translation;
+        obj.mesh_data.global_transform = curr_entity->transform;
     }
     for (DrawObject& obj : curr_entity->transparent_objs) {
-        obj.mesh_data.global_transform *= translation;
+        obj.mesh_data.global_transform = curr_entity->transform;
     }
     scene->velocity = glm::vec3(0);
 

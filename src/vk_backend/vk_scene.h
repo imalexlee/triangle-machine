@@ -22,7 +22,7 @@ struct Entity {
     std::vector<DrawObject> opaque_objs;
     std::string             name{};
     // glm::vec3               pos = {0, 0, 0};
-    glm::mat4 transform;
+    glm::mat4 transform{};
 };
 
 struct EntityPushConstants {

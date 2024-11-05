@@ -17,7 +17,7 @@ void engine_init(Engine* engine) {
     assert(active_engine == nullptr);
     active_engine = engine;
 
-    constexpr glm::vec4 init_cam_pos = {0, -1, -8, 1};
+    constexpr glm::vec4 init_cam_pos = {0, 0, 8, 1};
 
     window_init(&engine->window, core_opts::initial_width, core_opts::initial_height, "Triangle Machine");
 
@@ -62,7 +62,7 @@ void engine_init(Engine* engine) {
 
     std::array gltf_paths = {
         "../assets/glb/porsche.glb",
-        "../assets/glb/structure.glb",
+        //   "../assets/glb/structure.glb",
     };
     scene_load(&engine->scene, &engine->backend, gltf_paths);
 
@@ -73,6 +73,9 @@ void engine_init(Engine* engine) {
     });
 
     window_register_cursor_callback(&engine->window, [=](double x_pos, double y_pos) { camera_cursor_callback(&engine->camera, x_pos, y_pos); });
+
+    window_register_mouse_button_callback(
+        &engine->window, [=](int button, int action, int mods) { camera_mouse_button_callback(&engine->camera, button, action, mods); });
 
     /*
     window_register_resize_callback(

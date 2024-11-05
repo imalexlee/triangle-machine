@@ -559,7 +559,8 @@ Entity load_entity(VkBackend* backend, const std::filesystem::path& path) {
     entity.transparent_objs.shrink_to_fit();
 
     // extract name from path
-    entity.name = std::filesystem::path(path).stem().string();
+    entity.name      = std::filesystem::path(path).stem().string();
+    entity.transform = glm::mat4(1.f);
 
     for (auto& image : gltf_images) {
         stbi_image_free(image.data);

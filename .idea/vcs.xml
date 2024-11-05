@@ -3,6 +3,7 @@
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/thirdparty/ImGuizmo" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/thirdparty/imgui" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/thirdparty/shaderc" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/thirdparty/shaderc/third_party/abseil_cpp" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/thirdparty/shaderc/third_party/effcee" vcs="Git" />
