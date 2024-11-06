@@ -5,6 +5,9 @@
 #include "scene.h"
 #include "window.h"
 
+#include "simdjson.h"
+#include <ImGuiFileDialog.h>
+#include <imconfig.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_vulkan.h>
 
@@ -27,6 +30,19 @@ void editor_init(Editor* editor, VkBackend* backend, GLFWwindow* window) {
     editor->imgui_style->Colors[ImGuiCol_WindowBg].w = 1.0f;
 
     editor->gizmo_op = ImGuizmo::UNIVERSAL;
+
+    namespace fs = std::filesystem;
+    if (!fs::is_directory(editor->app_data_dir) || !fs::exists(editor->app_data_dir)) {
+        editor->app_data_dir_exists = fs::create_directory(editor->app_data_dir);
+    } else {
+        editor->app_data_dir_exists = true;
+    }
+    for (const auto& path : std::filesystem::directory_iterator(editor->app_data_dir)) {
+        if (path.is_regular_file()) {
+            editor->app_data_dir_contains_files = true;
+            break;
+        }
+    }
 
     backend_create_imgui_resources(backend);
 }
@@ -106,10 +122,70 @@ void update_viewport(Editor* editor, const VkBackend* backend, const Window* win
     start_time = high_resolution_clock::now();
 }
 
-void update_scene_overview(Editor* editor, const VkBackend* backend, const Window* window, const Camera* camera, Scene* scene) {
+void update_file_menu(Editor* editor, VkBackend* backend, const Window* window, const Camera* camera, Scene* scene) {
+    ImGui::PushItemFlag(ImGuiItemFlags_AutoClosePopups, false);
+    static bool new_selected = false;
+    if (ImGui::MenuItem("New", "Ctrl+N", false, editor->app_data_dir_exists)) {
+        new_selected = true;
+    }
+    static bool open_selected = false;
+    if (ImGui::MenuItem("Open", "Ctrl+O", false, editor->app_data_dir_contains_files)) {
+        open_selected = true;
+    }
+    ImGui::PopItemFlag();
+    static bool save_selected = false;
+    if (ImGui::MenuItem("Save", "Ctrl+O", false, !editor->curr_scene_path.empty())) {
+        save_selected = true;
+    }
+    if (ImGui::MenuItem("Quit", "Alt+F4")) {
+        editor->quit = true;
+    }
+
+    // handle selections
+    if (new_selected || open_selected) {
+        IGFD::FileDialogConfig config;
+        config.path  = editor->app_data_dir.string();
+        config.flags = ImGuiFileDialogFlags_Modal;
+        ImGuiFileDialog::Instance()->OpenDialog("ChooseFileDlgKey", new_selected ? "Create New File" : "Open File", ".json", config);
+
+        if (ImGuiFileDialog::Instance()->Display("ChooseFileDlgKey")) {
+            if (ImGuiFileDialog::Instance()->IsOk()) {
+                std::string file_path = ImGuiFileDialog::Instance()->GetFilePathName();
+                if (new_selected) {
+                    std::ofstream new_file(file_path);
+                    new_file << R"+({"scene":{"entities":[]}})+"_padded;
+                    new_file.close();
+                }
+                scene_open(scene, backend, file_path);
+                new_selected            = false;
+                editor->curr_scene_path = file_path;
+            } else {
+                // cancel was clicked
+                new_selected = false;
+            }
+
+            ImGuiFileDialog::Instance()->Close();
+        }
+    }
+    if (save_selected) {
+        assert(!editor->curr_scene_path.empty());
+        // scene_save();
+    }
+}
+
+void update_scene_overview(Editor* editor, VkBackend* backend, const Window* window, const Camera* camera, Scene* scene) {
 
     static bool show_window = true;
-    ImGui::Begin("Overview", &show_window);
+    ImGui::Begin("Overview", &show_window, ImGuiWindowFlags_MenuBar);
+
+    if (ImGui::BeginMenuBar()) {
+        if (ImGui::BeginMenu("File")) {
+            update_file_menu(editor, backend, window, camera, scene);
+            ImGui::EndMenu();
+        }
+        ImGui::EndMenuBar();
+    }
+
     ImGui::Text("Frame time: %.3f ms (%.1f FPS)", backend->stats.frame_time, 1000.f / backend->stats.frame_time);
     ImGui::Text("Host buffer recording: %.3f us", backend->stats.draw_time);
     ImGuiTreeNodeFlags base_tree_flags =
@@ -170,7 +246,7 @@ void update_entity_viewer(Editor* editor, const VkBackend* backend, const Window
     ImGui::End();
 }
 
-void editor_update(Editor* editor, const VkBackend* backend, const Window* window, Camera* camera, Scene* scene) {
+void editor_update(Editor* editor, VkBackend* backend, const Window* window, Camera* camera, Scene* scene) {
     begin_ui();
     update_viewport(editor, backend, window, camera, scene);
     update_scene_overview(editor, backend, window, camera, scene);

@@ -30,7 +30,6 @@ void engine_init(Engine* engine) {
     editor_init(&engine->editor, &engine->backend, engine->window.glfw_window);
     backend_upload_vert_shader(&engine->backend, "../shaders/vertex/indexed_draw.vert", "vert shader");
     backend_upload_frag_shader(&engine->backend, "../shaders/fragment/pbr.frag", "frag shader");
-
     backend_upload_sky_box_shaders(&engine->backend, "../shaders/vertex/skybox.vert", "../shaders/fragment/skybox.frag", "skybox shaders");
 
     std::array file_names = {
@@ -60,11 +59,11 @@ void engine_init(Engine* engine) {
                              "../assets/gltf/main_sponza/Main1_Sponza/NewSponza_Main_glTF_003.gltf"};
                              */
 
-    std::array gltf_paths = {
-        "../assets/glb/porsche.glb",
-        //   "../assets/glb/structure.glb",
-    };
-    scene_load(&engine->scene, &engine->backend, gltf_paths);
+    // std::array<std::filesystem::path, 1> gltf_paths = {
+    //     //  "../assets/glb/porsche.glb",
+    //     "../assets/glb/structure.glb",
+    // };
+    // scene_load(&engine->scene, &engine->backend, gltf_paths);
 
     window_register_key_callback(&engine->window, [=](int key, int scancode, int action, int mods) {
         camera_key_callback(&engine->camera, key, scancode, action, mods);
@@ -106,6 +105,9 @@ void engine_run(Engine* engine) {
 
             backend_update_render_area(&engine->backend, &render_area);
             engine->editor.ui_resized = false;
+        }
+        if (engine->editor.quit) {
+            break;
         }
         scene_update(&engine->scene, &engine->editor);
         backend_draw(&engine->backend, engine->scene.entities, &world_data, 0, 0);

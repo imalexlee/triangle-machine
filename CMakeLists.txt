@@ -47,6 +47,13 @@ add_executable(
 
         thirdparty/ImGuizmo/ImGuizmo.cpp
         thirdparty/ImGuizmo/ImGuizmo.h
+        thirdparty/ImGuiFileDialog/ImGuiFileDialog.cpp
+        thirdparty/ImGuiFileDialog/ImGuiFileDialog.h
+        thirdparty/ImGuiFileDialog/ImGuiFileDialogConfig.h
+        thirdparty/nlohmann/json.hpp
+        thirdparty/simdjson/simdjson.cpp
+        thirdparty/simdjson/simdjson.h
+
 )
 
 target_compile_options(
@@ -67,6 +74,7 @@ endif ()
 
 add_subdirectory(thirdparty/fmt)
 add_subdirectory(thirdparty/fastgltf)
+add_subdirectory(thirdparty/ImGuiFileDialog)
 #add_subdirectory(thirdparty/meshoptimizer)
 add_subdirectory(thirdparty/glfw)
 #add_subdirectory(thirdparty/glslang)
@@ -85,6 +93,8 @@ target_include_directories(
         PRIVATE thirdparty/taskflow
         PRIVATE thirdparty/fastgltf/include
         PRIVATE thirdparty/shaderc/utils
+        PRIVATE thirdparty/ImGuiFileDialog
+        PRIVATE thirdparty/
 )
 
 target_link_directories(${PROJECT_NAME} PUBLIC thirdparty/fmt/src PUBLIC

@@ -15,10 +15,16 @@ struct Editor {
     int           viewport_height{9};
     int           selected_entity{-1};
     int           window_width{};
-    // Notifies consumer of user requesting recompilation but doesn't mandate it.
-    // Therefore, this flag should be turned off by the consumer once/if it's handled.
+
+    // editor state
     bool should_recompile_shaders;
     bool ui_resized{true};
+    bool quit{false};
+    bool app_data_dir_exists{false};
+    bool app_data_dir_contains_files{false};
+
+    std::filesystem::path app_data_dir{"app_data"};
+    std::filesystem::path curr_scene_path{};
 
     // editor options
     int gizmo_mode{};
@@ -27,7 +33,7 @@ struct Editor {
 
 void editor_init(Editor* editor, VkBackend* backend, GLFWwindow* window);
 
-void editor_update(Editor* editor, const VkBackend* backend, const Window* window, struct Camera* camera, struct Scene* scene);
+void editor_update(Editor* editor, VkBackend* backend, const Window* window, struct Camera* camera, struct Scene* scene);
 
 void editor_deinit(const Editor* editor);
 

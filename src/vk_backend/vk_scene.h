@@ -1,4 +1,5 @@
 #pragma once
+#include <filesystem>
 #include <glm/vec3.hpp>
 #include <vector>
 #include <vulkan/vulkan_core.h>
@@ -20,6 +21,7 @@ struct DrawObject {
 struct Entity {
     std::vector<DrawObject> transparent_objs;
     std::vector<DrawObject> opaque_objs;
+    std::filesystem::path   path{};
     std::string             name{};
     // glm::vec3               pos = {0, 0, 0};
     glm::mat4 transform{};
