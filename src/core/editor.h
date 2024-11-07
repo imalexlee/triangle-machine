@@ -13,8 +13,8 @@ struct Editor {
     ImDrawData*   imgui_draw_data{};
     int           viewport_width{16};
     int           viewport_height{9};
-    int           selected_entity{-1};
-    int           window_width{};
+    // int           selected_entity{-1};
+    int window_width{};
 
     // editor state
     bool should_recompile_shaders;

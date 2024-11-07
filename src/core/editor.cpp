@@ -98,9 +98,9 @@ void update_viewport(Editor* editor, const VkBackend* backend, const Window* win
         camera_zoom(camera, editor->imgui_io->MouseWheel * time_elapsed * 20);
     }
 
-    if (editor->selected_entity >= 0) {
+    if (scene->selected_entity >= 0) {
 
-        Entity* entity = &scene->entities[editor->selected_entity];
+        Entity* entity = &scene->entities[scene->selected_entity];
 
         if (ImGuizmo::IsUsing()) {
             scene_request_update(scene);
@@ -145,23 +145,26 @@ void update_file_menu(Editor* editor, VkBackend* backend, const Window* window, 
     if (new_selected || open_selected) {
         IGFD::FileDialogConfig config;
         config.path  = editor->app_data_dir.string();
-        config.flags = ImGuiFileDialogFlags_Modal;
+        config.flags = ImGuiFileDialogFlags_Modal | ImGuiFileDialogFlags_CaseInsensitiveExtentionFiltering;
         ImGuiFileDialog::Instance()->OpenDialog("ChooseFileDlgKey", new_selected ? "Create New File" : "Open File", ".json", config);
 
         if (ImGuiFileDialog::Instance()->Display("ChooseFileDlgKey")) {
             if (ImGuiFileDialog::Instance()->IsOk()) {
-                std::string file_path = ImGuiFileDialog::Instance()->GetFilePathName();
+                std::string file_path    = ImGuiFileDialog::Instance()->GetFilePathName();
+                std::string current_path = ImGuiFileDialog::Instance()->GetCurrentPath();
                 if (new_selected) {
                     std::ofstream new_file(file_path);
                     new_file << R"+({"scene":{"entities":[]}})+"_padded;
                     new_file.close();
                 }
                 scene_open(scene, backend, file_path);
-                new_selected            = false;
                 editor->curr_scene_path = file_path;
+                new_selected            = false;
+                open_selected           = false;
             } else {
                 // cancel was clicked
-                new_selected = false;
+                new_selected  = false;
+                open_selected = false;
             }
 
             ImGuiFileDialog::Instance()->Close();
@@ -169,7 +172,7 @@ void update_file_menu(Editor* editor, VkBackend* backend, const Window* window, 
     }
     if (save_selected) {
         assert(!editor->curr_scene_path.empty());
-        // scene_save();
+        scene_save(scene, editor->curr_scene_path);
     }
 }
 
@@ -191,18 +194,43 @@ void update_scene_overview(Editor* editor, VkBackend* backend, const Window* win
     ImGuiTreeNodeFlags base_tree_flags =
         ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_SpanAvailWidth;
     if (ImGui::TreeNode("Scene")) {
+        ImGui::SameLine();
+
+        static bool add_entity_pressed = false;
+        if (!editor->curr_scene_path.empty() && (ImGui::SmallButton("+") || add_entity_pressed)) {
+            add_entity_pressed = true;
+
+            IGFD::FileDialogConfig config;
+            config.path  = editor->app_data_dir.string();
+            config.flags = ImGuiFileDialogFlags_Modal | ImGuiFileDialogFlags_CaseInsensitiveExtentionFiltering;
+            ImGuiFileDialog::Instance()->OpenDialog("ChooseFileDlgKey", "Add Entity", ".gltf,.glb", config);
+
+            if (ImGuiFileDialog::Instance()->Display("ChooseFileDlgKey")) {
+                if (ImGuiFileDialog::Instance()->IsOk()) {
+                    std::filesystem::path gltf_path = ImGuiFileDialog::Instance()->GetFilePathName();
+
+                    scene_load_gltf_path(scene, backend, gltf_path);
+                    add_entity_pressed = false;
+                } else {
+                    add_entity_pressed = false;
+                }
+
+                ImGuiFileDialog::Instance()->Close();
+            }
+        }
+
         for (size_t i = 0; i < scene->entities.size(); i++) {
             // adding since all items are leaf nodes. will be different when adding nested nodes
             ImGuiTreeNodeFlags node_flags = base_tree_flags | ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
 
-            if (i == editor->selected_entity) {
+            if (i == scene->selected_entity) {
                 node_flags |= ImGuiTreeNodeFlags_Selected;
             }
             ImGui::TreeNodeEx((void*)(intptr_t)i, node_flags, "%s", scene->entities[i].name.c_str());
 
             if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
                 // toggle off if already selected
-                editor->selected_entity = i == editor->selected_entity ? -1 : i;
+                scene->selected_entity = i == scene->selected_entity ? -1 : i;
             }
         }
         ImGui::TreePop();
@@ -211,16 +239,16 @@ void update_scene_overview(Editor* editor, VkBackend* backend, const Window* win
 }
 
 void update_entity_viewer(Editor* editor, const VkBackend* backend, const Window* window, const Camera* camera, Scene* scene) {
-    if (editor->selected_entity < 0) {
+    if (scene->selected_entity < 0) {
         return;
     }
     static bool show_window = true;
     if (!show_window) {
-        editor->selected_entity = -1;
-        show_window             = true;
+        scene->selected_entity = -1;
+        show_window            = true;
         return;
     }
-    ImGui::Begin(scene->entities[editor->selected_entity].name.c_str(), &show_window);
+    ImGui::Begin(scene->entities[scene->selected_entity].name.c_str(), &show_window);
     ImGui::Text("Gizmo Mode");
     ImGui::RadioButton("Local", &editor->gizmo_mode, ImGuizmo::MODE::LOCAL);
     ImGui::SameLine();
@@ -235,7 +263,7 @@ void update_entity_viewer(Editor* editor, const VkBackend* backend, const Window
     ImGui::RadioButton("Universal", &editor->gizmo_op, ImGuizmo::UNIVERSAL);
 
     float   translation[3], rotation[3], scale[3];
-    Entity* curr_entity = &scene->entities[editor->selected_entity];
+    Entity* curr_entity = &scene->entities[scene->selected_entity];
     ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(curr_entity->transform), translation, rotation, scale);
     ImGui::Text("Entity Transformation");
     ImGui::InputFloat3("Tr", translation, "%.3f");

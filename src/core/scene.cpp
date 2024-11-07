@@ -5,11 +5,14 @@
 #include <fstream>
 #include <nlohmann/json.hpp>
 
-void scene_load(Scene* scene, VkBackend* backend, std::span<std::filesystem::path> gltf_paths) {
-    scene->entities.reserve(gltf_paths.size());
+void scene_load_gltf_paths(Scene* scene, VkBackend* backend, std::span<std::filesystem::path> gltf_paths) {
     for (const auto& path : gltf_paths) {
         scene->entities.push_back(load_entity(backend, path));
     }
+}
+
+void scene_load_gltf_path(Scene* scene, VkBackend* backend, std::filesystem::path& gltf_path) {
+    scene->entities.push_back(load_entity(backend, gltf_path));
 }
 
 void scene_key_callback(Scene* scene, int key, int action) {
@@ -52,8 +55,8 @@ void scene_request_update(Scene* scene) { scene->update_requested = true; }
 using namespace std::chrono;
 static auto start_time = high_resolution_clock::now();
 
-void scene_update(Scene* scene, const Editor* editor) {
-    if (!scene->update_requested || editor->selected_entity < 0) {
+void scene_update(Scene* scene) {
+    if (!scene->update_requested || scene->selected_entity < 0) {
         start_time = high_resolution_clock::now();
         return;
     }
@@ -61,7 +64,7 @@ void scene_update(Scene* scene, const Editor* editor) {
     auto  time_duration = duration_cast<duration<float>>(high_resolution_clock::now() - start_time);
     float time_elapsed  = time_duration.count();
 
-    Entity* curr_entity = &scene->entities[editor->selected_entity];
+    Entity* curr_entity = &scene->entities[scene->selected_entity];
 
     // glm::mat4 translation = glm::translate(glm::mat4{1.f}, scene->velocity * time_elapsed);
     // curr_entity->transform *= translation;
@@ -76,9 +79,44 @@ void scene_update(Scene* scene, const Editor* editor) {
     start_time = high_resolution_clock::now();
 }
 
-void scene_save(Scene* scene) {
-    // TODO: Write data straight to json file, overwriting it.
-    // TODO: using nlohmann json
+void scene_append(Scene* scene, std::filesystem::path& entity_path) {}
+
+void scene_save(Scene* scene, std::filesystem::path& path) {
+    nlohmann::json output;
+
+    // Create the scene object
+    nlohmann::json scene_obj;
+    nlohmann::json entities = nlohmann::json::array();
+
+    // Assuming scene has matching vectors for paths and transforms
+    for (size_t i = 0; i < scene->entities.size(); i++) {
+        nlohmann::json entity;
+
+        // Add the path
+        entity["path"] = scene->entities[i].path.string();
+
+        // Convert the transform matrix to array
+        std::vector<float> transform_array;
+        transform_array.reserve(16);
+
+        const glm::mat4& transform = scene->entities[i].transform;
+        for (int col = 0; col < 4; col++) {
+            for (int row = 0; row < 4; row++) {
+                transform_array.push_back(transform[col][row]);
+            }
+        }
+
+        entity["transform"] = transform_array;
+        entities.push_back(entity);
+    }
+
+    scene_obj["entities"] = entities;
+    output["scene"]       = scene_obj;
+
+    // Write to file
+    std::ofstream file(path);
+    file << output.dump(4); // The 4 parameter adds pretty printing with indentation
+    file.close();
 }
 
 void scene_open(Scene* scene, VkBackend* backend, const std::filesystem::path& path) {
@@ -140,11 +178,18 @@ void scene_open(Scene* scene, VkBackend* backend, const std::filesystem::path& p
         transforms.push_back(transform);
     }
 
-    scene_load(scene, backend, gltf_paths);
+    scene_load_gltf_paths(scene, backend, gltf_paths);
 
-    assert(scene->entities.size() == gltf_paths.size() == transforms.size());
+    assert(gltf_paths.size() == transforms.size());
     for (size_t i = 0; i < scene->entities.size(); i++) {
         Entity* entity    = &scene->entities[i];
         entity->transform = transforms[i];
+
+        // update all entities with their saved global transforms
+        scene->selected_entity = i;
+        scene_request_update(scene);
+        scene_update(scene);
     }
+
+    scene->selected_entity = -1;
 }

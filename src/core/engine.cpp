@@ -63,7 +63,7 @@ void engine_init(Engine* engine) {
     //     //  "../assets/glb/porsche.glb",
     //     "../assets/glb/structure.glb",
     // };
-    // scene_load(&engine->scene, &engine->backend, gltf_paths);
+    // scene_load_gltf_paths(&engine->scene, &engine->backend, gltf_paths);
 
     window_register_key_callback(&engine->window, [=](int key, int scancode, int action, int mods) {
         camera_key_callback(&engine->camera, key, scancode, action, mods);
@@ -109,7 +109,7 @@ void engine_run(Engine* engine) {
         if (engine->editor.quit) {
             break;
         }
-        scene_update(&engine->scene, &engine->editor);
+        scene_update(&engine->scene);
         backend_draw(&engine->backend, engine->scene.entities, &world_data, 0, 0);
     }
 }
