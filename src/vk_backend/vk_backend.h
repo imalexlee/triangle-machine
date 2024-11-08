@@ -128,6 +128,8 @@ void backend_recompile_frag_shader(VkBackend* backend, uint32_t shader_idx);
 void backend_create_accel_struct(VkBackend* backend, std::span<const BottomLevelGeometry> bottom_level_geometries,
                                  std::span<const TopLevelInstanceRef> instance_refs);
 
+void backend_update_accel_struct(VkBackend* backend, const glm::mat4* transform, uint32_t instance_idx);
+
 template <typename T>
 [[nodiscard]] MeshBuffers backend_upload_mesh(VkBackend* backend, const std::span<const uint32_t> indices, std::span<const T> vertices) {
 

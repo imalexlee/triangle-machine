@@ -1226,6 +1226,11 @@ void backend_create_accel_struct(VkBackend* backend, std::span<const BottomLevel
     desc_writer_update_desc_set(&desc_writer, backend->device_ctx.logical_device, backend->graphics_desc_set);
 };
 
+void backend_update_accel_struct(VkBackend* backend, const glm::mat4* transform, uint32_t instance_idx) {
+    accel_struct_ctx_update_tlas(&backend->accel_struct_ctx, &backend->ext_ctx, backend->device_ctx.logical_device,
+                                 backend->device_ctx.queues.graphics, backend->allocator, transform, instance_idx);
+}
+
 void backend_finish_pending_vk_work(const VkBackend* backend) { vkDeviceWaitIdle(backend->device_ctx.logical_device); }
 
 void backend_deinit(VkBackend* backend) {

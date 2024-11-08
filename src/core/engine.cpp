@@ -50,7 +50,7 @@ void engine_init(Engine* engine) {
         memcpy(skybox_data.data() + offset, data, data_size);
     }
 
-    backend_upload_sky_box(&engine->backend, skybox_data.data(), 4, width, height);
+    //  backend_upload_sky_box(&engine->backend, skybox_data.data(), 4, width, height);
 
     /*
     std::array gltf_paths = {// "../assets/gltf/main_sponza/pkg_a_Curtains/NewSponza_Curtains_glTF.gltf",
@@ -109,7 +109,7 @@ void engine_run(Engine* engine) {
         if (engine->editor.quit) {
             break;
         }
-        scene_update(&engine->scene);
+        scene_update(&engine->scene, &engine->backend);
         backend_draw(&engine->backend, engine->scene.entities, &world_data, 0, 0);
     }
 }

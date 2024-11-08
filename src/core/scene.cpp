@@ -55,7 +55,7 @@ void scene_request_update(Scene* scene) { scene->update_requested = true; }
 using namespace std::chrono;
 static auto start_time = high_resolution_clock::now();
 
-void scene_update(Scene* scene) {
+void scene_update(Scene* scene, VkBackend* backend) {
     if (!scene->update_requested || scene->selected_entity < 0) {
         start_time = high_resolution_clock::now();
         return;
@@ -76,7 +76,11 @@ void scene_update(Scene* scene) {
     }
     scene->velocity = glm::vec3(0);
 
+    backend_update_accel_struct(backend, &curr_entity->transform, scene->selected_entity);
+
     start_time = high_resolution_clock::now();
+
+    scene->update_requested = false;
 }
 
 void scene_append(Scene* scene, std::filesystem::path& entity_path) {}
@@ -84,15 +88,12 @@ void scene_append(Scene* scene, std::filesystem::path& entity_path) {}
 void scene_save(Scene* scene, std::filesystem::path& path) {
     nlohmann::json output;
 
-    // Create the scene object
     nlohmann::json scene_obj;
     nlohmann::json entities = nlohmann::json::array();
 
-    // Assuming scene has matching vectors for paths and transforms
     for (size_t i = 0; i < scene->entities.size(); i++) {
         nlohmann::json entity;
 
-        // Add the path
         entity["path"] = scene->entities[i].path.string();
 
         // Convert the transform matrix to array
@@ -113,7 +114,6 @@ void scene_save(Scene* scene, std::filesystem::path& path) {
     scene_obj["entities"] = entities;
     output["scene"]       = scene_obj;
 
-    // Write to file
     std::ofstream file(path);
     file << output.dump(4); // The 4 parameter adds pretty printing with indentation
     file.close();
@@ -188,7 +188,7 @@ void scene_open(Scene* scene, VkBackend* backend, const std::filesystem::path& p
         // update all entities with their saved global transforms
         scene->selected_entity = i;
         scene_request_update(scene);
-        scene_update(scene);
+        scene_update(scene, backend);
     }
 
     scene->selected_entity = -1;

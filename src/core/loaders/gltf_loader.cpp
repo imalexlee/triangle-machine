@@ -510,10 +510,8 @@ Entity load_entity(VkBackend* backend, const std::filesystem::path& path) {
     instance_refs.reserve(gltf_mesh_nodes.size());
     for (const auto& node : gltf_mesh_nodes) {
         TopLevelInstanceRef new_instance_ref{};
-        new_instance_ref.mesh_idx = node.mesh_i;
-        // Transposing since vulkan acceleration structure instances expect a row-major matrix
-        // and we are in column major
-        new_instance_ref.transform = glm::transpose(node.transform);
+        new_instance_ref.mesh_idx  = node.mesh_i;
+        new_instance_ref.transform = node.transform;
 
         instance_refs.push_back(new_instance_ref);
     }

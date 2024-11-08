@@ -21,7 +21,7 @@ void scene_load_gltf_path(Scene* scene, VkBackend* backend, std::filesystem::pat
 
 void scene_request_update(Scene* scene);
 
-void scene_update(Scene* scene);
+void scene_update(Scene* scene, VkBackend* backend);
 
 void scene_open(Scene* scene, VkBackend* backend, const std::filesystem::path& path);
 
