@@ -471,27 +471,28 @@ static uint32_t upload_gltf_materials(VkBackend* backend, std::span<const GLTFMa
     return 0;
 }
 
-Entity load_entity(VkBackend* backend, const std::filesystem::path& path) {
+Entity load_entity(VkBackend* backend, const std::filesystem::path path) {
 
-    constexpr auto supported_extensions = fastgltf::Extensions::KHR_mesh_quantization | fastgltf::Extensions::KHR_texture_transform |
-                                          fastgltf::Extensions::KHR_materials_clearcoat | fastgltf::Extensions::KHR_materials_specular |
-                                          fastgltf::Extensions::KHR_materials_transmission | fastgltf::Extensions::KHR_materials_variants;
-
-    fastgltf::Parser         parser(supported_extensions);
-    fastgltf::GltfDataBuffer data;
-    data.loadFromFile(path);
+    constexpr fastgltf::Extensions supported_extensions =
+        fastgltf::Extensions::KHR_mesh_quantization | fastgltf::Extensions::KHR_texture_transform | fastgltf::Extensions::KHR_materials_clearcoat |
+        fastgltf::Extensions::KHR_materials_specular | fastgltf::Extensions::KHR_materials_transmission |
+        fastgltf::Extensions::KHR_materials_variants;
 
     constexpr auto gltf_options = fastgltf::Options::DontRequireValidAssetMember | fastgltf::Options::AllowDouble |
                                   fastgltf::Options::LoadGLBBuffers | fastgltf::Options::LoadExternalBuffers | fastgltf::Options::LoadExternalImages |
                                   fastgltf::Options::GenerateMeshIndices;
 
-    auto load = parser.loadGltf(&data, path.parent_path(), gltf_options);
+    fastgltf::GltfDataBuffer data{};
+    data.loadFromFile(path);
+
+    fastgltf::Parser parser{supported_extensions};
+    auto             load = parser.loadGltf(&data, path.parent_path(), gltf_options);
 
     if (auto error = load.error(); error != fastgltf::Error::None) {
         fmt::println("ERROR LOADING GLTF");
         std::exit(1);
     }
-    fastgltf::Asset asset;
+    fastgltf::Asset asset{};
     asset = std::move(load.get());
 
     const std::vector<GLTFImage>    gltf_images     = load_gltf_images(&asset);

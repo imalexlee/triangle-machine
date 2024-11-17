@@ -74,7 +74,8 @@ void update_viewport(Editor* editor, const VkBackend* backend, const Window* win
     ImGui::Begin("Viewport");
 
     ImVec2 viewport_panel_size = ImGui::GetContentRegionAvail();
-    ImGui::Image((ImTextureID)backend->viewport_desc_sets[backend->current_frame_i], ImVec2{viewport_panel_size.x, viewport_panel_size.y});
+    ImGui::Image(reinterpret_cast<ImTextureID>(backend->viewport_desc_sets[backend->current_frame_i]),
+                 ImVec2{viewport_panel_size.x, viewport_panel_size.y});
 
     editor->viewport_width  = viewport_panel_size.x;
     editor->viewport_height = viewport_panel_size.y;
@@ -90,7 +91,7 @@ void update_viewport(Editor* editor, const VkBackend* backend, const Window* win
     }
     if (ImGui::IsKeyDown(ImGuiKey_MouseMiddle)) {
         ImVec2 mouse_delta = editor->imgui_io->MouseDelta;
-        camera_pan(camera, mouse_delta.x * time_elapsed, -mouse_delta.y * -time_elapsed);
+        camera_pan(camera, mouse_delta.x * time_elapsed, mouse_delta.y * time_elapsed);
     }
 
     // scroll wheel zoom
@@ -191,33 +192,34 @@ void update_scene_overview(Editor* editor, VkBackend* backend, const Window* win
 
     ImGui::Text("Frame time: %.3f ms (%.1f FPS)", backend->stats.frame_time, 1000.f / backend->stats.frame_time);
     ImGui::Text("Host buffer recording: %.3f us", backend->stats.draw_time);
+    if (ImGui::Button("Recompile Fragment Shader")) {
+        // TODO: don't hardcode the index
+        backend_recompile_frag_shader(backend, 1);
+    }
     ImGuiTreeNodeFlags base_tree_flags =
         ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_SpanAvailWidth;
-    if (ImGui::TreeNode("Scene")) {
-        ImGui::SameLine();
+    static bool add_entity_pressed = false;
+    if (!editor->curr_scene_path.empty() && (ImGui::Button("Add Entity +") || add_entity_pressed)) {
+        add_entity_pressed = true;
 
-        static bool add_entity_pressed = false;
-        if (!editor->curr_scene_path.empty() && (ImGui::SmallButton("+") || add_entity_pressed)) {
-            add_entity_pressed = true;
+        IGFD::FileDialogConfig config;
+        config.path  = editor->app_data_dir.string();
+        config.flags = ImGuiFileDialogFlags_Modal | ImGuiFileDialogFlags_CaseInsensitiveExtentionFiltering;
+        ImGuiFileDialog::Instance()->OpenDialog("ChooseFileDlgKey", "Add Entity", ".glb,.gltf", config);
+        if (ImGuiFileDialog::Instance()->Display("ChooseFileDlgKey")) {
+            if (ImGuiFileDialog::Instance()->IsOk()) {
+                std::string gltf_path = ImGuiFileDialog::Instance()->GetFilePathName();
 
-            IGFD::FileDialogConfig config;
-            config.path  = editor->app_data_dir.string();
-            config.flags = ImGuiFileDialogFlags_Modal | ImGuiFileDialogFlags_CaseInsensitiveExtentionFiltering;
-            ImGuiFileDialog::Instance()->OpenDialog("ChooseFileDlgKey", "Add Entity", ".gltf,.glb", config);
-
-            if (ImGuiFileDialog::Instance()->Display("ChooseFileDlgKey")) {
-                if (ImGuiFileDialog::Instance()->IsOk()) {
-                    std::filesystem::path gltf_path = ImGuiFileDialog::Instance()->GetFilePathName();
-
-                    scene_load_gltf_path(scene, backend, gltf_path);
-                    add_entity_pressed = false;
-                } else {
-                    add_entity_pressed = false;
-                }
-
-                ImGuiFileDialog::Instance()->Close();
+                scene_load_gltf_path(scene, backend, gltf_path);
+                add_entity_pressed = false;
+            } else {
+                add_entity_pressed = false;
             }
+
+            ImGuiFileDialog::Instance()->Close();
         }
+    }
+    if (ImGui::TreeNode("Scene")) {
 
         for (size_t i = 0; i < scene->entities.size(); i++) {
             // adding since all items are leaf nodes. will be different when adding nested nodes
@@ -226,7 +228,7 @@ void update_scene_overview(Editor* editor, VkBackend* backend, const Window* win
             if (i == scene->selected_entity) {
                 node_flags |= ImGuiTreeNodeFlags_Selected;
             }
-            ImGui::TreeNodeEx((void*)(intptr_t)i, node_flags, "%s", scene->entities[i].name.c_str());
+            ImGui::TreeNodeEx(reinterpret_cast<void*>(i), node_flags, "%s", scene->entities[i].name.c_str());
 
             if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
                 // toggle off if already selected
@@ -288,12 +290,4 @@ void editor_deinit(const Editor* editor) {
     ImGui_ImplVulkan_Shutdown();
 
     ImGui::DestroyContext(editor->imgui_ctx);
-}
-
-void editor_key_callback(Editor* editor, int key, int scancode, int action, int mods) {
-    if (action == GLFW_PRESS) {
-        if (key == GLFW_KEY_R) {
-            editor->should_recompile_shaders = true;
-        }
-    }
 }

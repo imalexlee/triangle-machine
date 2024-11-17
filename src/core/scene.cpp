@@ -11,7 +11,7 @@ void scene_load_gltf_paths(Scene* scene, VkBackend* backend, std::span<std::file
     }
 }
 
-void scene_load_gltf_path(Scene* scene, VkBackend* backend, std::filesystem::path& gltf_path) {
+void scene_load_gltf_path(Scene* scene, VkBackend* backend, const std::string gltf_path) {
     scene->entities.push_back(load_entity(backend, gltf_path));
 }
 

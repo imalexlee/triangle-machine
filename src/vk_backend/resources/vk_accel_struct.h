@@ -22,22 +22,22 @@ struct BottomLevelGeometry {
 
 struct AccelStructContext {
     VkAccelerationStructureKHR              top_level = VK_NULL_HANDLE;
-    std::vector<VkAccelerationStructureKHR> bottom_levels;
+    std::vector<VkAccelerationStructureKHR> bottom_levels{};
 
     CommandContext cmd_ctx{};
-    VkFence        fence;
+    VkFence        fence{};
 
     AllocatedBuffer              instance_buf{};
     AllocatedBuffer              tlas_buffer{};
     AllocatedBuffer              scratch_buffer{};
     std::vector<AllocatedBuffer> blas_buffers{};
 
-    std::vector<VkAccelerationStructureGeometryKHR> triangle_geometries;
+    std::vector<VkAccelerationStructureGeometryKHR> triangle_geometries{};
     // All entities have their own list of instances
-    std::vector<std::vector<VkAccelerationStructureInstanceKHR>> tlas_instances;
+    std::vector<std::vector<VkAccelerationStructureInstanceKHR>> tlas_instances{};
     std::vector<std::vector<glm::mat4>>                          local_transforms{};
 
-    std::vector<VkAccelerationStructureBuildRangeInfoKHR> triangle_build_ranges;
+    std::vector<VkAccelerationStructureBuildRangeInfoKHR> triangle_build_ranges{};
 };
 
 void accel_struct_ctx_init(AccelStructContext* accel_struct_ctx, VkDevice device, uint32_t queue_family_idx);

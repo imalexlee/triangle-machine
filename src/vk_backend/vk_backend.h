@@ -80,7 +80,7 @@ struct VkBackend {
     AllocatedImage                 color_resolve_image{};
     AllocatedImage                 depth_image{};
     std::vector<AllocatedImage>    tex_images{};
-    uint32_t                       tex_sampler_desc_count;
+    uint32_t                       tex_sampler_desc_count{};
     AllocatedBuffer                mat_buffer{};
     uint32_t                       mat_count{0};
     AllocatedImage                 sky_box_image{};

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "audio.h"
 #include "camera.h"
 #include "scene.h"
 #include "vk_backend/vk_backend.h"
@@ -13,6 +14,8 @@ struct Engine {
     Window    window{};
     Camera    camera{};
     Editor    editor{};
+
+    AudioContext audio_ctx{};
 };
 
 void engine_init(Engine* engine);

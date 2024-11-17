@@ -1,5 +1,6 @@
 #include "engine.h"
 #include "core_options.h"
+#include "loaders/gltf_loader.h"
 
 #include <GLFW/glfw3.h>
 #include <array>
@@ -22,6 +23,8 @@ void engine_init(Engine* engine) {
     window_init(&engine->window, core_opts::initial_width, core_opts::initial_height, "Triangle Machine");
 
     camera_init(&engine->camera, &engine->window, init_cam_pos);
+
+    audio_ctx_init(&engine->audio_ctx);
 
     const VkInstance   instance = vk_instance_create("triangle machine", "my engine");
     const VkSurfaceKHR surface  = vk_surface_get(&engine->window, instance);
@@ -50,24 +53,13 @@ void engine_init(Engine* engine) {
         memcpy(skybox_data.data() + offset, data, data_size);
     }
 
-    //  backend_upload_sky_box(&engine->backend, skybox_data.data(), 4, width, height);
+    backend_upload_sky_box(&engine->backend, skybox_data.data(), 4, width, height);
 
-    /*
-    std::array gltf_paths = {// "../assets/gltf/main_sponza/pkg_a_Curtains/NewSponza_Curtains_glTF.gltf",
-                             // "../assets/gltf/main_sponza/pkg_b_ivy/NewSponza_IvyGrowth_glTF.gltf",
-                             // "../assets/gltf/main_sponza/pkg_c_trees/NewSponza_CypressTree_glTF.gltf",
-                             "../assets/gltf/main_sponza/Main1_Sponza/NewSponza_Main_glTF_003.gltf"};
-                             */
-
-    // std::array<std::filesystem::path, 1> gltf_paths = {
-    //     //  "../assets/glb/porsche.glb",
-    //     "../assets/glb/structure.glb",
-    // };
-    // scene_load_gltf_paths(&engine->scene, &engine->backend, gltf_paths);
+    // const std::string gltf_path = "../assets/glb/structure.glb";
+    // scene_load_gltf_path(&engine->scene, &engine->backend, gltf_path);
 
     window_register_key_callback(&engine->window, [=](int key, int scancode, int action, int mods) {
         camera_key_callback(&engine->camera, key, scancode, action, mods);
-        editor_key_callback(&engine->editor, key, scancode, action, mods);
         scene_key_callback(&engine->scene, key, action);
     });
 
@@ -75,11 +67,6 @@ void engine_init(Engine* engine) {
 
     window_register_mouse_button_callback(
         &engine->window, [=](int button, int action, int mods) { camera_mouse_button_callback(&engine->camera, button, action, mods); });
-
-    /*
-    window_register_resize_callback(
-        &engine->window, [=](int window_width, int window_height) { editor_resize_callback(&engine->editor, window_width, window_height); });
-    */
 }
 
 void engine_run(Engine* engine) {
@@ -89,15 +76,14 @@ void engine_run(Engine* engine) {
 
         world_data = camera_update(&engine->camera, engine->editor.viewport_width, engine->editor.viewport_height);
 
-        if (engine->editor.should_recompile_shaders) {
-            // TODO: don't hardcode the index
-            backend_recompile_frag_shader(&engine->backend, 1);
-            engine->editor.should_recompile_shaders = false;
-        }
-
         editor_update(&engine->editor, &engine->backend, &engine->window, &engine->camera, &engine->scene);
 
+        static bool play_sound = false;
+
         if (engine->editor.ui_resized) {
+            if (!play_sound) {
+                play_sound = true;
+            }
             RenderArea render_area{};
             render_area.top_left.x           = engine->editor.window_width;
             render_area.scissor_dimensions.x = engine->window.width - engine->editor.window_width;
@@ -105,6 +91,8 @@ void engine_run(Engine* engine) {
 
             backend_update_render_area(&engine->backend, &render_area);
             engine->editor.ui_resized = false;
+        } else {
+            play_sound = false;
         }
         if (engine->editor.quit) {
             break;

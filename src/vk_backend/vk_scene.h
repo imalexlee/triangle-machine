@@ -13,14 +13,14 @@ struct MeshData {
 
 struct DrawObject {
     MeshData mesh_data{};
-    VkBuffer index_buffer;
+    VkBuffer index_buffer{};
     uint32_t indices_count{};
     uint32_t indices_start{};
 };
 
 struct Entity {
-    std::vector<DrawObject> transparent_objs;
-    std::vector<DrawObject> opaque_objs;
+    std::vector<DrawObject> transparent_objs{};
+    std::vector<DrawObject> opaque_objs{};
     std::filesystem::path   path{};
     std::string             name{};
     // glm::vec3               pos = {0, 0, 0};

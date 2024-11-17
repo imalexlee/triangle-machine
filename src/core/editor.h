@@ -13,11 +13,9 @@ struct Editor {
     ImDrawData*   imgui_draw_data{};
     int           viewport_width{16};
     int           viewport_height{9};
-    // int           selected_entity{-1};
-    int window_width{};
+    int           window_width{};
 
     // editor state
-    bool should_recompile_shaders;
     bool ui_resized{true};
     bool quit{false};
     bool app_data_dir_exists{false};
@@ -36,7 +34,3 @@ void editor_init(Editor* editor, VkBackend* backend, GLFWwindow* window);
 void editor_update(Editor* editor, VkBackend* backend, const Window* window, struct Camera* camera, struct Scene* scene);
 
 void editor_deinit(const Editor* editor);
-
-void editor_key_callback(Editor* editor, int key, int scancode, int action, int mods);
-
-// void editor_resize_callback(Editor* editor, int width, int height);

@@ -53,8 +53,14 @@ add_executable(
         thirdparty/nlohmann/json.hpp
         thirdparty/simdjson/simdjson.cpp
         thirdparty/simdjson/simdjson.h
-
+        src/core/audio.cpp
+        src/core/audio.h
 )
+
+#target_compile_options(${PROJECT_NAME} PRIVATE -fsanitize=address)
+#target_link_directories(${PROJECT_NAME} PRIVATE "$ENV{ProgramFiles\(x86\)}/Microsoft Visual Studio/2022/Community/VC/Tools/Llvm/x64/lib/clang/18/lib/windows")
+#target_link_libraries(${PROJECT_NAME} PRIVATE clang_rt.asan_dynamic-x86_64 clang_rt.asan_dynamic_runtime_thunk-x86_64)
+#target_link_options(${PROJECT_NAME} PRIVATE /wholearchive:clang_rt.asan_dynamic_runtime_thunk-x86_64.lib)
 
 target_compile_options(
         ${PROJECT_NAME}
@@ -64,8 +70,10 @@ target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
 target_compile_options(
         ${PROJECT_NAME}
         PUBLIC
-        "$<$<CONFIG:RELEASE>:-Ofast;-fno-signed-zeros;-flto;-Wall;-Wextra>;-Wno-missing-field-initializers"
+        "$<$<CONFIG:RELEASE>:-g;-flto;-Wall;-Wextra>;-Wno-missing-field-initializers"
 )
+
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=undefined -g -O0")
 
 if (APPLE)
     enable_language(OBJC)
@@ -81,6 +89,8 @@ add_subdirectory(thirdparty/glfw)
 add_subdirectory(thirdparty/shaderc)
 add_subdirectory(thirdparty)
 
+set(FMOD_PATH "C:/Program Files (x86)/FMOD SoundSystem/FMOD Studio API Windows/api/core")
+
 target_include_directories(
         ${PROJECT_NAME} SYSTEM
         PRIVATE src
@@ -95,10 +105,24 @@ target_include_directories(
         PRIVATE thirdparty/shaderc/utils
         PRIVATE thirdparty/ImGuiFileDialog
         PRIVATE thirdparty/
+        PRIVATE ${FMOD_PATH}/inc/
 )
 
 target_link_directories(${PROJECT_NAME} PUBLIC thirdparty/fmt/src PUBLIC
-        thirdparty/fastgltf/src)
+        thirdparty/fastgltf/src PUBLIC ${FMOD_PATH}/lib/x64)
+
+add_library(fmod SHARED IMPORTED)
+set_target_properties(fmod PROPERTIES
+        IMPORTED_LOCATION "${FMOD_PATH}/lib/x64/fmod.dll"
+        IMPORTED_IMPLIB "${FMOD_PATH}/lib/x64/fmod_vc.lib"
+        INTERFACE_INCLUDE_DIRECTORIES "${FMOD_PATH}/inc/"
+)
+
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${FMOD_PATH}/lib/x64/fmod.dll"
+        $<TARGET_FILE_DIR:${PROJECT_NAME}>
+)
 
 # Find NVTT.
 if (NOT NVTT_DIR)
@@ -168,13 +192,16 @@ add_custom_command(
 target_link_libraries(
         ${PROJECT_NAME}
         PUBLIC glfw
-        #   meshoptimizer
         fastgltf
         fmt
         imgui
         shaderc
         shaderc_util
-        Vulkan::Vulkan)
+        Vulkan::Vulkan
+        #        fmod_vc
+        fmod
+
+)
 
 
 find_program(

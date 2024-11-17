@@ -8,7 +8,7 @@
 #include <vk_backend/vk_scene.h>
 
 struct Scene {
-    std::vector<Entity> entities;
+    std::vector<Entity> entities{};
     glm::vec3           velocity{0, 0, 0};
     int                 selected_entity{-1};
     float               movement_speed{5.f};
@@ -17,7 +17,7 @@ struct Scene {
 
 void scene_load_gltf_paths(Scene* scene, VkBackend* backend, std::span<std::filesystem::path> gltf_paths);
 
-void scene_load_gltf_path(Scene* scene, VkBackend* backend, std::filesystem::path& gltf_path);
+void scene_load_gltf_path(Scene* scene, VkBackend* backend, const std::string gltf_path);
 
 void scene_request_update(Scene* scene);
 
