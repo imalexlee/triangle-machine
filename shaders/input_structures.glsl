@@ -40,8 +40,11 @@ layout (std430, buffer_reference) readonly buffer VertexBuffer {
 };
 
 layout (push_constant) uniform PushConstants {
+    mat4 global_transform;
     mat4 local_transform;
     VertexBuffer vertex_buffer;
     uint material_i;
 } constants;
+
+
 

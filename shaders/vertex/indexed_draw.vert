@@ -14,13 +14,13 @@ layout (location = 4) out vec4 vert_pos;
 void main() {
     Vertex v = constants.vertex_buffer.vertices[gl_VertexIndex];
 
-    vert_pos = (constants.local_transform * vec4(v.pos.xyz, 1.f));
+    vert_pos = constants.global_transform * constants.local_transform * vec4(v.pos.xyz, 1.f);
     gl_Position = scene_data.proj * scene_data.view * vert_pos;
 
     surface_normal = mat3(constants.local_transform) * v.norm.xyz;
 
 
-    PBR_Material mat = material_buf.materials[nonuniformEXT(constants.material_i)];
+    PBR_Material mat = material_buf.materials[nonuniformEXT (constants.material_i)];
     uint color_tex_coord = mat.color_tex_coord;
     color_uv = v.tex_coord[color_tex_coord];
 

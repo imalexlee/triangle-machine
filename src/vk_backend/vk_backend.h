@@ -32,6 +32,12 @@ struct ShaderIndices {
     uint16_t sky_box_frag{};
 };
 
+struct RenderArea {
+    glm::vec2 top_left{0};
+    // {width, height}
+    glm::vec2 scissor_dimensions{0};
+};
+
 struct VkBackend {
     VkInstance                     instance;
     VkSurfaceKHR                   surface;
@@ -40,7 +46,11 @@ struct VkBackend {
     VkRenderingAttachmentInfo      scene_color_attachment;
     VkRenderingAttachmentInfo      scene_depth_attachment;
     VkRenderingInfo                scene_rendering_info;
+    VkRenderingAttachmentInfo      ui_color_attachment;
+    VkRenderingInfo                ui_rendering_info;
     VkDescriptorPool               imm_descriptor_pool;
+    std::vector<VkDescriptorSet>   viewport_desc_sets;
+    std::vector<AllocatedImage>    viewport_images;
     VkFence                        imm_fence;
     VkSampler                      default_linear_sampler;
     VkSampler                      default_nearest_sampler;
@@ -52,6 +62,7 @@ struct VkBackend {
     VkPipelineLayout               sky_box_pipeline_layout;
     VkPipelineLayout               grid_pipeline_layout;
     VmaAllocator                   allocator{};
+    RenderArea                     render_area{};
     DescriptorAllocator            scene_desc_allocator{};
     DescriptorAllocator            graphics_desc_allocator{};
     DeviceContext                  device_ctx{};
@@ -69,15 +80,16 @@ struct VkBackend {
     AllocatedImage                 color_resolve_image{};
     AllocatedImage                 depth_image{};
     std::vector<AllocatedImage>    tex_images{};
-    uint32_t                       tex_sampler_desc_count;
+    uint32_t                       tex_sampler_desc_count{};
     AllocatedBuffer                mat_buffer{};
     uint32_t                       mat_count{0};
     AllocatedImage                 sky_box_image{};
     AllocatedBuffer                sky_box_vert_buffer{};
     std::array<AllocatedBuffer, 3> scene_data_buffers{};
     uint64_t                       frame_num{1};
+    uint8_t                        current_frame_i{};
     std::array<Frame, 3>           frames{};
-    SceneData                      scene_data{};
+    WorldData                      scene_data{};
     ExtContext                     ext_ctx{};
     DeletionQueue                  deletion_queue{};
     static constexpr uint32_t      material_desc_binding     = 0;
@@ -94,9 +106,11 @@ void backend_finish_pending_vk_work(const VkBackend* backend);
 
 void backend_deinit(VkBackend* backend);
 
-void backend_draw(VkBackend* backend, std::vector<Entity>& entities, const SceneData* scene_data, size_t vert_shader, size_t frag_shader);
+void backend_draw(VkBackend* backend, std::vector<Entity>& entities, const WorldData* scene_data, size_t vert_shader, size_t frag_shader);
 
 void backend_create_imgui_resources(VkBackend* backend);
+
+void backend_update_render_area(VkBackend* backend, const RenderArea* render_area);
 
 void backend_upload_vert_shader(VkBackend* backend, const std::filesystem::path& file_path, const std::string& name);
 
@@ -113,6 +127,8 @@ void backend_recompile_frag_shader(VkBackend* backend, uint32_t shader_idx);
 
 void backend_create_accel_struct(VkBackend* backend, std::span<const BottomLevelGeometry> bottom_level_geometries,
                                  std::span<const TopLevelInstanceRef> instance_refs);
+
+void backend_update_accel_struct(VkBackend* backend, const glm::mat4* transform, uint32_t instance_idx);
 
 template <typename T>
 [[nodiscard]] MeshBuffers backend_upload_mesh(VkBackend* backend, const std::span<const uint32_t> indices, std::span<const T> vertices) {

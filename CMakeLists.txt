@@ -44,7 +44,17 @@ add_executable(
         src/vk_backend/vk_ext.h
         src/vk_backend/resources/vk_accel_struct.cpp
         src/vk_backend/resources/vk_accel_struct.h
+
+        thirdparty/ImGuizmo/ImGuizmo.cpp
+        thirdparty/ImGuizmo/ImGuizmo.h
+        thirdparty/ImGuiFileDialog/ImGuiFileDialog.cpp
+        thirdparty/ImGuiFileDialog/ImGuiFileDialog.h
+        thirdparty/ImGuiFileDialog/ImGuiFileDialogConfig.h
+        thirdparty/nlohmann/json.hpp
+        src/core/audio.cpp
+        src/core/audio.h
 )
+
 
 target_compile_options(
         ${PROJECT_NAME}
@@ -64,16 +74,20 @@ endif ()
 
 add_subdirectory(thirdparty/fmt)
 add_subdirectory(thirdparty/fastgltf)
+add_subdirectory(thirdparty/ImGuiFileDialog)
 #add_subdirectory(thirdparty/meshoptimizer)
 add_subdirectory(thirdparty/glfw)
 #add_subdirectory(thirdparty/glslang)
 add_subdirectory(thirdparty/shaderc)
 add_subdirectory(thirdparty)
 
+set(FMOD_PATH "C:/Program Files (x86)/FMOD SoundSystem/FMOD Studio API Windows/api/core")
+
 target_include_directories(
         ${PROJECT_NAME} SYSTEM
         PRIVATE src
         PRIVATE thirdparty/glm
+        PRIVATE thirdparty/ImGuizmo
         PRIVATE thirdparty/glfw/include
         PRIVATE thirdparty/fmt/include
         PRIVATE thirdparty/stb_image
@@ -81,10 +95,26 @@ target_include_directories(
         PRIVATE thirdparty/taskflow
         PRIVATE thirdparty/fastgltf/include
         PRIVATE thirdparty/shaderc/utils
+        PRIVATE thirdparty/ImGuiFileDialog
+        PRIVATE thirdparty/
+        PRIVATE ${FMOD_PATH}/inc/
 )
 
 target_link_directories(${PROJECT_NAME} PUBLIC thirdparty/fmt/src PUBLIC
-        thirdparty/fastgltf/src)
+        thirdparty/fastgltf/src PUBLIC ${FMOD_PATH}/lib/x64)
+
+add_library(fmod SHARED IMPORTED)
+set_target_properties(fmod PROPERTIES
+        IMPORTED_LOCATION "${FMOD_PATH}/lib/x64/fmod.dll"
+        IMPORTED_IMPLIB "${FMOD_PATH}/lib/x64/fmod_vc.lib"
+        INTERFACE_INCLUDE_DIRECTORIES "${FMOD_PATH}/inc/"
+)
+
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${FMOD_PATH}/lib/x64/fmod.dll"
+        $<TARGET_FILE_DIR:${PROJECT_NAME}>
+)
 
 # Find NVTT.
 if (NOT NVTT_DIR)
@@ -154,13 +184,16 @@ add_custom_command(
 target_link_libraries(
         ${PROJECT_NAME}
         PUBLIC glfw
-        #   meshoptimizer
         fastgltf
         fmt
         imgui
         shaderc
         shaderc_util
-        Vulkan::Vulkan)
+        Vulkan::Vulkan
+        #        fmod_vc
+        fmod
+
+)
 
 
 find_program(

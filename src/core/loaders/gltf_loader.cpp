@@ -239,13 +239,13 @@ static std::vector<GLTFMesh> load_gltf_meshes(const fastgltf::Asset* my_asset) {
             fastgltf::iterateAccessor<uint32_t>(*my_asset, *indices_accessor,
                                                 [&](uint32_t vert_index) { new_mesh.indices.push_back(vert_index + vertex_count); });
 
-            fastgltf::iterateAccessorWithIndex<glm::vec3>(*my_asset, *pos_accessor, [&](glm::vec3 pos, size_t i) {
+            fastgltf::iterateAccessorWithIndex<glm::vec3>(*my_asset, *pos_accessor, [&](const glm::vec3& pos, size_t i) {
                 new_mesh.vertices[i + vertex_count].position.x = pos.x;
                 new_mesh.vertices[i + vertex_count].position.y = pos.y;
                 new_mesh.vertices[i + vertex_count].position.z = pos.z;
             });
 
-            fastgltf::iterateAccessorWithIndex<glm::vec3>(*my_asset, *normal_accessor, [&](glm::vec3 normal, size_t i) {
+            fastgltf::iterateAccessorWithIndex<glm::vec3>(*my_asset, *normal_accessor, [&](const glm::vec3& normal, size_t i) {
                 assert(i + vertex_count < new_mesh.vertices.size());
                 new_mesh.vertices[i + vertex_count].normal.x = normal.x;
                 new_mesh.vertices[i + vertex_count].normal.y = normal.y;
@@ -258,7 +258,7 @@ static std::vector<GLTFMesh> load_gltf_meshes(const fastgltf::Asset* my_asset) {
                 if (tex_coord_attribute != primitive.attributes.cend()) {
                     // found tex coord
                     const fastgltf::Accessor* tex_coord_accessor = &my_asset->accessors[tex_coord_attribute->second];
-                    fastgltf::iterateAccessorWithIndex<glm::vec2>(*my_asset, *tex_coord_accessor, [&](glm::vec2 tex_coord, size_t i) {
+                    fastgltf::iterateAccessorWithIndex<glm::vec2>(*my_asset, *tex_coord_accessor, [&](const glm::vec2& tex_coord, size_t i) {
                         assert(i + vertex_count < new_mesh.vertices.size());
                         new_mesh.vertices[i + vertex_count].tex_coord[coord_i].x = tex_coord.x;
                         new_mesh.vertices[i + vertex_count].tex_coord[coord_i].y = tex_coord.y;
@@ -473,25 +473,26 @@ static uint32_t upload_gltf_materials(VkBackend* backend, std::span<const GLTFMa
 
 Entity load_entity(VkBackend* backend, const std::filesystem::path& path) {
 
-    constexpr auto supported_extensions = fastgltf::Extensions::KHR_mesh_quantization | fastgltf::Extensions::KHR_texture_transform |
-                                          fastgltf::Extensions::KHR_materials_clearcoat | fastgltf::Extensions::KHR_materials_specular |
-                                          fastgltf::Extensions::KHR_materials_transmission | fastgltf::Extensions::KHR_materials_variants;
-
-    fastgltf::Parser         parser(supported_extensions);
-    fastgltf::GltfDataBuffer data;
-    data.loadFromFile(path);
+    constexpr fastgltf::Extensions supported_extensions =
+        fastgltf::Extensions::KHR_mesh_quantization | fastgltf::Extensions::KHR_texture_transform | fastgltf::Extensions::KHR_materials_clearcoat |
+        fastgltf::Extensions::KHR_materials_specular | fastgltf::Extensions::KHR_materials_transmission |
+        fastgltf::Extensions::KHR_materials_variants;
 
     constexpr auto gltf_options = fastgltf::Options::DontRequireValidAssetMember | fastgltf::Options::AllowDouble |
                                   fastgltf::Options::LoadGLBBuffers | fastgltf::Options::LoadExternalBuffers | fastgltf::Options::LoadExternalImages |
                                   fastgltf::Options::GenerateMeshIndices;
 
-    auto load = parser.loadGltf(&data, path.parent_path(), gltf_options);
+    fastgltf::GltfDataBuffer data{};
+    data.loadFromFile(path);
+
+    fastgltf::Parser parser{supported_extensions};
+    auto             load = parser.loadGltf(&data, path.parent_path(), gltf_options);
 
     if (auto error = load.error(); error != fastgltf::Error::None) {
         fmt::println("ERROR LOADING GLTF");
         std::exit(1);
     }
-    fastgltf::Asset asset;
+    fastgltf::Asset asset{};
     asset = std::move(load.get());
 
     const std::vector<GLTFImage>    gltf_images     = load_gltf_images(&asset);
@@ -510,10 +511,8 @@ Entity load_entity(VkBackend* backend, const std::filesystem::path& path) {
     instance_refs.reserve(gltf_mesh_nodes.size());
     for (const auto& node : gltf_mesh_nodes) {
         TopLevelInstanceRef new_instance_ref{};
-        new_instance_ref.mesh_idx = node.mesh_i;
-        // Transposing since vulkan acceleration structure instances expect a row-major matrix
-        // and we are in column major
-        new_instance_ref.transform = glm::transpose(node.transform);
+        new_instance_ref.mesh_idx  = node.mesh_i;
+        new_instance_ref.transform = node.transform;
 
         instance_refs.push_back(new_instance_ref);
     }
@@ -557,6 +556,11 @@ Entity load_entity(VkBackend* backend, const std::filesystem::path& path) {
 
     entity.opaque_objs.shrink_to_fit();
     entity.transparent_objs.shrink_to_fit();
+
+    // extract name from path
+    entity.name      = path.stem().string();
+    entity.path      = path;
+    entity.transform = glm::mat4(1.f);
 
     for (auto& image : gltf_images) {
         stbi_image_free(image.data);
