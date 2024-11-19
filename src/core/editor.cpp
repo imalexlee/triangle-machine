@@ -5,7 +5,8 @@
 #include "scene.h"
 #include "window.h"
 
-#include "simdjson.h"
+#include "nlohmann/json.hpp"
+
 #include <ImGuiFileDialog.h>
 #include <imconfig.h>
 #include <imgui_impl_glfw.h>
@@ -123,7 +124,7 @@ void update_viewport(Editor* editor, const VkBackend* backend, const Window* win
     start_time = high_resolution_clock::now();
 }
 
-void update_file_menu(Editor* editor, VkBackend* backend, const Window* window, const Camera* camera, Scene* scene) {
+void update_file_menu(Editor* editor, VkBackend* backend, Scene* scene) {
     ImGui::PushItemFlag(ImGuiItemFlags_AutoClosePopups, false);
     static bool new_selected = false;
     if (ImGui::MenuItem("New", "Ctrl+N", false, editor->app_data_dir_exists)) {
@@ -155,7 +156,8 @@ void update_file_menu(Editor* editor, VkBackend* backend, const Window* window, 
                 std::string current_path = ImGuiFileDialog::Instance()->GetCurrentPath();
                 if (new_selected) {
                     std::ofstream new_file(file_path);
-                    new_file << R"+({"scene":{"entities":[]}})+"_padded;
+                    using namespace nlohmann::literals;
+                    new_file << R"+({"scene":{"entities":[]}})+"_json;
                     new_file.close();
                 }
                 scene_open(scene, backend, file_path);
@@ -184,7 +186,7 @@ void update_scene_overview(Editor* editor, VkBackend* backend, const Window* win
 
     if (ImGui::BeginMenuBar()) {
         if (ImGui::BeginMenu("File")) {
-            update_file_menu(editor, backend, window, camera, scene);
+            update_file_menu(editor, backend, scene);
             ImGui::EndMenu();
         }
         ImGui::EndMenuBar();
@@ -240,7 +242,7 @@ void update_scene_overview(Editor* editor, VkBackend* backend, const Window* win
     ImGui::End();
 }
 
-void update_entity_viewer(Editor* editor, const VkBackend* backend, const Window* window, const Camera* camera, Scene* scene) {
+void update_entity_viewer(Editor* editor, Scene* scene) {
     if (scene->selected_entity < 0) {
         return;
     }
@@ -280,7 +282,7 @@ void editor_update(Editor* editor, VkBackend* backend, const Window* window, Cam
     begin_ui();
     update_viewport(editor, backend, window, camera, scene);
     update_scene_overview(editor, backend, window, camera, scene);
-    update_entity_viewer(editor, backend, window, camera, scene);
+    update_entity_viewer(editor, scene);
     end_ui(editor);
 }
 

@@ -4,7 +4,6 @@
 
 #include <assert.h>
 #include <fmod.hpp>
-#include <iostream>
 
 void audio_ctx_init(AudioContext* audio_ctx) {
     FMOD_RESULT result = FMOD_System_Create(&audio_ctx->system, FMOD_VERSION);

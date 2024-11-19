@@ -239,13 +239,13 @@ static std::vector<GLTFMesh> load_gltf_meshes(const fastgltf::Asset* my_asset) {
             fastgltf::iterateAccessor<uint32_t>(*my_asset, *indices_accessor,
                                                 [&](uint32_t vert_index) { new_mesh.indices.push_back(vert_index + vertex_count); });
 
-            fastgltf::iterateAccessorWithIndex<glm::vec3>(*my_asset, *pos_accessor, [&](glm::vec3 pos, size_t i) {
+            fastgltf::iterateAccessorWithIndex<glm::vec3>(*my_asset, *pos_accessor, [&](const glm::vec3& pos, size_t i) {
                 new_mesh.vertices[i + vertex_count].position.x = pos.x;
                 new_mesh.vertices[i + vertex_count].position.y = pos.y;
                 new_mesh.vertices[i + vertex_count].position.z = pos.z;
             });
 
-            fastgltf::iterateAccessorWithIndex<glm::vec3>(*my_asset, *normal_accessor, [&](glm::vec3 normal, size_t i) {
+            fastgltf::iterateAccessorWithIndex<glm::vec3>(*my_asset, *normal_accessor, [&](const glm::vec3& normal, size_t i) {
                 assert(i + vertex_count < new_mesh.vertices.size());
                 new_mesh.vertices[i + vertex_count].normal.x = normal.x;
                 new_mesh.vertices[i + vertex_count].normal.y = normal.y;
@@ -258,7 +258,7 @@ static std::vector<GLTFMesh> load_gltf_meshes(const fastgltf::Asset* my_asset) {
                 if (tex_coord_attribute != primitive.attributes.cend()) {
                     // found tex coord
                     const fastgltf::Accessor* tex_coord_accessor = &my_asset->accessors[tex_coord_attribute->second];
-                    fastgltf::iterateAccessorWithIndex<glm::vec2>(*my_asset, *tex_coord_accessor, [&](glm::vec2 tex_coord, size_t i) {
+                    fastgltf::iterateAccessorWithIndex<glm::vec2>(*my_asset, *tex_coord_accessor, [&](const glm::vec2& tex_coord, size_t i) {
                         assert(i + vertex_count < new_mesh.vertices.size());
                         new_mesh.vertices[i + vertex_count].tex_coord[coord_i].x = tex_coord.x;
                         new_mesh.vertices[i + vertex_count].tex_coord[coord_i].y = tex_coord.y;
@@ -471,7 +471,7 @@ static uint32_t upload_gltf_materials(VkBackend* backend, std::span<const GLTFMa
     return 0;
 }
 
-Entity load_entity(VkBackend* backend, const std::filesystem::path path) {
+Entity load_entity(VkBackend* backend, const std::filesystem::path& path) {
 
     constexpr fastgltf::Extensions supported_extensions =
         fastgltf::Extensions::KHR_mesh_quantization | fastgltf::Extensions::KHR_texture_transform | fastgltf::Extensions::KHR_materials_clearcoat |

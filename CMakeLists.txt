@@ -51,16 +51,10 @@ add_executable(
         thirdparty/ImGuiFileDialog/ImGuiFileDialog.h
         thirdparty/ImGuiFileDialog/ImGuiFileDialogConfig.h
         thirdparty/nlohmann/json.hpp
-        thirdparty/simdjson/simdjson.cpp
-        thirdparty/simdjson/simdjson.h
         src/core/audio.cpp
         src/core/audio.h
 )
 
-#target_compile_options(${PROJECT_NAME} PRIVATE -fsanitize=address)
-#target_link_directories(${PROJECT_NAME} PRIVATE "$ENV{ProgramFiles\(x86\)}/Microsoft Visual Studio/2022/Community/VC/Tools/Llvm/x64/lib/clang/18/lib/windows")
-#target_link_libraries(${PROJECT_NAME} PRIVATE clang_rt.asan_dynamic-x86_64 clang_rt.asan_dynamic_runtime_thunk-x86_64)
-#target_link_options(${PROJECT_NAME} PRIVATE /wholearchive:clang_rt.asan_dynamic_runtime_thunk-x86_64.lib)
 
 target_compile_options(
         ${PROJECT_NAME}
@@ -70,10 +64,8 @@ target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
 target_compile_options(
         ${PROJECT_NAME}
         PUBLIC
-        "$<$<CONFIG:RELEASE>:-g;-flto;-Wall;-Wextra>;-Wno-missing-field-initializers"
+        "$<$<CONFIG:RELEASE>:-Ofast;-fno-signed-zeros;-flto;-Wall;-Wextra>;-Wno-missing-field-initializers"
 )
-
-#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=undefined -g -O0")
 
 if (APPLE)
     enable_language(OBJC)
