@@ -8,6 +8,7 @@ layout (set = 0, binding = 0) uniform SceneData {
     vec4 eye_pos;
 } scene_data;
 
+layout (set = 0, binding = 1, r32i) uniform writeonly iimage2D entity_id_img;
 
 struct PBR_Material {
     vec4 color_factors;

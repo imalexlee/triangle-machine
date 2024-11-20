@@ -175,7 +175,11 @@ void create_logical_device(DeviceContext* device_ctx) {
     features_1_2.bufferDeviceAddress                          = VK_TRUE;
     features_1_2.descriptorIndexing                           = VK_TRUE;
     features_1_2.runtimeDescriptorArray                       = VK_TRUE;
+    features_1_2.shaderStorageImageArrayNonUniformIndexing    = VK_TRUE;
     features_1_2.pNext                                        = &features_1_3;
+
+    VkPhysicalDeviceFeatures features_1_0{};
+    features_1_0.shaderStorageImageExtendedFormats = VK_TRUE;
 
     VkDeviceCreateInfo device_ci{};
     device_ci.sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -183,6 +187,7 @@ void create_logical_device(DeviceContext* device_ctx) {
     device_ci.queueCreateInfoCount    = queue_infos.size();
     device_ci.ppEnabledExtensionNames = device_extensions.data();
     device_ci.enabledExtensionCount   = device_extensions.size();
+    device_ci.pEnabledFeatures        = &features_1_0;
     device_ci.pNext                   = &features_1_2;
 
     VK_CHECK(vkCreateDevice(device_ctx->physical_device, &device_ci, nullptr, &device_ctx->logical_device));

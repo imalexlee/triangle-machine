@@ -44,6 +44,7 @@ struct VkBackend {
     VkExtent2D                     image_extent;
     VkClearValue                   scene_clear_value;
     VkRenderingAttachmentInfo      scene_color_attachment;
+    VkRenderingAttachmentInfo      scene_entity_id_attachment;
     VkRenderingAttachmentInfo      scene_depth_attachment;
     VkRenderingInfo                scene_rendering_info;
     VkRenderingAttachmentInfo      ui_color_attachment;
@@ -82,7 +83,8 @@ struct VkBackend {
     std::vector<AllocatedImage>    tex_images{};
     uint32_t                       tex_sampler_desc_count{};
     AllocatedBuffer                mat_buffer{};
-    uint32_t                       mat_count{0};
+    std::array<AllocatedImage, 3>  entity_id_images{};
+    uint32_t                       mat_count{};
     AllocatedImage                 sky_box_image{};
     AllocatedBuffer                sky_box_vert_buffer{};
     std::array<AllocatedBuffer, 3> scene_data_buffers{};

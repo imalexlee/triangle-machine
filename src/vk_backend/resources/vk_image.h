@@ -25,15 +25,17 @@ struct TextureSampler {
  *
  * @param device    The device to allocate from
  * @param allocator The VMA Allocator to use for allocation
- * @param usage     The usage of the image
+ * @param img_usage The usage of the image
  * @param view_type The type of image view
  * @param extent    The extent of the image in 2D
  * @param format    The format of the image
  * @param samples   The number of samples for the image (for multisampling)
  * @return          An AllocatedImage
  */
-[[nodiscard]] AllocatedImage allocated_image_create(VkDevice device, VmaAllocator allocator, VkImageUsageFlags usage, VkImageViewType view_type,
-                                                    VkExtent2D extent, VkFormat format, uint32_t samples = 1);
+AllocatedImage allocated_image_create(VkDevice device, VmaAllocator allocator, VkImageUsageFlags img_usage, VkImageViewType view_type,
+                                      VkExtent2D extent, VkFormat format, uint32_t samples = 1,
+                                      VmaMemoryUsage           memory_usage     = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+                                      VmaAllocationCreateFlags allocation_flags = 0);
 
 /**
  * @brief Perform a blit (copy) from one image to another

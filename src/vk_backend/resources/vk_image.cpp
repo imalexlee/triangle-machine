@@ -5,8 +5,9 @@
 #include <vk_backend/vk_sync.h>
 
 // creates a 2D image along with its image_view
-AllocatedImage allocated_image_create(VkDevice device, VmaAllocator allocator, VkImageUsageFlags usage, VkImageViewType view_type, VkExtent2D extent,
-                            VkFormat format, uint32_t samples) {
+AllocatedImage allocated_image_create(VkDevice device, VmaAllocator allocator, VkImageUsageFlags img_usage, VkImageViewType view_type,
+                                      VkExtent2D extent, VkFormat format, uint32_t samples, VmaMemoryUsage memory_usage,
+                                      VmaAllocationCreateFlags allocation_flags) {
 
     VkExtent3D extent_3D{
         .width  = extent.width,
@@ -22,7 +23,7 @@ AllocatedImage allocated_image_create(VkDevice device, VmaAllocator allocator, V
     image_ci.sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     image_ci.extent        = extent_3D;
     image_ci.format        = format;
-    image_ci.usage         = usage;
+    image_ci.usage         = img_usage;
     image_ci.samples       = static_cast<VkSampleCountFlagBits>(samples);
     image_ci.mipLevels     = 1;
     image_ci.imageType     = VK_IMAGE_TYPE_2D;
@@ -31,8 +32,9 @@ AllocatedImage allocated_image_create(VkDevice device, VmaAllocator allocator, V
     image_ci.flags         = view_type == VK_IMAGE_VIEW_TYPE_CUBE ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0;
 
     VmaAllocationCreateInfo allocation_ci{};
-    allocation_ci.usage         = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-    allocation_ci.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    allocation_ci.usage = memory_usage;
+    // allocation_ci.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    allocation_ci.flags = allocation_flags;
 
     // creates an image handle and allocates the memory for it
     VK_CHECK(vmaCreateImage(allocator, &image_ci, &allocation_ci, &allocated_image.image, &allocated_image.allocation, nullptr));
@@ -49,7 +51,7 @@ AllocatedImage allocated_image_create(VkDevice device, VmaAllocator allocator, V
 }
 
 VkImageView vk_image_view_create(VkDevice device, VkImage image, VkImageViewType view_type, VkFormat format, VkImageAspectFlags aspect_flags,
-                              uint32_t mip_levels) {
+                                 uint32_t mip_levels) {
 
     VkImageView           image_view;
     VkImageViewCreateInfo image_view_ci{};
@@ -95,7 +97,7 @@ VkImage vk_image_create(VkDevice device, VkFormat format, VkImageUsageFlags usag
 }
 
 VkSampler vk_sampler_create(VkDevice device, VkFilter min_filter, VkFilter mag_filter, VkSamplerAddressMode address_mode_u,
-                         VkSamplerAddressMode address_mode_v) {
+                            VkSamplerAddressMode address_mode_v) {
     VkSamplerCreateInfo sampler_ci{};
     sampler_ci.sType        = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
     sampler_ci.minFilter    = min_filter;
@@ -110,7 +112,7 @@ VkSampler vk_sampler_create(VkDevice device, VkFilter min_filter, VkFilter mag_f
 };
 
 void vk_image_blit(VkCommandBuffer cmd, VkImage src, VkImage dest, VkExtent2D src_extent, VkExtent2D dst_extent, uint32_t src_layer_count,
-                uint32_t dst_layer_count) {
+                   uint32_t dst_layer_count) {
     VkImageBlit2 blit_region{.sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2, .pNext = nullptr};
     blit_region.srcOffsets[1].x = src_extent.width;
     blit_region.srcOffsets[1].y = src_extent.height;

@@ -5,6 +5,7 @@
 #include "../input_structures.glsl"
 
 layout (location = 0) out vec4 out_color;
+//layout (location = 1) out int entity_id;
 
 layout (location = 1) in vec2 color_uv;
 layout (location = 2) in vec2 metal_rough_uv;
@@ -113,5 +114,8 @@ void main() {
 
     }
 
+    ivec2 coord = ivec2(gl_FragCoord.xy);
+    imageStore(entity_id_img, coord, ivec4(50, 0, 0, 0));
+    //    entity_id = 50;
 
 }

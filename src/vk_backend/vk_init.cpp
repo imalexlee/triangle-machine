@@ -1,7 +1,7 @@
 #include "vk_init.h"
 #include <vulkan/vulkan_core.h>
 
-VkRenderingInfo vk_rendering_info_create(const VkRenderingAttachmentInfo* color_attachment, const VkRenderingAttachmentInfo* depth_attachment,
+VkRenderingInfo vk_rendering_info_create(std::span<VkRenderingAttachmentInfo*> color_attachment, const VkRenderingAttachmentInfo* depth_attachment,
                                          VkExtent2D extent) {
 
     VkRenderingInfo rendering_info{};
@@ -11,8 +11,8 @@ VkRenderingInfo vk_rendering_info_create(const VkRenderingAttachmentInfo* color_
         .extent = extent,
     };
 
-    rendering_info.pColorAttachments    = color_attachment;
-    rendering_info.colorAttachmentCount = 1;
+    rendering_info.pColorAttachments    = color_attachment[0];
+    rendering_info.colorAttachmentCount = color_attachment.size();
     rendering_info.pDepthAttachment     = depth_attachment;
     rendering_info.pStencilAttachment   = nullptr;
     rendering_info.layerCount           = 1;
