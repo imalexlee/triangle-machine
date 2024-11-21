@@ -94,13 +94,9 @@ void backend_init(VkBackend* backend, VkInstance instance, VkSurfaceKHR surface,
             allocated_buffer_create(backend->allocator, sizeof(WorldData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_AUTO,
                                     VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
 
-        //        uint32_t entity_buffer_size = width * height * sizeof(int32_t);
-        // backend->entity_id_images[i] =
-        //     allocated_buffer_create(backend->allocator, entity_buffer_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_AUTO,
-        //                             VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT);
         backend->entity_id_images[i] = allocated_image_create(
             backend->device_ctx.logical_device, backend->allocator, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R32_SINT, 1, VMA_MEMORY_USAGE_AUTO_PREFER_HOST);
+            VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16_UINT, 1, VMA_MEMORY_USAGE_AUTO);
 
         DescriptorWriter writer{};
         desc_writer_write_image_desc(&writer, 1, backend->entity_id_images[i].image_view, backend->default_linear_sampler, VK_IMAGE_LAYOUT_GENERAL,
@@ -643,7 +639,7 @@ void backend_draw(VkBackend* backend, std::vector<Entity>& entities, const World
     vk_image_memory_barrier_insert(cmd_buffer, backend->entity_id_images[backend->current_frame_i].image, VK_IMAGE_LAYOUT_UNDEFINED,
                                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-    VkClearValue            entity_id_clear_value = {.color = {{-1, 0, 0, 0}}};
+    VkClearValue            entity_id_clear_value = {.color = {{0, 0, 0, 0}}};
     VkImageSubresourceRange range                 = vk_image_subresource_range_create(VK_IMAGE_ASPECT_COLOR_BIT, 1, 1);
 
     vkCmdClearColorImage(cmd_buffer, backend->entity_id_images[backend->current_frame_i].image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -773,10 +769,14 @@ void resize(VkBackend* backend) {
 
         allocated_image_destroy(backend->device_ctx.logical_device, backend->allocator, &backend->entity_id_images[i]);
 
-        // uint32_t entity_buffer_size = backend->image_extent.width * backend->image_extent.height * sizeof(int32_t);
-        // backend->entity_id_images[i] =
-        //     allocated_buffer_create(backend->allocator, entity_buffer_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_AUTO,
-        //                             VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT);
+        backend->entity_id_images[i] = allocated_image_create(
+            backend->device_ctx.logical_device, backend->allocator, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16_UINT, 1, VMA_MEMORY_USAGE_AUTO);
+
+        DescriptorWriter writer{};
+        desc_writer_write_image_desc(&writer, 1, backend->entity_id_images[i].image_view, backend->default_linear_sampler, VK_IMAGE_LAYOUT_GENERAL,
+                                     VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+        desc_writer_update_desc_set(&writer, backend->device_ctx.logical_device, backend->scene_desc_sets[i]);
     }
 
     for (size_t i = 0; i < backend->viewport_images.size(); i++) {
@@ -1314,6 +1314,10 @@ void backend_deinit(VkBackend* backend) {
 
     for (const auto& image : backend->viewport_images) {
         allocated_image_destroy(backend->device_ctx.logical_device, backend->allocator, &image);
+    }
+
+    for (const auto& entity_id_img : backend->entity_id_images) {
+        allocated_image_destroy(backend->device_ctx.logical_device, backend->allocator, &entity_id_img);
     }
 
     for (const auto& scene_buf : backend->scene_data_buffers) {

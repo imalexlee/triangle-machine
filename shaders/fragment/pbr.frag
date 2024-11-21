@@ -96,8 +96,6 @@ void main() {
 
     vec3 final_color = (diffuse_brdf + specular_brdf) * light_intensity * n_dot_l;
 
-
-
     out_color = vec4(final_color, tex_color.a);
 
     rayQueryEXT rq;
@@ -115,7 +113,11 @@ void main() {
     }
 
     ivec2 coord = ivec2(gl_FragCoord.xy);
-    imageStore(entity_id_img, coord, ivec4(50, 0, 0, 0));
-    //    entity_id = 50;
+    uvec4 img_elem = imageLoad(entity_id_img, coord);
+    uint z_int = uint(round(gl_FragCoord.z * 65535.0));
 
+    if (z_int > img_elem.y) {
+        // store new value in id buffer if the current fragments distance to camera is closer than the last
+        imageStore(entity_id_img, coord, ivec4(constants.entity_id, z_int, 0, 0));
+    }
 }

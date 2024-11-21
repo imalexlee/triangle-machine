@@ -9,6 +9,7 @@ struct MeshData {
     glm::mat4       local_transform{1.f};
     VkDeviceAddress vertex_buffer_address{};
     uint32_t        mat_i{0};
+    uint32_t        entity_id{};
 };
 
 struct DrawObject {
@@ -23,8 +24,8 @@ struct Entity {
     std::vector<DrawObject> opaque_objs{};
     std::filesystem::path   path{};
     std::string             name{};
-    // glm::vec3               pos = {0, 0, 0};
-    glm::mat4 transform{};
+    glm::mat4               transform{};
+    uint32_t                id;
 };
 
 struct EntityPushConstants {

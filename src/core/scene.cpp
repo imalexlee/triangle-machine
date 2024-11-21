@@ -6,12 +6,31 @@
 
 void scene_load_gltf_paths(Scene* scene, VkBackend* backend, std::span<std::filesystem::path> gltf_paths) {
     for (const auto& path : gltf_paths) {
-        scene->entities.push_back(load_entity(backend, path));
+        Entity new_entity = load_entity(backend, path);
+        new_entity.id     = scene->entities.size() + 1;
+
+        for (DrawObject& obj : new_entity.opaque_objs) {
+            obj.mesh_data.entity_id = new_entity.id;
+        }
+        for (DrawObject& obj : new_entity.transparent_objs) {
+            obj.mesh_data.entity_id = new_entity.id;
+        }
+
+        scene->entities.push_back(new_entity);
     }
 }
 
 void scene_load_gltf_path(Scene* scene, VkBackend* backend, const std::filesystem::path& gltf_path) {
-    scene->entities.push_back(load_entity(backend, gltf_path));
+    Entity new_entity = load_entity(backend, gltf_path);
+    new_entity.id     = scene->entities.size() + 1;
+
+    for (DrawObject& obj : new_entity.opaque_objs) {
+        obj.mesh_data.entity_id = new_entity.id;
+    }
+    for (DrawObject& obj : new_entity.transparent_objs) {
+        obj.mesh_data.entity_id = new_entity.id;
+    }
+    scene->entities.push_back(new_entity);
 }
 
 void scene_key_callback(Scene* scene, int key, int action) {
