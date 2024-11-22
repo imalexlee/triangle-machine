@@ -55,6 +55,8 @@ void engine_init(Engine* engine) {
 
     backend_upload_sky_box(&engine->backend, skybox_data.data(), 4, width, height);
 
+    backend_upload_cursor_shaders(&engine->backend);
+
     // const std::string gltf_path = "../assets/glb/structure.glb";
     // scene_load_gltf_path(&engine->scene, &engine->backend, gltf_path);
 
@@ -95,7 +97,14 @@ void engine_run(Engine* engine) {
             play_sound = false;
         }
         if (engine->editor.quit) {
-            break;
+            // TEMPORARY
+            int32_t  x  = engine->editor.viewport_width / 2;
+            int32_t  y  = engine->editor.viewport_height / 2;
+            uint32_t id = backend_entity_id_at_pos(&engine->backend, 400, 300);
+            std::cout << "ID: " << id << std::endl;
+            engine->editor.quit = false;
+
+            // break;
         }
         scene_update(&engine->scene, &engine->backend);
         backend_draw(&engine->backend, engine->scene.entities, &world_data, 0, 0);

@@ -39,6 +39,4 @@ void main() {
     projection = scene_data.proj;
 
     gl_Position = vec4(pos, 1.0);
-
-
 }

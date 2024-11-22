@@ -30,6 +30,8 @@ struct ShaderIndices {
     uint16_t grid_frag{};
     uint16_t sky_box_vert{};
     uint16_t sky_box_frag{};
+    uint16_t cursor_vert{};
+    uint16_t cursor_frag{};
 };
 
 struct RenderArea {
@@ -87,6 +89,7 @@ struct VkBackend {
     uint32_t                       mat_count{};
     AllocatedImage                 sky_box_image{};
     AllocatedBuffer                sky_box_vert_buffer{};
+    AllocatedBuffer                entity_id_result_buffer;
     std::array<AllocatedBuffer, 3> scene_data_buffers{};
     uint64_t                       frame_num{1};
     uint8_t                        current_frame_i{};
@@ -106,6 +109,8 @@ void backend_init(VkBackend* backend, VkInstance instance, VkSurfaceKHR surface,
 
 void backend_finish_pending_vk_work(const VkBackend* backend);
 
+[[nodiscard]] uint16_t backend_entity_id_at_pos(const VkBackend* backend, int32_t x, int32_t y);
+
 void backend_deinit(VkBackend* backend);
 
 void backend_draw(VkBackend* backend, std::vector<Entity>& entities, const WorldData* scene_data, size_t vert_shader, size_t frag_shader);
@@ -120,6 +125,8 @@ void backend_upload_frag_shader(VkBackend* backend, const std::filesystem::path&
 
 void backend_upload_sky_box_shaders(VkBackend* backend, const std::filesystem::path& vert_path, const std::filesystem::path& frag_path,
                                     const std::string& name);
+
+void backend_upload_cursor_shaders(VkBackend* backend);
 
 void backend_upload_sky_box(VkBackend* backend, const uint8_t* texture_data, uint32_t color_channels, uint32_t width, uint32_t height);
 
