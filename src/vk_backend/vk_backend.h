@@ -101,11 +101,14 @@ struct VkBackend {
     static constexpr uint32_t      accel_struct_desc_binding = 1;
     static constexpr uint32_t      sky_box_desc_binding      = 2;
     static constexpr uint32_t      texture_desc_binding      = 3;
+
+    // I hate this so much. only temporary. editor should be completely seperated from renderer and engine
+    enum class EngineMode mode {};
 };
 
 [[nodiscard]] VkInstance vk_instance_create(const char* app_name, const char* engine_name);
 
-void backend_init(VkBackend* backend, VkInstance instance, VkSurfaceKHR surface, uint32_t width, uint32_t height);
+void backend_init(VkBackend* backend, VkInstance instance, VkSurfaceKHR surface, uint32_t width, uint32_t height, EngineMode mode);
 
 void backend_finish_pending_vk_work(const VkBackend* backend);
 

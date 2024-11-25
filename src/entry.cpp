@@ -2,7 +2,7 @@
 
 int main() {
     Engine engine{};
-    engine_init(&engine);
+    engine_init(&engine, EngineMode::EDIT);
 
     engine_run(&engine);
 

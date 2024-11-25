@@ -23,6 +23,8 @@ void scene_request_update(Scene* scene);
 
 void scene_update(Scene* scene, VkBackend* backend);
 
+void scene_update_entity_pos(Scene* scene, uint16_t ent_id, const glm::vec3& offset);
+
 void scene_open(Scene* scene, VkBackend* backend, const std::filesystem::path& path);
 
 void scene_save(Scene* scene, const std::filesystem::path& path);

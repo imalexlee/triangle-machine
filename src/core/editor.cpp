@@ -15,7 +15,7 @@
 static void end_ui(Editor* editor);
 static void begin_ui();
 
-void editor_init(Editor* editor, VkBackend* backend, GLFWwindow* window) {
+void editor_init(Editor* editor, VkBackend* backend, Camera* camera, GLFWwindow* window) {
     editor->imgui_ctx = ImGui::CreateContext();
 
     editor->imgui_io              = &ImGui::GetIO();
@@ -46,6 +46,12 @@ void editor_init(Editor* editor, VkBackend* backend, GLFWwindow* window) {
     }
 
     backend_create_imgui_resources(backend);
+
+    camera_register_update_callback(camera, [=] {
+        camera->proj = glm::perspective(glm::radians(45.f), static_cast<float>(editor->viewport_width) / static_cast<float>(editor->viewport_height),
+                                        10000.0f, 0.1f);
+        //  cam->proj[1][1] *= -1; // correcting for Vulkans inverted Y coordinate
+    });
 }
 
 static void begin_ui() {

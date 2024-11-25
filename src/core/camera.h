@@ -28,6 +28,8 @@ struct Camera {
 
     bool middle_mouse_pressed{false};
     bool right_mouse_pressed{false};
+
+    std::vector<std::function<void()>> camera_update_callbacks;
 };
 
 void camera_init(Camera* cam, const Window* window, glm::vec4 initial_pos, float init_pitch_theta = 0.f, float init_yaw_theta = 0.f);
@@ -45,3 +47,5 @@ void camera_key_callback(Camera* cam, int key, int scancode, int action, int mod
 void camera_cursor_callback(Camera* cam, double x_pos, double y_pos);
 
 void camera_mouse_button_callback(Camera* cam, int button, int action, int mods);
+
+void camera_register_update_callback(Camera* cam, std::function<void()>&& fn_ptr);

@@ -14,9 +14,11 @@
 
 static Engine* active_engine = nullptr;
 
-void engine_init(Engine* engine) {
+void engine_init(Engine* engine, EngineMode mode) {
     assert(active_engine == nullptr);
     active_engine = engine;
+
+    engine->mode = mode;
 
     constexpr glm::vec4 init_cam_pos = {0, 0, 8, 1};
 
@@ -29,8 +31,11 @@ void engine_init(Engine* engine) {
     const VkInstance   instance = vk_instance_create("triangle machine", "my engine");
     const VkSurfaceKHR surface  = vk_surface_get(&engine->window, instance);
 
-    backend_init(&engine->backend, instance, surface, engine->window.width, engine->window.height);
-    editor_init(&engine->editor, &engine->backend, engine->window.glfw_window);
+    backend_init(&engine->backend, instance, surface, engine->window.width, engine->window.height, mode);
+    if (mode == EngineMode::EDIT) {
+        editor_init(&engine->editor, &engine->backend, &engine->camera, engine->window.glfw_window);
+    }
+
     backend_upload_vert_shader(&engine->backend, "../shaders/vertex/indexed_draw.vert", "vert shader");
     backend_upload_frag_shader(&engine->backend, "../shaders/fragment/pbr.frag", "frag shader");
     backend_upload_sky_box_shaders(&engine->backend, "../shaders/vertex/skybox.vert", "../shaders/fragment/skybox.frag", "skybox shaders");
@@ -57,18 +62,20 @@ void engine_init(Engine* engine) {
 
     backend_upload_cursor_shaders(&engine->backend);
 
-    // const std::string gltf_path = "../assets/glb/structure.glb";
-    // scene_load_gltf_path(&engine->scene, &engine->backend, gltf_path);
-
     window_register_key_callback(&engine->window, [=](int key, int scancode, int action, int mods) {
         camera_key_callback(&engine->camera, key, scancode, action, mods);
-        scene_key_callback(&engine->scene, key, action);
+        // scene_key_callback(&engine->scene, key, action);
     });
 
     window_register_cursor_callback(&engine->window, [=](double x_pos, double y_pos) { camera_cursor_callback(&engine->camera, x_pos, y_pos); });
 
     window_register_mouse_button_callback(
         &engine->window, [=](int button, int action, int mods) { camera_mouse_button_callback(&engine->camera, button, action, mods); });
+
+    if (mode == EngineMode::RELEASE) {
+        // const std::string gltf_path = "../assets/glb/structure.glb";
+        // scene_load_gltf_path(&engine->scene, &engine->backend, gltf_path);
+    }
 }
 
 void engine_run(Engine* engine) {
@@ -76,35 +83,24 @@ void engine_run(Engine* engine) {
     while (!glfwWindowShouldClose(engine->window.glfw_window)) {
         glfwPollEvents();
 
-        world_data = camera_update(&engine->camera, engine->editor.viewport_width, engine->editor.viewport_height);
+        uint32_t viewport_width  = engine->window.width;
+        uint32_t viewport_height = engine->window.height;
 
-        editor_update(&engine->editor, &engine->backend, &engine->window, &engine->camera, &engine->scene);
-
-        static bool play_sound = false;
-
-        if (engine->editor.ui_resized) {
-            if (!play_sound) {
-                play_sound = true;
-            }
-            RenderArea render_area{};
-            render_area.top_left.x           = engine->editor.window_width;
-            render_area.scissor_dimensions.x = engine->window.width - engine->editor.window_width;
-            render_area.scissor_dimensions.y = engine->window.height;
-
-            backend_update_render_area(&engine->backend, &render_area);
-            engine->editor.ui_resized = false;
-        } else {
-            play_sound = false;
+        if (engine->mode == EngineMode::EDIT) {
+            viewport_width  = engine->editor.viewport_width;
+            viewport_height = engine->editor.viewport_height;
         }
-        if (engine->editor.quit) {
-            // TEMPORARY
-            int32_t  x  = engine->editor.viewport_width / 2;
-            int32_t  y  = engine->editor.viewport_height / 2;
-            uint32_t id = backend_entity_id_at_pos(&engine->backend, 400, 300);
-            std::cout << "ID: " << id << std::endl;
-            engine->editor.quit = false;
 
-            // break;
+        world_data = camera_update(&engine->camera, viewport_width, viewport_height);
+
+        if (engine->mode == EngineMode::EDIT) {
+            editor_update(&engine->editor, &engine->backend, &engine->window, &engine->camera, &engine->scene);
+        }
+
+        if (engine->mode == EngineMode::EDIT) {
+            if (engine->editor.quit) {
+                break;
+            }
         }
         scene_update(&engine->scene, &engine->backend);
         backend_draw(&engine->backend, engine->scene.entities, &world_data, 0, 0);
@@ -114,7 +110,10 @@ void engine_run(Engine* engine) {
 void engine_deinit(Engine* engine) {
     backend_finish_pending_vk_work(&engine->backend);
 
-    editor_deinit(&engine->editor);
+    if (engine->mode == EngineMode::EDIT) {
+        editor_deinit(&engine->editor);
+    }
     window_deinit(&engine->window);
     backend_deinit(&engine->backend);
 }
+uint16_t engine_select_entity_at(const Engine* engine, int32_t x, int32_t y) { return backend_entity_id_at_pos(&engine->backend, x, y); }

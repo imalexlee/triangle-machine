@@ -25,6 +25,7 @@ struct Entity {
     std::filesystem::path   path{};
     std::string             name{};
     glm::mat4               transform{};
+    glm::vec3               orig_pos{};
     uint32_t                id;
 };
 

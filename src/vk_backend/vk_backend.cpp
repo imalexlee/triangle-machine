@@ -30,6 +30,7 @@
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan_core.h>
 
+#include <core/engine.h>
 #include <set>
 
 // initialization
@@ -67,7 +68,7 @@ using namespace std::chrono;
 
 static VkBackend* active_backend = nullptr;
 
-void backend_init(VkBackend* backend, VkInstance instance, VkSurfaceKHR surface, uint32_t width, uint32_t height) {
+void backend_init(VkBackend* backend, VkInstance instance, VkSurfaceKHR surface, uint32_t width, uint32_t height, EngineMode mode) {
 
     assert(active_backend == nullptr);
     active_backend = backend;
@@ -126,12 +127,15 @@ void backend_init(VkBackend* backend, VkInstance instance, VkSurfaceKHR surface,
         allocated_image_create(backend->device_ctx.logical_device, backend->allocator, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
                                VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_D32_SFLOAT, backend->device_ctx.raster_samples);
 
+    backend->mode = mode;
     // TODO: don't worry about viewport images in released scenes. only for editor/debugging
-    for (size_t i = 0; i < backend->swapchain_context.images.size(); i++) {
-        AllocatedImage new_viewport_image = allocated_image_create(backend->device_ctx.logical_device, backend->allocator,
-                                                                   VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                                                                   VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
-        backend->viewport_images.push_back(new_viewport_image);
+    if (backend->mode == EngineMode::EDIT) {
+        for (size_t i = 0; i < backend->swapchain_context.images.size(); i++) {
+            AllocatedImage new_viewport_image = allocated_image_create(
+                backend->device_ctx.logical_device, backend->allocator, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
+            backend->viewport_images.push_back(new_viewport_image);
+        }
     }
 
     // create color attachments and  rendering information from our allocated images
@@ -408,6 +412,8 @@ void create_default_data(VkBackend* backend) {
 
 void backend_create_imgui_resources(VkBackend* backend) {
 
+    assert(backend->mode == EngineMode::EDIT);
+
     std::array<VkDescriptorPoolSize, 11> pool_sizes = {
         {{VK_DESCRIPTOR_TYPE_SAMPLER, 1000},
          {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000},
@@ -664,6 +670,8 @@ void render_cursor(const VkBackend* backend, VkCommandBuffer cmd_buf) {
 
     vkCmdSetDepthTestEnable(cmd_buf, VK_FALSE);
 
+    vkCmdSetCullMode(cmd_buf, VK_CULL_MODE_NONE);
+
     const uint16_t cursor_vert = backend->shader_indices.cursor_vert;
     backend->ext_ctx.vkCmdBindShadersEXT(cmd_buf, 1, &backend->shader_ctx.vert_shaders[cursor_vert].stage,
                                          &backend->shader_ctx.vert_shaders[cursor_vert].shader);
@@ -738,25 +746,30 @@ void backend_draw(VkBackend* backend, std::vector<Entity>& entities, const World
 
     vkCmdEndRendering(cmd_buffer);
 
-    vk_image_memory_barrier_insert(cmd_buffer, backend->color_resolve_image.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                                   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-
     // save image for UI viewport rendering into a dedicated image
-    VkImage curr_viewport_img = backend->viewport_images[backend->current_frame_i].image;
-    vk_image_memory_barrier_insert(cmd_buffer, curr_viewport_img, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    if (backend->mode == EngineMode::EDIT) {
+        vk_image_memory_barrier_insert(cmd_buffer, backend->color_resolve_image.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                       VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
-    vk_image_blit(cmd_buffer, backend->color_resolve_image.image, curr_viewport_img, backend->swapchain_context.extent, backend->image_extent, 1, 1);
+        VkImage curr_viewport_img = backend->viewport_images[backend->current_frame_i].image;
+        vk_image_memory_barrier_insert(cmd_buffer, curr_viewport_img, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-    vk_image_memory_barrier_insert(cmd_buffer, curr_viewport_img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        vk_image_blit(cmd_buffer, backend->color_resolve_image.image, curr_viewport_img, backend->swapchain_context.extent, backend->image_extent, 1,
+                      1);
 
-    vk_image_memory_barrier_insert(cmd_buffer, backend->color_resolve_image.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        vk_image_memory_barrier_insert(cmd_buffer, curr_viewport_img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-    vkCmdBeginRendering(cmd_buffer, &backend->ui_rendering_info);
+        vk_image_memory_barrier_insert(cmd_buffer, backend->color_resolve_image.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                       VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-    render_ui(cmd_buffer);
+        vkCmdBeginRendering(cmd_buffer, &backend->ui_rendering_info);
 
-    vkCmdEndRendering(cmd_buffer);
+        if (backend->mode == EngineMode::EDIT) {
+            render_ui(cmd_buffer);
+        }
+
+        vkCmdEndRendering(cmd_buffer);
+    }
 
     vk_image_memory_barrier_insert(cmd_buffer, backend->color_resolve_image.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
@@ -831,29 +844,30 @@ void resize(VkBackend* backend) {
         allocated_image_create(backend->device_ctx.logical_device, backend->allocator, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
                                VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_D32_SFLOAT, backend->device_ctx.raster_samples);
 
-    for (size_t i = 0; i < backend->swapchain_context.images.size(); i++) {
-        allocated_image_destroy(backend->device_ctx.logical_device, backend->allocator, &backend->viewport_images[i]);
-        AllocatedImage new_viewport_image = allocated_image_create(backend->device_ctx.logical_device, backend->allocator,
-                                                                   VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                                                                   VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
-        backend->viewport_images[i]       = new_viewport_image;
+    if (backend->mode == EngineMode::EDIT) {
+        for (size_t i = 0; i < backend->swapchain_context.images.size(); i++) {
+            allocated_image_destroy(backend->device_ctx.logical_device, backend->allocator, &backend->viewport_images[i]);
+            AllocatedImage new_viewport_image = allocated_image_create(
+                backend->device_ctx.logical_device, backend->allocator, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
+            backend->viewport_images[i] = new_viewport_image;
 
-        allocated_image_destroy(backend->device_ctx.logical_device, backend->allocator, &backend->entity_id_images[i]);
+            allocated_image_destroy(backend->device_ctx.logical_device, backend->allocator, &backend->entity_id_images[i]);
 
-        backend->entity_id_images[i] = allocated_image_create(
-            backend->device_ctx.logical_device, backend->allocator, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16_UINT, 1, VMA_MEMORY_USAGE_AUTO);
+            backend->entity_id_images[i] = allocated_image_create(
+                backend->device_ctx.logical_device, backend->allocator, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16_UINT, 1, VMA_MEMORY_USAGE_AUTO);
 
-        DescriptorWriter writer{};
-        desc_writer_write_image_desc(&writer, 1, backend->entity_id_images[i].image_view, backend->default_linear_sampler, VK_IMAGE_LAYOUT_GENERAL,
-                                     VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-        desc_writer_update_desc_set(&writer, backend->device_ctx.logical_device, backend->scene_desc_sets[i]);
-    }
-
-    for (size_t i = 0; i < backend->viewport_images.size(); i++) {
-        VkDescriptorSet new_viewport_ds = ImGui_ImplVulkan_AddTexture(backend->default_linear_sampler, backend->viewport_images[i].image_view,
-                                                                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-        backend->viewport_desc_sets[i]  = new_viewport_ds;
+            DescriptorWriter writer{};
+            desc_writer_write_image_desc(&writer, 1, backend->entity_id_images[i].image_view, backend->default_linear_sampler,
+                                         VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+            desc_writer_update_desc_set(&writer, backend->device_ctx.logical_device, backend->scene_desc_sets[i]);
+        }
+        for (size_t i = 0; i < backend->viewport_images.size(); i++) {
+            VkDescriptorSet new_viewport_ds = ImGui_ImplVulkan_AddTexture(backend->default_linear_sampler, backend->viewport_images[i].image_view,
+                                                                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+            backend->viewport_desc_sets[i]  = new_viewport_ds;
+        }
     }
 
     configure_render_resources(backend);
@@ -999,7 +1013,7 @@ void set_render_state(VkBackend* backend, VkCommandBuffer cmd_buf) {
 
     vkCmdSetRasterizerDiscardEnable(cmd_buf, VK_FALSE);
 
-    vkCmdSetCullMode(cmd_buf, VK_CULL_MODE_NONE);
+    vkCmdSetCullMode(cmd_buf, VK_CULL_MODE_BACK_BIT);
 
     backend->ext_ctx.vkCmdSetVertexInputEXT(cmd_buf, 0, nullptr, 0, nullptr);
 
@@ -1017,9 +1031,9 @@ void set_render_state(VkBackend* backend, VkCommandBuffer cmd_buf) {
 
     constexpr uint32_t max = ~0;
 
-    const VkSampleMask sample_masks[4] = {max, max, max, max};
+    constexpr VkSampleMask sample_masks[4] = {max, max, max, max};
 
-    backend->ext_ctx.vkCmdSetSampleMaskEXT(cmd_buf, VK_SAMPLE_COUNT_4_BIT, sample_masks);
+    backend->ext_ctx.vkCmdSetSampleMaskEXT(cmd_buf, VK_SAMPLE_COUNT_1_BIT, sample_masks);
 
     backend->ext_ctx.vkCmdSetAlphaToCoverageEnableEXT(cmd_buf, VK_FALSE);
 
@@ -1383,8 +1397,10 @@ void backend_deinit(VkBackend* backend) {
     allocated_image_destroy(backend->device_ctx.logical_device, backend->allocator, &backend->depth_image);
     allocated_image_destroy(backend->device_ctx.logical_device, backend->allocator, &backend->color_resolve_image);
 
-    for (const auto& image : backend->viewport_images) {
-        allocated_image_destroy(backend->device_ctx.logical_device, backend->allocator, &image);
+    if (backend->mode == EngineMode::EDIT) {
+        for (const auto& image : backend->viewport_images) {
+            allocated_image_destroy(backend->device_ctx.logical_device, backend->allocator, &image);
+        }
     }
 
     for (const auto& entity_id_img : backend->entity_id_images) {

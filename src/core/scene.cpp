@@ -2,6 +2,7 @@
 
 #include "loaders/gltf_loader.h"
 #include <fstream>
+#include <glm/gtx/matrix_decompose.hpp>
 #include <nlohmann/json.hpp>
 
 void scene_load_gltf_paths(Scene* scene, VkBackend* backend, std::span<std::filesystem::path> gltf_paths) {
@@ -88,6 +89,22 @@ void scene_update(Scene* scene, VkBackend* backend) {
     backend_update_accel_struct(backend, &curr_entity->transform, scene->selected_entity);
 
     scene->update_requested = false;
+}
+
+void scene_update_entity_pos(Scene* scene, uint16_t ent_id, const glm::vec3& new_pos) {
+    if (ent_id == 0) {
+        return;
+    }
+    Entity* entity = &scene->entities[ent_id - 1];
+
+    glm::mat4 translation = glm::translate(glm::mat4(1.0f), new_pos);
+
+    for (DrawObject& obj : entity->opaque_objs) {
+        obj.mesh_data.global_transform = entity->transform * translation;
+    }
+    for (DrawObject& obj : entity->transparent_objs) {
+        obj.mesh_data.global_transform = entity->transform * translation;
+    }
 }
 
 void scene_save(Scene* scene, const std::filesystem::path& path) {
@@ -178,6 +195,16 @@ void scene_open(Scene* scene, VkBackend* backend, const std::filesystem::path& p
     for (size_t i = 0; i < scene->entities.size(); i++) {
         Entity* entity    = &scene->entities[i];
         entity->transform = transforms[i];
+        // unused
+        glm::vec3 scale;
+        glm::quat rotation;
+        glm::vec3 skew;
+        glm::vec4 perspective;
+
+        glm::vec3 translation;
+        glm::decompose(transforms[i], scale, rotation, translation, skew, perspective);
+
+        entity->orig_pos = translation;
 
         scene->selected_entity = i;
         scene_request_update(scene);

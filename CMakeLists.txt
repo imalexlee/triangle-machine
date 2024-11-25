@@ -16,9 +16,11 @@ if (UNIX AND NOT APPLE)
     add_link_options("-lglfw;-lvulkan;-lXxf86vm;-lXrandr;-lXi")
 endif ()
 
+# I hate this. my game and engine are one. this is only temporary until I have more time to make a truly
+# independent engine from my games
 add_executable(
         ${PROJECT_NAME}
-        src/entry.cpp
+        house_of_ashes/entry.cpp
         src/core/engine.cpp
         src/core/window.cpp
         src/core/camera.cpp

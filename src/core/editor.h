@@ -29,7 +29,7 @@ struct Editor {
     int gizmo_op{};
 };
 
-void editor_init(Editor* editor, VkBackend* backend, GLFWwindow* window);
+void editor_init(Editor* editor, VkBackend* backend, struct Camera* camera, GLFWwindow* window);
 
 void editor_update(Editor* editor, VkBackend* backend, const Window* window, struct Camera* camera, struct Scene* scene);
 

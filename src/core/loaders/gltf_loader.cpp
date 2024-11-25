@@ -226,7 +226,7 @@ static std::vector<GLTFMesh> load_gltf_meshes(const fastgltf::Asset* my_asset) {
                 new_primitive.material_i = primitive.materialIndex.value();
             }
 
-            assert(primitive.findAttribute("NORMAL") != primitive.attributes.cend()); // no normal
+            // assert(primitive.findAttribute("NORMAL") != primitive.attributes.cend()); // no normal
 
             const fastgltf::Accessor* pos_accessor     = &my_asset->accessors[primitive.findAttribute("POSITION")->second];
             const fastgltf::Accessor* indices_accessor = &my_asset->accessors[primitive.indicesAccessor.value()];
@@ -245,12 +245,15 @@ static std::vector<GLTFMesh> load_gltf_meshes(const fastgltf::Asset* my_asset) {
                 new_mesh.vertices[i + vertex_count].position.z = pos.z;
             });
 
-            fastgltf::iterateAccessorWithIndex<glm::vec3>(*my_asset, *normal_accessor, [&](const glm::vec3& normal, size_t i) {
-                assert(i + vertex_count < new_mesh.vertices.size());
-                new_mesh.vertices[i + vertex_count].normal.x = normal.x;
-                new_mesh.vertices[i + vertex_count].normal.y = normal.y;
-                new_mesh.vertices[i + vertex_count].normal.z = normal.z;
-            });
+            if (primitive.findAttribute("NORMAL") != primitive.attributes.cend()) {
+                fastgltf::iterateAccessorWithIndex<glm::vec3>(*my_asset, *normal_accessor, [&](const glm::vec3& normal, size_t i) {
+                    assert(i + vertex_count < new_mesh.vertices.size());
+                    new_mesh.vertices[i + vertex_count].normal.x = normal.x;
+                    new_mesh.vertices[i + vertex_count].normal.y = normal.y;
+                    new_mesh.vertices[i + vertex_count].normal.z = normal.z;
+                });
+            }
+
             for (int coord_i = 0; coord_i < tex_coord_num; coord_i++) {
                 std::string coord_name          = "TEXCOORD_" + std::to_string(coord_i);
                 const auto  tex_coord_attribute = primitive.findAttribute(coord_name);
@@ -397,6 +400,11 @@ static std::vector<VkSampler> upload_gltf_samplers(VkBackend* backend, std::span
 
 static uint32_t upload_gltf_textures(VkBackend* backend, std::span<const GLTFImage> images, std::span<const GLTFTexture> textures,
                                      std::span<const fastgltf::Sampler> samplers) {
+
+    if (images.size() == 0) {
+        return 0;
+    }
+
     const std::vector<VkSampler> vk_samplers = upload_gltf_samplers(backend, samplers);
     std::vector<TextureSampler>  tex_samplers;
 
@@ -449,6 +457,10 @@ static uint32_t upload_gltf_materials(VkBackend* backend, std::span<const GLTFMa
         std::ignore = backend_upload_materials<MaterialData>(backend, mat_arr);
     }
 
+    if (gltf_materials.size() == 0) {
+        return 0;
+    }
+
     std::vector<MaterialData> materials;
     materials.reserve(gltf_materials.size());
     for (const auto& gltf_mat : gltf_materials) {
@@ -485,7 +497,7 @@ Entity load_entity(VkBackend* backend, const std::filesystem::path& path) {
     fastgltf::GltfDataBuffer data{};
     data.loadFromFile(path);
 
-    fastgltf::Parser parser{supported_extensions};
+    fastgltf::Parser parser(supported_extensions);
     auto             load = parser.loadGltf(&data, path.parent_path(), gltf_options);
 
     if (auto error = load.error(); error != fastgltf::Error::None) {
@@ -546,7 +558,7 @@ Entity load_entity(VkBackend* backend, const std::filesystem::path& path) {
                 new_draw_obj.mesh_data.mat_i = 0;
             }
 
-            if (gltf_materials[primitive.material_i.value_or(0)].alpha_mode == fastgltf::AlphaMode::Blend) {
+            if (gltf_materials.size() > 0 && gltf_materials[primitive.material_i.value_or(0)].alpha_mode == fastgltf::AlphaMode::Blend) {
                 entity.transparent_objs.push_back(new_draw_obj);
             } else {
                 entity.opaque_objs.push_back(new_draw_obj);
