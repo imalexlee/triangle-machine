@@ -20,7 +20,7 @@ void engine_init(Engine* engine, EngineMode mode) {
 
     engine->mode = mode;
 
-    constexpr glm::vec4 init_cam_pos = {0, 0, 8, 1};
+    constexpr glm::vec4 init_cam_pos = {4.85, -1.58, -7.95, 1};
 
     window_init(&engine->window, core_opts::initial_width, core_opts::initial_height, "Triangle Machine");
 
@@ -63,8 +63,8 @@ void engine_init(Engine* engine, EngineMode mode) {
     backend_upload_cursor_shaders(&engine->backend);
 
     window_register_key_callback(&engine->window, [=](int key, int scancode, int action, int mods) {
-        camera_key_callback(&engine->camera, key, scancode, action, mods);
-        // scene_key_callback(&engine->scene, key, action);
+        // camera_key_callback(&engine->camera, key, scancode, action, mods);
+        //  scene_key_callback(&engine->scene, key, action);
     });
 
     window_register_cursor_callback(&engine->window, [=](double x_pos, double y_pos) { camera_cursor_callback(&engine->camera, x_pos, y_pos); });
@@ -83,6 +83,10 @@ void engine_run(Engine* engine) {
     while (!glfwWindowShouldClose(engine->window.glfw_window)) {
         glfwPollEvents();
 
+        // if (engine->backend.frame_num % 60 == 0) {
+        //     std::cout << engine->camera.position.x << " " << engine->camera.position.y << " " << engine->camera.position.z << '\n';
+        //     std::cout << engine->camera.direction.x << " " << engine->camera.direction.y << " " << engine->camera.direction.z << "\n\n";
+        // }
         uint32_t viewport_width  = engine->window.width;
         uint32_t viewport_height = engine->window.height;
 

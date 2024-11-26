@@ -485,10 +485,12 @@ static uint32_t upload_gltf_materials(VkBackend* backend, std::span<const GLTFMa
 
 Entity load_entity(VkBackend* backend, const std::filesystem::path& path) {
 
-    constexpr fastgltf::Extensions supported_extensions =
-        fastgltf::Extensions::KHR_mesh_quantization | fastgltf::Extensions::KHR_texture_transform | fastgltf::Extensions::KHR_materials_clearcoat |
-        fastgltf::Extensions::KHR_materials_specular | fastgltf::Extensions::KHR_materials_transmission |
-        fastgltf::Extensions::KHR_materials_variants;
+    // constexpr fastgltf::Extensions supported_extensions =
+    //     fastgltf::Extensions::KHR_mesh_quantization | fastgltf::Extensions::KHR_texture_transform | fastgltf::Extensions::KHR_materials_clearcoat |
+    //     fastgltf::Extensions::KHR_materials_specular | fastgltf::Extensions::KHR_materials_transmission |
+    //     fastgltf::Extensions::KHR_materials_variants;
+
+    constexpr fastgltf::Extensions supported_extensions = static_cast<fastgltf::Extensions>(0x0007FFFF);
 
     constexpr auto gltf_options = fastgltf::Options::DontRequireValidAssetMember | fastgltf::Options::AllowDouble |
                                   fastgltf::Options::LoadGLBBuffers | fastgltf::Options::LoadExternalBuffers | fastgltf::Options::LoadExternalImages |

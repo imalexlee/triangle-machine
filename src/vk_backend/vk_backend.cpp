@@ -852,22 +852,25 @@ void resize(VkBackend* backend) {
                 VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
             backend->viewport_images[i] = new_viewport_image;
 
-            allocated_image_destroy(backend->device_ctx.logical_device, backend->allocator, &backend->entity_id_images[i]);
-
-            backend->entity_id_images[i] = allocated_image_create(
-                backend->device_ctx.logical_device, backend->allocator, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16_UINT, 1, VMA_MEMORY_USAGE_AUTO);
-
-            DescriptorWriter writer{};
-            desc_writer_write_image_desc(&writer, 1, backend->entity_id_images[i].image_view, backend->default_linear_sampler,
-                                         VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-            desc_writer_update_desc_set(&writer, backend->device_ctx.logical_device, backend->scene_desc_sets[i]);
+            for (size_t j = 0; j < backend->viewport_images.size(); j++) {
+                VkDescriptorSet new_viewport_ds = ImGui_ImplVulkan_AddTexture(backend->default_linear_sampler, backend->viewport_images[j].image_view,
+                                                                              VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+                backend->viewport_desc_sets[j]  = new_viewport_ds;
+            }
         }
-        for (size_t i = 0; i < backend->viewport_images.size(); i++) {
-            VkDescriptorSet new_viewport_ds = ImGui_ImplVulkan_AddTexture(backend->default_linear_sampler, backend->viewport_images[i].image_view,
-                                                                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-            backend->viewport_desc_sets[i]  = new_viewport_ds;
-        }
+    }
+
+    for (size_t i = 0; i < backend->entity_id_images.size(); i++) {
+        allocated_image_destroy(backend->device_ctx.logical_device, backend->allocator, &backend->entity_id_images[i]);
+
+        backend->entity_id_images[i] = allocated_image_create(
+            backend->device_ctx.logical_device, backend->allocator, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16_UINT, 1, VMA_MEMORY_USAGE_AUTO);
+
+        DescriptorWriter writer{};
+        desc_writer_write_image_desc(&writer, 1, backend->entity_id_images[i].image_view, backend->default_linear_sampler, VK_IMAGE_LAYOUT_GENERAL,
+                                     VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+        desc_writer_update_desc_set(&writer, backend->device_ctx.logical_device, backend->scene_desc_sets[i]);
     }
 
     configure_render_resources(backend);
@@ -1013,7 +1016,7 @@ void set_render_state(VkBackend* backend, VkCommandBuffer cmd_buf) {
 
     vkCmdSetRasterizerDiscardEnable(cmd_buf, VK_FALSE);
 
-    vkCmdSetCullMode(cmd_buf, VK_CULL_MODE_BACK_BIT);
+    vkCmdSetCullMode(cmd_buf, VK_CULL_MODE_NONE);
 
     backend->ext_ctx.vkCmdSetVertexInputEXT(cmd_buf, 0, nullptr, 0, nullptr);
 

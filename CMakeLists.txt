@@ -20,7 +20,8 @@ endif ()
 # independent engine from my games
 add_executable(
         ${PROJECT_NAME}
-        house_of_ashes/entry.cpp
+        #        src/entry.cpp
+        src/entry.cpp
         src/core/engine.cpp
         src/core/window.cpp
         src/core/camera.cpp
@@ -194,9 +195,7 @@ target_link_libraries(
         Vulkan::Vulkan
         #        fmod_vc
         fmod
-
 )
-
 
 find_program(
         GLSL_VALIDATOR glslangValidator
