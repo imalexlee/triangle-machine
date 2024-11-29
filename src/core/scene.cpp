@@ -4,9 +4,14 @@
 #include <fstream>
 #include <glm/gtx/matrix_decompose.hpp>
 #include <nlohmann/json.hpp>
+#include <taskflow/taskflow/taskflow.hpp>
 
+using namespace std::chrono;
 void scene_load_gltf_paths(Scene* scene, VkBackend* backend, std::span<std::filesystem::path> gltf_paths) {
+    auto start_time = high_resolution_clock::now();
     for (const auto& path : gltf_paths) {
+        auto start_load_time = high_resolution_clock::now();
+
         Entity new_entity = load_entity(backend, path);
         new_entity.id     = scene->entities.size() + 1;
 
@@ -18,8 +23,55 @@ void scene_load_gltf_paths(Scene* scene, VkBackend* backend, std::span<std::file
         }
 
         scene->entities.push_back(new_entity);
+        auto  time_dur_load     = duration_cast<duration<float>>(high_resolution_clock::now() - start_load_time);
+        float time_elapsed_load = time_dur_load.count();
+
+        std::cout << "entity " + new_entity.name << " load time: " << time_elapsed_load << std::endl;
     }
+    auto  time_duration = duration_cast<duration<float>>(high_resolution_clock::now() - start_time);
+    float time_elapsed  = time_duration.count();
+    std::cout << "total load time: " << time_elapsed << std::endl;
 }
+
+// void scene_load_gltf_paths(Scene* scene, VkBackend* backend, std::span<std::filesystem::path> gltf_paths) {
+//     auto         start_time = high_resolution_clock::now();
+//     tf::Executor executor;
+//
+//     std::vector<std::future<Entity>> entity_futures;
+//     entity_futures.reserve(gltf_paths.size());
+//
+//     for (const auto& path : gltf_paths) {
+//         entity_futures.push_back(executor.async([&]() {
+//             Entity new_entity = load_entity(backend, path);
+//             new_entity.id     = scene->entities.size() + 1;
+//
+//             for (DrawObject& obj : new_entity.opaque_objs) {
+//                 obj.mesh_data.entity_id = new_entity.id;
+//             }
+//             for (DrawObject& obj : new_entity.transparent_objs) {
+//                 obj.mesh_data.entity_id = new_entity.id;
+//             }
+//             return new_entity;
+//         }));
+//     }
+//
+//     executor.wait_for_all();
+//
+//     std::vector<Entity> new_entities;
+//     new_entities.reserve(entity_futures.size());
+//     for (auto& future : entity_futures) {
+//         new_entities.push_back(future.get());
+//     }
+//     // since entities load async, sort them to ensure proper order
+//     std::ranges::sort(new_entities, [&](const Entity& e1, const Entity& e2) { return e1.id < e2.id; });
+//
+//     for (const auto& entity : new_entities) {
+//         scene->entities.push_back(entity);
+//     }
+//     auto  time_duration = duration_cast<duration<float>>(high_resolution_clock::now() - start_time);
+//     float time_elapsed  = time_duration.count();
+//     std::cout << "total load time: " << time_elapsed << std::endl;
+// }
 
 void scene_load_gltf_path(Scene* scene, VkBackend* backend, const std::filesystem::path& gltf_path) {
     Entity new_entity = load_entity(backend, gltf_path);

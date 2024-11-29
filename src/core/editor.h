@@ -27,6 +27,10 @@ struct Editor {
     // editor options
     int gizmo_mode{};
     int gizmo_op{};
+    // holds the average location transform of the entity so that the gizmo looks right
+    // saves the original transforms as well for delta calculations
+    std::vector<glm::mat4> base_gizmo_transforms;
+    std::vector<glm::mat4> curr_gizmo_transforms;
 };
 
 void editor_init(Editor* editor, VkBackend* backend, struct Camera* camera, GLFWwindow* window);

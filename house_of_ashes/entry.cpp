@@ -177,10 +177,13 @@ int main() {
 
     GameState game_state{};
 
-    scene_open(&engine.scene, &engine.backend, "app_data/game2.json");
+    // scene_open(&engine.scene, &engine.backend, "app_data/game2.json");
 
-    // const std::string gltf_path = "../assets/glb/monkey.glb";
-    // scene_load_gltf_path(&engine.scene, &engine.backend, gltf_path);
+    EngineFeatures features = EngineFeatures::SKY_BOX | EngineFeatures::DEBUG_GRID;
+    engine_enable_features(&engine, features);
+
+    const std::string gltf_path = "../assets/glb/monkey.glb";
+    scene_load_gltf_path(&engine.scene, &engine.backend, gltf_path);
 
     engine.camera.movement_speed = 0.7f;
 

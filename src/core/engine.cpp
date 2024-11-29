@@ -62,20 +62,10 @@ void engine_init(Engine* engine, EngineMode mode) {
 
     backend_upload_cursor_shaders(&engine->backend);
 
-    window_register_key_callback(&engine->window, [=](int key, int scancode, int action, int mods) {
-        // camera_key_callback(&engine->camera, key, scancode, action, mods);
-        //  scene_key_callback(&engine->scene, key, action);
-    });
-
     window_register_cursor_callback(&engine->window, [=](double x_pos, double y_pos) { camera_cursor_callback(&engine->camera, x_pos, y_pos); });
 
     window_register_mouse_button_callback(
         &engine->window, [=](int button, int action, int mods) { camera_mouse_button_callback(&engine->camera, button, action, mods); });
-
-    if (mode == EngineMode::RELEASE) {
-        // const std::string gltf_path = "../assets/glb/structure.glb";
-        // scene_load_gltf_path(&engine->scene, &engine->backend, gltf_path);
-    }
 }
 
 void engine_run(Engine* engine) {
@@ -83,10 +73,6 @@ void engine_run(Engine* engine) {
     while (!glfwWindowShouldClose(engine->window.glfw_window)) {
         glfwPollEvents();
 
-        // if (engine->backend.frame_num % 60 == 0) {
-        //     std::cout << engine->camera.position.x << " " << engine->camera.position.y << " " << engine->camera.position.z << '\n';
-        //     std::cout << engine->camera.direction.x << " " << engine->camera.direction.y << " " << engine->camera.direction.z << "\n\n";
-        // }
         uint32_t viewport_width  = engine->window.width;
         uint32_t viewport_height = engine->window.height;
 
@@ -99,15 +85,13 @@ void engine_run(Engine* engine) {
 
         if (engine->mode == EngineMode::EDIT) {
             editor_update(&engine->editor, &engine->backend, &engine->window, &engine->camera, &engine->scene);
-        }
 
-        if (engine->mode == EngineMode::EDIT) {
             if (engine->editor.quit) {
                 break;
             }
         }
         scene_update(&engine->scene, &engine->backend);
-        backend_draw(&engine->backend, engine->scene.entities, &world_data, 0, 0);
+        backend_draw(&engine->backend, engine->scene.entities, &world_data, engine->features);
     }
 }
 
@@ -121,3 +105,7 @@ void engine_deinit(Engine* engine) {
     backend_deinit(&engine->backend);
 }
 uint16_t engine_select_entity_at(const Engine* engine, int32_t x, int32_t y) { return backend_entity_id_at_pos(&engine->backend, x, y); }
+
+void engine_enable_features(Engine* engine, EngineFeatures features) { engine->features |= features; }
+
+void engine_disable_features(Engine* engine, EngineFeatures features) { engine->features &= ~features; }

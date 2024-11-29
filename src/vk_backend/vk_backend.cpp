@@ -13,14 +13,14 @@
 #include "vk_init.h"
 #include "vk_options.h"
 #include <GLFW/glfw3.h>
-#include <cassert>
 #include <chrono>
 #include <cstring>
 #include <fmt/base.h>
 #include <fmt/format.h>
 #include <fstream>
+#include <future>
 #include <nvtt/nvtt.h>
-#include <string>
+#include <taskflow/taskflow/taskflow.hpp>
 #include <vk_backend/vk_command.h>
 #include <vk_backend/vk_debug.h>
 #include <vk_backend/vk_device.h>
@@ -31,7 +31,6 @@
 #include <vulkan/vulkan_core.h>
 
 #include <core/engine.h>
-#include <set>
 
 // initialization
 static void create_allocator(VkBackend* backend);
@@ -686,7 +685,7 @@ void render_cursor(const VkBackend* backend, VkCommandBuffer cmd_buf) {
     vkCmdDraw(cmd_buf, 4, 1, 0, 0);
 }
 
-void backend_draw(VkBackend* backend, std::vector<Entity>& entities, const WorldData* scene_data, size_t vert_shader, size_t frag_shader) {
+void backend_draw(VkBackend* backend, std::vector<Entity>& entities, const WorldData* scene_data, EngineFeatures engine_features) {
     auto start_frame_time = system_clock::now();
 
     update_curr_frame_idx(backend);
@@ -736,18 +735,22 @@ void backend_draw(VkBackend* backend, std::vector<Entity>& entities, const World
 
     set_render_state(backend, cmd_buffer);
 
-    // render_sky_box(backend, cmd_buffer);
+    if ((engine_features & EngineFeatures::SKY_BOX) == EngineFeatures::SKY_BOX) {
+        render_sky_box(backend, cmd_buffer);
+    }
 
     render_geometry(backend, cmd_buffer, entities);
 
-    // render_grid(backend, cmd_buffer);
+    if ((engine_features & EngineFeatures::DEBUG_GRID) == EngineFeatures::DEBUG_GRID) {
+        render_grid(backend, cmd_buffer);
+    }
 
     render_cursor(backend, cmd_buffer);
 
     vkCmdEndRendering(cmd_buffer);
 
-    // save image for UI viewport rendering into a dedicated image
     if (backend->mode == EngineMode::EDIT) {
+        // save image for UI viewport rendering into a dedicated image
         vk_image_memory_barrier_insert(cmd_buffer, backend->color_resolve_image.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
@@ -764,9 +767,7 @@ void backend_draw(VkBackend* backend, std::vector<Entity>& entities, const World
 
         vkCmdBeginRendering(cmd_buffer, &backend->ui_rendering_info);
 
-        if (backend->mode == EngineMode::EDIT) {
-            render_ui(cmd_buffer);
-        }
+        render_ui(cmd_buffer);
 
         vkCmdEndRendering(cmd_buffer);
     }
@@ -1036,7 +1037,7 @@ void set_render_state(VkBackend* backend, VkCommandBuffer cmd_buf) {
 
     constexpr VkSampleMask sample_masks[4] = {max, max, max, max};
 
-    backend->ext_ctx.vkCmdSetSampleMaskEXT(cmd_buf, VK_SAMPLE_COUNT_1_BIT, sample_masks);
+    backend->ext_ctx.vkCmdSetSampleMaskEXT(cmd_buf, VK_SAMPLE_COUNT_4_BIT, sample_masks);
 
     backend->ext_ctx.vkCmdSetAlphaToCoverageEnableEXT(cmd_buf, VK_FALSE);
 
@@ -1066,7 +1067,6 @@ void set_render_state(VkBackend* backend, VkCommandBuffer cmd_buf) {
 
     // set default bindings (null) to all shader types for the graphics bind point
     // https://docs.vulkan.org/spec/latest/chapters/shaders.html#shaders-binding
-    /*
     constexpr std::array graphics_pipeline_stages = {
         VK_SHADER_STAGE_VERTEX_BIT,
         VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT,
@@ -1078,7 +1078,6 @@ void set_render_state(VkBackend* backend, VkCommandBuffer cmd_buf) {
     };
 
     backend->ext_ctx.vkCmdBindShadersEXT(cmd_buf, graphics_pipeline_stages.size(), graphics_pipeline_stages.data(), VK_NULL_HANDLE);
-*/
 }
 
 void upload_sky_box_texture(VkBackend* backend, const TextureSampler* tex_sampler) {
@@ -1149,14 +1148,146 @@ struct UniqueImageInstance {
     uint32_t       width;
 };
 
-[[nodiscard]] static std::vector<void*> compress_2d_color_textures(std::span<const UniqueImageInstance> image_instances,
-                                                                   uint32_t* total_compressed_size, uint32_t* largest_img_size) {
+// [[nodiscard]] static std::vector<void*> compress_2d_color_textures(std::span<const UniqueImageInstance> image_instances,
+//                                                                    uint32_t* total_compressed_size, uint32_t* largest_img_size) {
+//
+//     nvtt::Context context;
+//     context.enableCudaAcceleration(true);
+//
+//     *largest_img_size = 0;
+//     std::vector<void*> compressed_data_bufs;
+//     compressed_data_bufs.reserve(image_instances.size());
+//     uint32_t total_byte_size = 0;
+//     for (size_t i = 0; i < image_instances.size(); i++) {
+//         const auto& image = image_instances[i];
+//         assert(image.color_channels == 4);
+//
+//         uint32_t image_bytes = image.height * image.width * image.color_channels;
+//
+//         nvtt::Surface nvtt_image;
+//         bool          res = nvtt_image.loadFromMemory((void*)image.data, image_bytes);
+//         assert(res);
+//
+//         nvtt::CompressionOptions compression_options;
+//         compression_options.setFormat(nvtt::Format_BC7);
+//
+//         // void* compressed_data = malloc(compressed_data_bytes);
+//
+//         std::filesystem::path out_filename = "out_compressed_" + std::to_string(i);
+//         std::ofstream         out_file(out_filename);
+//
+//         nvtt::OutputOptions output_options;
+//         output_options.setFileName(out_filename.string().c_str());
+//
+//         std::ignore = context.compress(nvtt_image, 0, 0, compression_options, output_options);
+//
+//         const uint32_t compressed_data_bytes = std::filesystem::file_size(out_filename); // BC7 uses 16 bytes/tile
+//         std::ifstream  file(out_filename, std::ios::binary | std::ios::ate);
+//         assert(file);
+//
+//         void* out_buffer = malloc(compressed_data_bytes);
+//
+//         file.seekg(0, std::ios::beg);
+//         file.read(static_cast<char*>(out_buffer), compressed_data_bytes);
+//
+//         *largest_img_size = (compressed_data_bytes > *largest_img_size) ? compressed_data_bytes : *largest_img_size;
+//         compressed_data_bufs.push_back(out_buffer);
+//         total_byte_size += compressed_data_bytes;
+//
+//         // nvtt::RefImage new_ref_image{};
+//         // new_ref_image.data         = image.data;
+//         // new_ref_image.num_channels = image.color_channels;
+//         // new_ref_image.height       = image.height;
+//         // new_ref_image.width        = image.width;
+//         // new_ref_image.depth        = 1;
+//         //
+//         // nvtt::CPUInputBuffer input_buf(&new_ref_image, nvtt::UINT8);
+//
+//         //     const auto settings =
+//         //     nvtt::EncodeSettings().SetFormat(nvtt::Format_BC7).SetQuality(nvtt::Quality_Normal).SetUseGPU(true).SetOutputToGPUMem(false);
+//         // bool encoding_successful = nvtt_encode(input_buf, compressed_data, settings);
+//         // assert(encoding_successful);
+//     }
+//
+//     *total_compressed_size = total_byte_size;
+//     return compressed_data_bufs;
+// }
+
+CompressedImage compress_img_task(const UniqueImageInstance* image, uint32_t id) {
+
+    assert(image->color_channels == 4);
+    nvtt::RefImage new_ref_image{};
+    new_ref_image.data         = image->data;
+    new_ref_image.num_channels = image->color_channels;
+    new_ref_image.height       = image->height;
+    new_ref_image.width        = image->width;
+    new_ref_image.depth        = 1;
+
+    nvtt::CPUInputBuffer input_buf(&new_ref_image, nvtt::UINT8);
+
+    const uint32_t compressed_data_bytes = input_buf.NumTiles() * 16;
+
+    CompressedImage new_compressed_img{};
+    new_compressed_img.id   = id;
+    new_compressed_img.size = compressed_data_bytes;
+    new_compressed_img.data = malloc(compressed_data_bytes); // BC7 uses 16 bytes/tile
+
+    nvtt::TimingContext timing_ctx;
+
+    nvtt::EncodeSettings encode_settings;
+
+    const auto settings =
+        nvtt::EncodeSettings().SetFormat(nvtt::Format_BC7).SetQuality(nvtt::Quality_Fastest).SetUseGPU(false).SetOutputToGPUMem(false);
+    bool encoding_successful = nvtt_encode(input_buf, new_compressed_img.data, settings);
+    assert(encoding_successful);
+
+    //    std::cout << "finished id: " << id << std::endl;
+
+    return new_compressed_img;
+}
+
+/*[[nodiscard]] static std::vector<CompressedImage> compress_2d_color_textures(std::span<const UniqueImageInstance> image_instances,
+                                                                             uint32_t* total_compressed_size, uint32_t* largest_img_size) {
+
+    // tf::Executor executor;
+    *largest_img_size = 0;
+    std::vector<std::future<CompressedImage>> compressed_data_buf_futures;
+    compressed_data_buf_futures.reserve(image_instances.size());
+    uint32_t total_byte_size = 0;
+    // std::cout << "launching " << image_instances.size() << " async tasks" << std::endl;
+
+    for (size_t i = 0; i < image_instances.size(); i++) {
+        const auto& image = image_instances[i];
+        compressed_data_buf_futures.push_back(std::async(std::launch::async, compress_img_task, &image, i));
+    }
+
+    std::vector<CompressedImage> compressed_images;
+    compressed_images.reserve(compressed_data_buf_futures.size());
+    for (size_t i = 0; i < compressed_data_buf_futures.size(); i++) {
+        // std::cout << "getting " << i << std::endl;
+        std::future<CompressedImage>& future = compressed_data_buf_futures[i];
+        compressed_images.push_back(future.get());
+
+        total_byte_size += compressed_images[i].size;
+
+        *largest_img_size = (compressed_images[i].size > *largest_img_size) ? compressed_images[i].size : *largest_img_size;
+    }
+
+    std::ranges::sort(compressed_images, [&](const CompressedImage& e1, const CompressedImage& e2) { return e1.id < e2.id; });
+
+    *total_compressed_size = total_byte_size;
+    return compressed_images;
+}*/
+
+[[nodiscard]] static std::vector<CompressedImage> compress_2d_color_textures(std::span<const UniqueImageInstance> image_instances,
+                                                                             uint32_t* total_compressed_size, uint32_t* largest_img_size) {
 
     *largest_img_size = 0;
-    std::vector<void*> compressed_data_bufs;
+    std::vector<CompressedImage> compressed_data_bufs;
     compressed_data_bufs.reserve(image_instances.size());
     uint32_t total_byte_size = 0;
-    for (const auto& image : image_instances) {
+    for (size_t i = 0; i < image_instances.size(); i++) {
+        const UniqueImageInstance& image = image_instances[i];
         assert(image.color_channels == 4);
 
         nvtt::RefImage new_ref_image{};
@@ -1172,14 +1303,17 @@ struct UniqueImageInstance {
 
         *largest_img_size = (compressed_data_bytes > *largest_img_size) ? compressed_data_bytes : *largest_img_size;
 
-        void* compressed_data = malloc(compressed_data_bytes); // BC7 uses 16 bytes/tile
+        CompressedImage new_compressed_img{};
+        new_compressed_img.id   = i;
+        new_compressed_img.size = compressed_data_bytes;
+        new_compressed_img.data = malloc(compressed_data_bytes); // BC7 uses 16 bytes/tile
 
         const auto settings =
-            nvtt::EncodeSettings().SetFormat(nvtt::Format_BC7).SetQuality(nvtt::Quality_Normal).SetUseGPU(true).SetOutputToGPUMem(false);
-        bool encoding_successful = nvtt_encode(input_buf, compressed_data, settings);
+            nvtt::EncodeSettings().SetFormat(nvtt::Format_BC7).SetQuality(nvtt::Quality_Fastest).SetUseGPU(true).SetOutputToGPUMem(false);
+        bool encoding_successful = nvtt_encode(input_buf, new_compressed_img.data, settings);
         assert(encoding_successful);
 
-        compressed_data_bufs.push_back(compressed_data);
+        compressed_data_bufs.push_back(new_compressed_img);
         total_byte_size += compressed_data_bytes;
     }
 
@@ -1217,9 +1351,10 @@ uint32_t backend_upload_2d_textures(VkBackend* backend, std::vector<TextureSampl
         }
     }
 
-    uint32_t           total_byte_size      = 0;
-    uint32_t           largest_image_size   = 0;
-    std::vector<void*> compressed_data_bufs = compress_2d_color_textures(unique_image_instances, &total_byte_size, &largest_image_size);
+    uint32_t total_byte_size    = 0;
+    uint32_t largest_image_size = 0;
+    // std::vector<void*> compressed_data_bufs = compress_2d_color_textures(unique_image_instances, &total_byte_size, &largest_image_size);
+    std::vector<CompressedImage> compressed_data_bufs = compress_2d_color_textures(unique_image_instances, &total_byte_size, &largest_image_size);
 
     // use the largest image size for our staging buffer, then just reuse it for all images
     AllocatedBuffer staging_buf = allocated_buffer_create(backend->allocator, largest_image_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
@@ -1234,7 +1369,8 @@ uint32_t backend_upload_2d_textures(VkBackend* backend, std::vector<TextureSampl
             .height = image->height,
         };
 
-        vmaCopyMemoryToAllocation(backend->allocator, compressed_data_bufs[i], staging_buf.allocation, 0, image->height * image->width);
+        //      vmaCopyMemoryToAllocation(backend->allocator, compressed_data_bufs[i], staging_buf.allocation, 0, image->height * image->width);
+        vmaCopyMemoryToAllocation(backend->allocator, compressed_data_bufs[i].data, staging_buf.allocation, 0, image->height * image->width);
 
         AllocatedImage tex_image = allocated_image_create(backend->device_ctx.logical_device, backend->allocator,
                                                           VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_VIEW_TYPE_2D, extent,
@@ -1287,8 +1423,9 @@ uint32_t backend_upload_2d_textures(VkBackend* backend, std::vector<TextureSampl
         desc_writer_clear(&descriptor_writer);
     }
 
-    for (void* data : compressed_data_bufs) {
-        free(data);
+    for (auto& data : compressed_data_bufs) {
+        // free(data);
+        free(data.data);
     }
     allocated_buffer_destroy(backend->allocator, &staging_buf);
 

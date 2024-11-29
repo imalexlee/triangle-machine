@@ -7,12 +7,10 @@
 #include "vk_backend/vk_frame.h"
 #include "vk_backend/vk_shader.h"
 #include "vk_ext.h"
-#include <iostream>
 
 #include <vk_backend/vk_pipeline.h>
 #include <vk_backend/vk_scene.h>
 #include <vk_backend/vk_swapchain.h>
-// #include <vulkan/vulkan_core.h>
 
 struct Stats {
     uint64_t total_draw_time{};
@@ -38,6 +36,12 @@ struct RenderArea {
     glm::vec2 top_left{0};
     // {width, height}
     glm::vec2 scissor_dimensions{0};
+};
+
+struct CompressedImage {
+    void*    data;
+    uint32_t size{};
+    uint32_t id{};
 };
 
 struct VkBackend {
@@ -116,7 +120,7 @@ void backend_finish_pending_vk_work(const VkBackend* backend);
 
 void backend_deinit(VkBackend* backend);
 
-void backend_draw(VkBackend* backend, std::vector<Entity>& entities, const WorldData* scene_data, size_t vert_shader, size_t frag_shader);
+void backend_draw(VkBackend* backend, std::vector<Entity>& entities, const WorldData* scene_data, enum class EngineFeatures engine_features);
 
 void backend_create_imgui_resources(VkBackend* backend);
 

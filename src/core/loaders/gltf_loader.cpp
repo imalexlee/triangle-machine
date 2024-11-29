@@ -490,6 +490,7 @@ Entity load_entity(VkBackend* backend, const std::filesystem::path& path) {
     //     fastgltf::Extensions::KHR_materials_specular | fastgltf::Extensions::KHR_materials_transmission |
     //     fastgltf::Extensions::KHR_materials_variants;
 
+    // all extensions
     constexpr fastgltf::Extensions supported_extensions = static_cast<fastgltf::Extensions>(0x0007FFFF);
 
     constexpr auto gltf_options = fastgltf::Options::DontRequireValidAssetMember | fastgltf::Options::AllowDouble |

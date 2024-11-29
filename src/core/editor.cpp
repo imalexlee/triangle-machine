@@ -2,15 +2,18 @@
 
 #include "ImGuizmo.h"
 #include "camera.h"
+#include "engine.h"
 #include "scene.h"
 #include "window.h"
 
 #include "nlohmann/json.hpp"
+#include <glm/gtx/matrix_decompose.hpp>
 
 #include <ImGuiFileDialog.h>
 #include <imconfig.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_vulkan.h>
+#include <iostream>
 
 static void end_ui(Editor* editor);
 static void begin_ui();
@@ -30,7 +33,7 @@ void editor_init(Editor* editor, VkBackend* backend, Camera* camera, GLFWwindow*
     editor->imgui_style->Colors[ImGuiCol_WindowBg]   = ImVec4(pow(56.f / 255, 2.2), pow(56.f / 255, 2.2), pow(56.f / 255, 2.2), 1.0);
     editor->imgui_style->Colors[ImGuiCol_WindowBg].w = 1.0f;
 
-    editor->gizmo_op = ImGuizmo::UNIVERSAL;
+    editor->gizmo_op = ImGuizmo::TRANSLATE;
 
     namespace fs = std::filesystem;
     if (!fs::is_directory(editor->app_data_dir) || !fs::exists(editor->app_data_dir)) {
@@ -71,6 +74,38 @@ static void end_ui(Editor* editor) {
     ImGui::Render();
 }
 
+glm::mat4 calculateTransformDifference(const glm::mat4& sourceTransform, const glm::mat4& targetTransform) {
+    // Decompose source transform
+    glm::vec3 sourceTranslation, sourceScale;
+    glm::quat sourceRotation;
+    glm::vec3 sourceSkew;
+    glm::vec4 sourcePerspective;
+    glm::decompose(sourceTransform, sourceScale, sourceRotation, sourceTranslation, sourceSkew, sourcePerspective);
+
+    // Decompose target transform
+    glm::vec3 targetTranslation, targetScale;
+    glm::quat targetRotation;
+    glm::vec3 targetSkew;
+    glm::vec4 targetPerspective;
+    glm::decompose(targetTransform, targetScale, targetRotation, targetTranslation, targetSkew, targetPerspective);
+
+    // Calculate differences
+    glm::vec3 translationDiff = targetTranslation - sourceTranslation;
+    glm::vec3 scaleDiff       = targetScale / sourceScale;
+    glm::quat rotationDiff    = glm::inverse(sourceRotation) * targetRotation;
+
+    // Reconstruct difference transform
+    glm::mat4 diffTransform = glm::mat4(1.0f);
+
+    // go to origin
+    diffTransform *= glm::translate(diffTransform, targetTranslation);
+    diffTransform *= glm::mat4_cast(rotationDiff);
+    diffTransform = glm::scale(diffTransform, scaleDiff);
+    diffTransform *= glm::translate(glm::mat4(1.0f), -targetTranslation);
+    diffTransform = glm::translate(diffTransform, translationDiff);
+
+    return diffTransform;
+}
 using namespace std::chrono;
 static auto start_time = high_resolution_clock::now();
 
@@ -101,6 +136,29 @@ void update_viewport(Editor* editor, const VkBackend* backend, const Window* win
         camera_pan(camera, mouse_delta.x * time_elapsed, mouse_delta.y * time_elapsed);
     }
 
+    if (ImGui::IsKeyPressed(ImGuiKey_MouseLeft, false) && !ImGuizmo::IsOver()) {
+
+        // only register clicks within viewport
+        glm::vec2 bounds_horiz = {ImGui::GetWindowPos().x, ImGui::GetWindowPos().x + editor->viewport_width};
+        glm::vec2 bounds_vert  = {ImGui::GetWindowPos().y, ImGui::GetWindowPos().y + editor->viewport_height};
+        float     mouse_x      = editor->imgui_io->MousePos.x;
+        float     mouse_y      = editor->imgui_io->MousePos.y;
+
+        if (mouse_x >= bounds_horiz[0] && mouse_x <= bounds_horiz[1] && mouse_y >= bounds_vert[0] && mouse_y <= bounds_vert[1]) {
+            ImVec2 viewport_window_size = ImGui::GetWindowSize();
+
+            // relative percentage of mouse in viewport. for x: 0.0 for left side. 1.0 for right side
+            float x_rel_percent = (mouse_x - bounds_horiz[0]) / viewport_window_size.x;
+            float y_rel_percent = (mouse_y - bounds_vert[0]) / viewport_window_size.y;
+
+            int32_t offset_x = window->width * x_rel_percent;
+            int32_t offset_y = window->height * y_rel_percent;
+
+            uint16_t ent_id        = backend_entity_id_at_pos(backend, offset_x, offset_y);
+            scene->selected_entity = ent_id > 0 ? ent_id - 1 : -1;
+        }
+    }
+
     // scroll wheel zoom
     if (editor->imgui_io->MouseWheel != 0) {
         camera_zoom(camera, editor->imgui_io->MouseWheel * time_elapsed * 20);
@@ -108,9 +166,10 @@ void update_viewport(Editor* editor, const VkBackend* backend, const Window* win
 
     if (scene->selected_entity >= 0) {
 
-        Entity* entity = &scene->entities[scene->selected_entity];
-
         if (ImGuizmo::IsUsing()) {
+            scene->entities[scene->selected_entity].transform = calculateTransformDifference(editor->base_gizmo_transforms[scene->selected_entity],
+                                                                                             editor->curr_gizmo_transforms[scene->selected_entity]);
+
             scene_request_update(scene);
         }
         ImGuizmo::SetOrthographic(false);
@@ -125,9 +184,38 @@ void update_viewport(Editor* editor, const VkBackend* backend, const Window* win
         proj[1][1] *= -1;
 
         ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(proj), static_cast<ImGuizmo::OPERATION>(editor->gizmo_op),
-                             static_cast<ImGuizmo::MODE>(editor->gizmo_mode), glm::value_ptr(entity->transform));
+                             static_cast<ImGuizmo::MODE>(editor->gizmo_mode), glm::value_ptr(editor->curr_gizmo_transforms[scene->selected_entity]));
     }
     start_time = high_resolution_clock::now();
+}
+
+glm::mat4 calculateAverageTransform(const std::vector<glm::mat4>& transformations) {
+    // If no transformations, return identity matrix
+    if (transformations.empty()) {
+        return glm::mat4(1.0f);
+    }
+
+    // Calculate the average transformation matrix
+    glm::mat4 averageTransform(1.0f); // Start with identity matrix
+
+    // Decompose each matrix into components
+    for (const auto& transform : transformations) {
+        // Decompose matrix into translation, rotation, and scale
+        glm::vec3 translation, scale;
+        glm::quat rotation;
+        glm::vec3 skew;
+        glm::vec4 perspective;
+
+        // Use glm::decompose to extract components (requires glm/gtx/matrix_decompose.hpp)
+        glm::decompose(transform, scale, rotation, translation, skew, perspective);
+
+        // Accumulate average of components
+        averageTransform = glm::translate(averageTransform, translation / static_cast<float>(transformations.size()));
+        // Note: Averaging rotations requires more complex quaternion interpolation
+        // Simple averaging of rotation may not produce correct results
+    }
+
+    return averageTransform;
 }
 
 void update_file_menu(Editor* editor, VkBackend* backend, Scene* scene) {
@@ -170,6 +258,21 @@ void update_file_menu(Editor* editor, VkBackend* backend, Scene* scene) {
                 editor->curr_scene_path = file_path;
                 new_selected            = false;
                 open_selected           = false;
+
+                // set gizmo transform at average location of all mesh transforms of a given entity
+                // so the center
+                for (const auto& entity : scene->entities) {
+                    std::vector<glm::mat4> transforms;
+                    for (const auto opaque_obj : entity.opaque_objs) {
+                        transforms.push_back(opaque_obj.mesh_data.local_transform);
+                    }
+                    for (const auto trans_obj : entity.transparent_objs) {
+                        transforms.push_back(trans_obj.mesh_data.local_transform);
+                    }
+                    glm::mat4 avg_transform = calculateAverageTransform(transforms);
+                    editor->base_gizmo_transforms.push_back(avg_transform);
+                    editor->curr_gizmo_transforms.push_back(avg_transform);
+                }
             } else {
                 // cancel was clicked
                 new_selected  = false;
@@ -219,6 +322,19 @@ void update_scene_overview(Editor* editor, VkBackend* backend, const Window* win
                 std::string gltf_path = ImGuiFileDialog::Instance()->GetFilePathName();
 
                 scene_load_gltf_path(scene, backend, gltf_path);
+                uint32_t new_entity_idx = scene->entities.size() - 1;
+
+                std::vector<glm::mat4> transforms;
+                for (const auto opaque_obj : scene->entities[new_entity_idx].opaque_objs) {
+                    transforms.push_back(opaque_obj.mesh_data.local_transform);
+                }
+                for (const auto trans_obj : scene->entities[new_entity_idx].transparent_objs) {
+                    transforms.push_back(trans_obj.mesh_data.local_transform);
+                }
+                glm::mat4 avg_transform = calculateAverageTransform(transforms);
+                editor->base_gizmo_transforms.push_back(avg_transform);
+                editor->curr_gizmo_transforms.push_back(avg_transform);
+                // TODO: avg transform
                 add_entity_pressed = false;
             } else {
                 add_entity_pressed = false;
@@ -249,37 +365,40 @@ void update_scene_overview(Editor* editor, VkBackend* backend, const Window* win
 }
 
 void update_entity_viewer(Editor* editor, Scene* scene) {
-    if (scene->selected_entity < 0) {
-        return;
-    }
-    static bool show_window = true;
-    if (!show_window) {
-        scene->selected_entity = -1;
-        show_window            = true;
-        return;
-    }
-    ImGui::Begin(scene->entities[scene->selected_entity].name.c_str(), &show_window);
-    ImGui::Text("Gizmo Mode");
-    ImGui::RadioButton("Local", &editor->gizmo_mode, ImGuizmo::MODE::LOCAL);
-    ImGui::SameLine();
-    ImGui::RadioButton("World", &editor->gizmo_mode, ImGuizmo::MODE::WORLD);
+    // if (scene->selected_entity < 0) {
+    //     return;
+    // }
+    // static bool show_window = true;
+    // if (!show_window) {
+    //     scene->selected_entity = -1;
+    //     show_window            = true;
+    //     return;
+    // }
+    ImGui::Begin("Entity Details");
+    if (scene->selected_entity >= 0) {
+        ImGui::Text(scene->entities[scene->selected_entity].name.c_str());
+        ImGui::Text("Gizmo Mode");
+        ImGui::RadioButton("Local", &editor->gizmo_mode, ImGuizmo::MODE::LOCAL);
+        ImGui::SameLine();
+        ImGui::RadioButton("World", &editor->gizmo_mode, ImGuizmo::MODE::WORLD);
 
-    ImGui::Text("Gizmo Operation");
-    ImGui::RadioButton("Translate", &editor->gizmo_op, ImGuizmo::TRANSLATE);
-    ImGui::SameLine();
-    ImGui::RadioButton("Rotate", &editor->gizmo_op, ImGuizmo::ROTATE);
-    ImGui::RadioButton("Scale", &editor->gizmo_op, ImGuizmo::SCALE);
-    ImGui::SameLine();
-    ImGui::RadioButton("Universal", &editor->gizmo_op, ImGuizmo::UNIVERSAL);
+        ImGui::Text("Gizmo Operation");
+        ImGui::RadioButton("Translate", &editor->gizmo_op, ImGuizmo::TRANSLATE);
+        ImGui::SameLine();
+        ImGui::RadioButton("Rotate", &editor->gizmo_op, ImGuizmo::ROTATE);
+        ImGui::RadioButton("Scale", &editor->gizmo_op, ImGuizmo::SCALE);
 
-    float   translation[3], rotation[3], scale[3];
-    Entity* curr_entity = &scene->entities[scene->selected_entity];
-    ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(curr_entity->transform), translation, rotation, scale);
-    ImGui::Text("Entity Transformation");
-    ImGui::InputFloat3("Tr", translation, "%.3f");
-    ImGui::InputFloat3("Rt", rotation, "%.3f");
-    ImGui::InputFloat3("Sc", scale, "%.3f");
-    ImGuizmo::RecomposeMatrixFromComponents(translation, rotation, scale, glm::value_ptr(curr_entity->transform));
+        float   translation[3], rotation[3], scale[3];
+        Entity* curr_entity = &scene->entities[scene->selected_entity];
+        ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(editor->curr_gizmo_transforms[scene->selected_entity]), translation, rotation, scale);
+        ImGui::Text("Entity Transformation");
+        ImGui::InputFloat3("Tr", translation, "%.3f");
+        ImGui::InputFloat3("Rt", rotation, "%.3f");
+        ImGui::InputFloat3("Sc", scale, "%.3f");
+        ImGuizmo::RecomposeMatrixFromComponents(translation, rotation, scale, glm::value_ptr(editor->curr_gizmo_transforms[scene->selected_entity]));
+    } else {
+        ImGui::Text("No Entity Selected");
+    }
 
     ImGui::End();
 }
