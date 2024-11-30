@@ -8,8 +8,9 @@
 
 layout (location = 1) out vec2 color_uv;
 layout (location = 2) out vec2 metal_rough_uv;
-layout (location = 3) out vec3 surface_normal;
-layout (location = 4) out vec4 vert_pos;
+layout (location = 3) out vec2 normal_uv;
+layout (location = 4) out vec3 surface_normal;
+layout (location = 5) out vec4 vert_pos;
 
 void main() {
     Vertex v = constants.vertex_buffer.vertices[gl_VertexIndex];
@@ -21,9 +22,10 @@ void main() {
 
 
     PBR_Material mat = material_buf.materials[nonuniformEXT (constants.material_i)];
-    uint color_tex_coord = mat.color_tex_coord;
-    color_uv = v.tex_coord[color_tex_coord];
 
-    uint metal_rough_tex_coord = mat.metal_rough_tex_coord;
-    metal_rough_uv = v.tex_coord[metal_rough_tex_coord];
+    color_uv = v.tex_coord[mat.color_tex_coord];
+
+    metal_rough_uv = v.tex_coord[mat.metal_rough_tex_coord];
+
+    normal_uv = v.tex_coord[mat.normal_tex_coord];
 }

@@ -55,60 +55,25 @@ vec3 fresnel_schlick(float v_dot_h, vec3 albedo, float metallic)
     return f_0 + (1.0 - f_0) * pow(clamp(1.0 - v_dot_h, 0.0, 1.0), 5.0);
 }
 
-mat3 cotangentFrame(vec3 N, vec3 p, vec2 uv)
-{
-    // get edge vectors of the pixel triangle
-    vec3 dp1 = dFdx(p);
-    vec3 dp2 = dFdy(p);
-    vec2 duv1 = dFdx(uv);
-    vec2 duv2 = dFdy(uv);
-
-    // solve the linear system
-    vec3 dp2perp = cross(dp2, N);
-    vec3 dp1perp = cross(N, dp1);
-    vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;
-    vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;
-
-    // construct a scale-invariant frame
-    float invmax = inversesqrt(max(dot(T, T), dot(B, B)));
-
-    // calculate handedness of the resulting cotangent frame
-    float w = (dot(cross(N, T), B) < 0.0) ? -1.0 : 1.0;
-
-    // adjust tangent if needed
-    T = T * w;
-
-    return mat3(T * invmax, B * invmax, N);
-}
-
-vec3 perturbNormal(vec3 n, vec3 v, vec3 normalSample, vec2 uv)
-{
-    vec3 map = normalize(2.0 * normalSample - vec3(1.0));
-    mat3 TBN = cotangentFrame(n, v, uv);
-    return normalize(TBN * map);
-}
-
 void main() {
-    PBR_Material mat = material_buf.materials[nonuniformEXT(constants.material_i)];
-
+    vec3 normal = normalize(surface_normal);
     vec3 view_dir = normalize(scene_data.eye_pos.xyz - vert_pos.xyz);
 
-    vec4 bump_tex_val = texture(tex_samplers[nonuniformEXT(mat.normal_tex_i)], normal_uv);
-    vec3 normal = normalize(surface_normal);
-    normal = perturbNormal(normal, view_dir, bump_tex_val.xyz, normal_uv);
-
-
+    PBR_Material mat = material_buf.materials[nonuniformEXT(constants.material_i)];
     vec4 tex_color = mat.color_factors * texture(tex_samplers[nonuniformEXT(mat.color_tex_i)], color_uv);
     //tex_color = pow(tex_color, vec4(1 / 2.2));
     vec3 color = tex_color.rgb;
 
+    vec3 bump = texture(tex_samplers[nonuniformEXT(mat.normal_tex_i)], normal_uv);
+    // revert to range [-1,1]
+    bump = normalize(bump * 2.0 - 1.0);
 
     float metallic = mat.metal_factor * texture(tex_samplers[nonuniformEXT (mat.metal_rough_tex_i)], metal_rough_uv).b;
     float roughness = mat.rough_factor * texture(tex_samplers[nonuniformEXT (mat.metal_rough_tex_i)], metal_rough_uv).g;
 
     vec3 light_dir = normalize(vec3(1, 1, 0.5));
     vec3 light_color = vec3(23.47, 21.31, 20.79);
-    vec3 light_diffuse_intensity = vec3(0.8);
+    vec3 light_diffuse_intensity = vec3(1);
 
     vec3 light_intensity = light_color * light_diffuse_intensity;
 
@@ -117,7 +82,7 @@ void main() {
 
     float v_dot_h = max(dot(view_dir, halfway), 0.0);
     float n_dot_v = max(dot(normal, view_dir), 0.0);
-    float n_dot_l = max(dot(normal, l), 0.3);
+    float n_dot_l = max(dot(normal, l), 0.1);
 
     vec3 f = fresnel_schlick(v_dot_h, color.rgb, metallic);
     vec3 k_s = f;

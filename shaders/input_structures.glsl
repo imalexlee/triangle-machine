@@ -18,6 +18,8 @@ struct PBR_Material {
     uint color_tex_coord;
     uint metal_rough_tex_i;
     uint metal_rough_tex_coord;
+    uint normal_tex_i;
+    uint normal_tex_coord;
 };
 
 layout (std430, set = 1, binding = 0) readonly buffer MaterialBuffer {

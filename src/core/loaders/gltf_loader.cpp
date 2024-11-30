@@ -40,11 +40,15 @@ struct MaterialData {
     glm::vec4 color_factors{1.f, 1.f, 1.f, 1.f};
     float     metal_factor{0};
     float     rough_factor{0};
-    int32_t   color_tex_i{-1}; // -1 represents no texture
-    uint32_t  color_tex_coord{0};
-    int32_t   metal_rough_tex_i{-1};
-    uint32_t  metal_rough_tex_coord{0};
-    float     padding[2];
+
+    int32_t  color_tex_i{-1}; // -1 represents no texture
+    uint32_t color_tex_coord{0};
+
+    int32_t  metal_rough_tex_i{-1};
+    uint32_t metal_rough_tex_coord{0};
+
+    int32_t  normal_tex_i{-1};
+    uint32_t normal_tex_coord{0};
 };
 
 struct GLTFMaterial {
@@ -158,6 +162,7 @@ std::vector<GLTFMaterial> load_gltf_materials(const fastgltf::Asset* asset) {
     gltf_materials.reserve(asset->materials.size());
     for (const auto& material : asset->materials) {
         GLTFMaterial new_mat{};
+        // albedo
         if (material.pbrData.baseColorTexture.has_value()) {
             const auto base_color_tex        = &material.pbrData.baseColorTexture.value();
             new_mat.mat_data.color_tex_coord = base_color_tex->texCoordIndex;
@@ -165,12 +170,21 @@ std::vector<GLTFMaterial> load_gltf_materials(const fastgltf::Asset* asset) {
         } else {
             new_mat.mat_data.color_tex_coord = 0;
         }
+        // metallic roughness
         if (material.pbrData.metallicRoughnessTexture.has_value()) {
             const auto metal_rough_tex             = &material.pbrData.metallicRoughnessTexture.value();
             new_mat.mat_data.metal_rough_tex_coord = metal_rough_tex->texCoordIndex;
             new_mat.mat_data.metal_rough_tex_i     = metal_rough_tex->textureIndex;
         } else {
             new_mat.mat_data.metal_rough_tex_coord = 0;
+        }
+        // normal
+        if (material.normalTexture.has_value()) {
+            const auto normal_tex             = &material.normalTexture.value();
+            new_mat.mat_data.normal_tex_coord = normal_tex->texCoordIndex;
+            new_mat.mat_data.normal_tex_i     = normal_tex->textureIndex;
+        } else {
+            new_mat.mat_data.normal_tex_coord = 0;
         }
         new_mat.mat_data.metal_factor  = material.pbrData.metallicFactor;
         new_mat.mat_data.rough_factor  = material.pbrData.roughnessFactor;
@@ -451,6 +465,7 @@ static uint32_t upload_gltf_materials(VkBackend* backend, std::span<const GLTFMa
         MaterialData default_mat{};
         default_mat.color_tex_i       = 0;
         default_mat.metal_rough_tex_i = 0;
+        default_mat.normal_tex_i      = 0;
 
         std::vector mat_arr = {default_mat};
 
@@ -474,6 +489,11 @@ static uint32_t upload_gltf_materials(VkBackend* backend, std::span<const GLTFMa
             new_mat_data.metal_rough_tex_i = gltf_mat.mat_data.metal_rough_tex_i + tex_desc_offset;
         } else {
             new_mat_data.metal_rough_tex_i = 0;
+        }
+        if (gltf_mat.mat_data.normal_tex_i >= 0) {
+            new_mat_data.normal_tex_i = gltf_mat.mat_data.normal_tex_i + tex_desc_offset;
+        } else {
+            new_mat_data.normal_tex_i = 0;
         }
         materials.push_back(new_mat_data);
     }
