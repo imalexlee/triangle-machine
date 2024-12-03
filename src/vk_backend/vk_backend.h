@@ -61,6 +61,7 @@ struct VkBackend {
     VkFence                        imm_fence;
     VkSampler                      default_linear_sampler;
     VkSampler                      default_nearest_sampler;
+    std::vector<VkSampler>         mip_mapped_samplers;
     VkDescriptorSet                graphics_desc_set;
     std::array<VkDescriptorSet, 3> scene_desc_sets{};
     VkDescriptorSetLayout          scene_desc_set_layout;
@@ -139,7 +140,7 @@ void backend_upload_sky_box(VkBackend* backend, const uint8_t* texture_data, uin
 
 void backend_recompile_frag_shader(VkBackend* backend, uint32_t shader_idx);
 
-[[nodiscard]] uint32_t backend_upload_2d_textures(VkBackend* backend, std::vector<TextureSampler>& tex_samplers);
+[[nodiscard]] uint32_t backend_upload_2d_textures(VkBackend* backend, std::vector<TextureSampler>& tex_samplers, VkFormat format);
 
 void backend_create_accel_struct(VkBackend* backend, std::span<const BottomLevelGeometry> bottom_level_geometries,
                                  std::span<const TopLevelInstanceRef> instance_refs);

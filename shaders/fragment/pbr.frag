@@ -103,8 +103,9 @@ void main() {
     vec3 color = tex_color.rgb;
 
 
-    float metallic = mat.metal_factor * texture(tex_samplers[nonuniformEXT (mat.metal_rough_tex_i)], metal_rough_uv).b;
-    float roughness = mat.rough_factor * texture(tex_samplers[nonuniformEXT (mat.metal_rough_tex_i)], metal_rough_uv).g;
+    vec4 metallic_roughness = texture(tex_samplers[nonuniformEXT (mat.metal_rough_tex_i)], metal_rough_uv);
+    float metallic = mat.metal_factor * metallic_roughness.b;
+    float roughness = mat.rough_factor * metallic_roughness.g;
 
     vec3 light_dir = normalize(vec3(1, 1, 0.5));
     vec3 light_color = vec3(23.47, 21.31, 20.79);
@@ -140,7 +141,8 @@ void main() {
 
     rayQueryEXT rq;
     float infinity = 1.0 / 0;
-    rayQueryInitializeEXT(rq, accel_struct, gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, vert_pos.xyz, 0.1, light_dir, infinity);
+    rayQueryInitializeEXT(rq, accel_struct, gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, vert_pos.xyz, 0.13, light_dir, infinity);
+
     rayQueryProceedEXT(rq);
 
     // 1.0 for occluded (in shadow) and 0.0 for not occluded

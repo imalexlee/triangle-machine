@@ -80,6 +80,7 @@ add_subdirectory(thirdparty/fastgltf)
 add_subdirectory(thirdparty/ImGuiFileDialog)
 #add_subdirectory(thirdparty/meshoptimizer)
 add_subdirectory(thirdparty/glfw)
+add_subdirectory(thirdparty/KTX-Software)
 #add_subdirectory(thirdparty/glslang)
 add_subdirectory(thirdparty/shaderc)
 add_subdirectory(thirdparty)
@@ -195,6 +196,7 @@ target_link_libraries(
         Vulkan::Vulkan
         #        fmod_vc
         fmod
+        ktx
 )
 
 find_program(

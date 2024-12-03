@@ -1,10 +1,17 @@
 #include "gltf_loader.h"
+
 #include "fastgltf/core.hpp"
 #include "fastgltf/tools.hpp"
 #include "fastgltf/types.hpp"
+#include "ktx.h"
+#include "libshaderc_util/counting_includer.h"
 #include "stb_image.h"
 
+#include <fstream>
+#include <iostream>
+
 #include <fastgltf/glm_element_traits.hpp>
+#include <nvtt/nvtt.h>
 #include <string>
 #include <vector>
 #include <vk_backend/vk_backend.h>
@@ -20,11 +27,17 @@ struct Vertex {
         {0, 0}
     };
 };
+
+// holds BC7 compressed data
 struct GLTFImage {
-    uint8_t* data{};
+    //   uint8_t* data{};
     uint32_t width{};
     uint32_t height{};
     uint32_t color_channels{};
+    //    uint32_t mip_count{1};
+    // if mip mapped, will be the size of all mips
+    // uint32_t              byte_size{};
+    std::vector<MipLevel> mip_levels;
 };
 struct GLTFTexture {
     std::optional<uint32_t> sampler_i{};
@@ -108,14 +121,186 @@ static std::vector<GLTFTexture> load_gltf_textures(const fastgltf::Asset* asset)
     return gltf_textures;
 }
 
+static void customCallback(nvtt::Severity severity, nvtt::Error error, const char* message, const void* userData) {
+    if (severity == nvtt::Severity_Warning || severity == nvtt::Severity_Error) {
+        std::cout << "NVTT ERROR: " << nvtt::errorString(error) << " - " << message << std::endl;
+    }
+}
+[[nodiscard]] static std::vector<MipLevel> compress_image(nvtt::Surface& surface, const std::string& out_file_name) {
+
+    // pass true enabling cuda acceleration
+    nvtt::Context context(true);
+
+    nvtt::CompressionOptions compression_options;
+    compression_options.setFormat(nvtt::Format_BC7);
+
+    nvtt::setMessageCallback(customCallback, nullptr);
+
+    std::filesystem::path file_name = "app_data/cache/" + out_file_name;
+
+    nvtt::OutputOptions output_options;
+    output_options.setFileName(file_name.string().c_str());
+    output_options.setContainer(nvtt::Container_DDS10);
+
+    uint32_t mip_count = surface.countMipmaps();
+
+    bool res = context.outputHeader(surface, mip_count, compression_options, output_options);
+    assert(res);
+
+    std::vector<MipLevel> mip_levels;
+    mip_levels.reserve(mip_count);
+
+    for (size_t i = 0; i < mip_count; i++) {
+
+        res = context.compress(surface, 0, i, compression_options, output_options);
+        assert(res);
+
+        MipLevel new_mip_level{};
+        new_mip_level.height = surface.height();
+        new_mip_level.width  = surface.width();
+
+        mip_levels.push_back(new_mip_level);
+
+        if (i == mip_count - 1) {
+            break;
+        }
+        surface.toLinearFromSrgb();
+        surface.premultiplyAlpha();
+
+        res = surface.buildNextMipmap(nvtt::MipmapFilter_Box);
+        assert(res);
+
+        surface.demultiplyAlpha();
+        surface.toSrgb();
+    }
+
+    // return the data pointers to the compressed texture file we just made
+    nvtt::SurfaceSet surface_set;
+    res = surface_set.loadDDS(file_name.string().c_str());
+
+    for (size_t i = 0; i < mip_levels.size(); i++) {
+        mip_levels[i].data = surface_set.GetSurface(0, i).data();
+    }
+
+    return mip_levels;
+}
+
+static void compress_image_ktx(const void* img_data, uint32_t width, uint32_t height, uint32_t channel_count,
+                               const std::filesystem::path& out_file_path) {
+
+    // no mip maps yet
+    ktxTextureCreateInfo texture_ci{};
+    texture_ci.vkFormat        = VK_FORMAT_R8G8B8A8_UNORM;
+    texture_ci.baseWidth       = width;
+    texture_ci.baseHeight      = height;
+    texture_ci.baseDepth       = 1;
+    texture_ci.numDimensions   = 2;
+    texture_ci.numLevels       = 1;
+    texture_ci.numLayers       = 1;
+    texture_ci.numFaces        = 1;
+    texture_ci.isArray         = false;
+    texture_ci.generateMipmaps = false;
+
+    ktxTexture2*   texture{};
+    KTX_error_code res = ktxTexture2_Create(&texture_ci, KTX_TEXTURE_CREATE_ALLOC_STORAGE, &texture);
+    assert(res == KTX_SUCCESS);
+
+    res = ktxTexture_SetImageFromMemory(ktxTexture(texture), 0, 0, 0, static_cast<const uint8_t*>(img_data), width * height * channel_count);
+    assert(res == KTX_SUCCESS);
+
+    uint32_t compression_thread_count = std::max(std::thread::hardware_concurrency() / 2, 1u);
+
+    ktxBasisParams params{};
+    params.uastc            = true;
+    params.threadCount      = compression_thread_count;
+    params.qualityLevel     = KTX_PACK_UASTC_LEVEL_DEFAULT;
+    params.compressionLevel = KTX_ETC1S_DEFAULT_COMPRESSION_LEVEL;
+    params.structSize       = sizeof(ktxBasisParams);
+
+    res = ktxTexture2_CompressBasisEx(texture, &params);
+    assert(res == KTX_SUCCESS);
+
+    res = ktxTexture_WriteToNamedFile(ktxTexture(texture), reinterpret_cast<const char*>(out_file_path.u8string().c_str()));
+    assert(res == KTX_SUCCESS);
+
+    ktxTexture_Destroy(ktxTexture(texture));
+}
+
+static std::vector<MipLevel> compress_image_from_path(const std::filesystem::path& path, const std::string& out_file_name) {
+
+    nvtt::Surface surface;
+
+    bool res = surface.load(path.string().c_str());
+    assert(res);
+
+    return compress_image(surface, out_file_name);
+}
+
+static std::vector<MipLevel> compress_image_from_memory(const void* data, uint32_t data_size, const std::string& out_file_name) {
+
+    nvtt::Surface surface;
+
+    bool res = surface.loadFromMemory(data, data_size);
+    assert(res);
+
+    return compress_image(surface, out_file_name);
+}
+
+[[nodiscard]] std::vector<MipLevel> read_ktx_image(const std::filesystem::path& path) {
+    ktxTexture2*   texture;
+    KTX_error_code res = ktxTexture2_CreateFromNamedFile(path.string().c_str(), KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT, &texture);
+    if (res != KTX_SUCCESS) {
+        exit(EXIT_FAILURE);
+    }
+    assert(res == KTX_SUCCESS);
+
+    if (ktxTexture2_NeedsTranscoding(texture)) {
+        ktxTexture2_TranscodeBasis(texture, KTX_TTF_BC7_RGBA, 0);
+    }
+
+    // only one mip level for now
+    std::vector<MipLevel> mip_levels;
+    mip_levels.reserve(1);
+
+    MipLevel new_mip_level{};
+    new_mip_level.height = texture->baseHeight;
+    new_mip_level.width  = texture->baseWidth;
+    new_mip_level.data   = ktxTexture_GetData(ktxTexture(texture));
+
+    mip_levels.push_back(new_mip_level);
+
+    return mip_levels;
+}
+
 static std::vector<GLTFImage> load_gltf_images(const fastgltf::Asset* asset) {
+    using namespace std::chrono;
+    auto start_frame_time = system_clock::now();
+
     std::vector<GLTFImage> gltf_images;
     gltf_images.reserve(asset->images.size());
 
-    int width, height, channel_count;
+    int width{}, height{}, channel_count{};
     for (const auto& gltf_image : asset->images) {
         GLTFImage new_image{};
 
+        std::string out_file_name = gltf_image.name.data();
+        // first, check if we have a cached image already. if so, just get the data from that and move on
+        std::filesystem::path full_path = "app_data/cache/" + out_file_name + ".ktx2";
+        if (std::filesystem::exists(full_path)) {
+
+            new_image.color_channels = 4;
+            new_image.mip_levels     = read_ktx_image(full_path);
+
+            // set the base width and height of the image, which is the extent of the first mip
+            new_image.width  = new_image.mip_levels[0].width;
+            new_image.height = new_image.mip_levels[0].height;
+
+            gltf_images.push_back(new_image);
+
+            continue;
+        }
+
+        void* data = nullptr;
         std::visit(fastgltf::visitor{
                        []([[maybe_unused]] auto& arg) {},
                        [&](const fastgltf::sources::URI& file_path) {
@@ -124,13 +309,11 @@ static std::vector<GLTFImage> load_gltf_images(const fastgltf::Asset* asset) {
 
                            const std::string path(file_path.uri.path().begin(), file_path.uri.path().end());
 
-                           new_image.data = stbi_load(path.c_str(), &width, &height, &channel_count, 4);
-                           assert(new_image.data);
+                           data = stbi_load(path.c_str(), &width, &height, &channel_count, 4);
                        },
                        [&](const fastgltf::sources::Array& vector) {
-                           new_image.data =
+                           data =
                                stbi_load_from_memory(vector.bytes.data(), static_cast<int>(vector.bytes.size()), &width, &height, &channel_count, 4);
-                           assert(new_image.data);
                        },
                        [&](const fastgltf::sources::BufferView& view) {
                            auto& buffer_view = asset->bufferViews[view.bufferViewIndex];
@@ -138,22 +321,32 @@ static std::vector<GLTFImage> load_gltf_images(const fastgltf::Asset* asset) {
 
                            std::visit(fastgltf::visitor{[]([[maybe_unused]] auto& arg) {},
                                                         [&](const fastgltf::sources::Array& vector) {
-                                                            new_image.data = stbi_load_from_memory(vector.bytes.data() + buffer_view.byteOffset,
-                                                                                                   static_cast<int>(buffer_view.byteLength), &width,
-                                                                                                   &height, &channel_count, 4);
-                                                            assert(new_image.data);
+                                                            data = stbi_load_from_memory(vector.bytes.data() + buffer_view.byteOffset,
+                                                                                         static_cast<int>(buffer_view.byteLength), &width, &height,
+                                                                                         &channel_count, 4);
                                                         }},
                                       buffer.data);
                        },
                    },
                    gltf_image.data);
 
+        assert(data);
+
+        compress_image_ktx(data, width, height, 4, full_path.string());
+
         new_image.width          = width;
         new_image.height         = height;
-        new_image.color_channels = 4;
+        new_image.color_channels = 1; // because of BC7 compression
+        new_image.mip_levels     = read_ktx_image(full_path);
 
         gltf_images.push_back(new_image);
+
+        stbi_image_free(data);
     }
+    auto end_time = system_clock::now();
+    auto dur      = duration<float>(end_time - start_frame_time);
+    std::cout << "Time: " << duration_cast<milliseconds>(dur).count() << std::endl;
+
     return gltf_images;
 }
 
@@ -310,7 +503,6 @@ static std::vector<MeshData> create_mesh_data(const VkBackend* backend, std::spa
 static int times_entered = 0;
 // Adds backend_draw objects to entity from a given root node
 void create_node_tree(const fastgltf::Asset* asset, const glm::mat4x4* transform, const size_t node_i, std::vector<GLTFNode>* gltf_nodes) {
-
     times_entered++;
     const fastgltf::Node* node = &asset->nodes[node_i];
     GLTFNode              new_gltf_node{};
@@ -414,7 +606,6 @@ static std::vector<VkSampler> upload_gltf_samplers(VkBackend* backend, std::span
 
 static uint32_t upload_gltf_textures(VkBackend* backend, std::span<const GLTFImage> images, std::span<const GLTFTexture> textures,
                                      std::span<const fastgltf::Sampler> samplers) {
-
     if (images.size() == 0) {
         return 0;
     }
@@ -434,7 +625,11 @@ static uint32_t upload_gltf_textures(VkBackend* backend, std::span<const GLTFIma
         new_tex_sampler.height         = image->height;
         new_tex_sampler.layer_count    = 1;
         new_tex_sampler.color_channels = image->color_channels;
-        new_tex_sampler.data           = image->data;
+        new_tex_sampler.mip_levels     = image->mip_levels;
+        // new_tex_sampler.data           = image->data;
+        // new_tex_sampler.mip_count      = image->mip_count;
+        // new_tex_sampler.mip_extents    = image->mip_extents;
+        // new_tex_sampler.byte_size      = image->byte_size;
 
         if (texture->sampler_i.has_value()) {
             new_tex_sampler.sampler = vk_samplers[texture->sampler_i.value()];
@@ -444,7 +639,7 @@ static uint32_t upload_gltf_textures(VkBackend* backend, std::span<const GLTFIma
         tex_samplers.push_back(new_tex_sampler);
     }
 
-    return backend_upload_2d_textures(backend, tex_samplers);
+    return backend_upload_2d_textures(backend, tex_samplers, VK_FORMAT_BC7_SRGB_BLOCK);
 }
 
 static std::vector<MeshBuffers> upload_gltf_mesh_buffers(VkBackend* backend, std::span<const GLTFMesh> meshes) {
@@ -459,7 +654,6 @@ static std::vector<MeshBuffers> upload_gltf_mesh_buffers(VkBackend* backend, std
 }
 
 static uint32_t upload_gltf_materials(VkBackend* backend, std::span<const GLTFMaterial> gltf_materials, uint32_t tex_desc_offset) {
-
     // If the backend has no materials, create the default material at index 0
     if (backend->mat_count == 0) {
         MaterialData default_mat{};
@@ -504,7 +698,6 @@ static uint32_t upload_gltf_materials(VkBackend* backend, std::span<const GLTFMa
 }
 
 Entity load_entity(VkBackend* backend, const std::filesystem::path& path) {
-
     // constexpr fastgltf::Extensions supported_extensions =
     //     fastgltf::Extensions::KHR_mesh_quantization | fastgltf::Extensions::KHR_texture_transform | fastgltf::Extensions::KHR_materials_clearcoat |
     //     fastgltf::Extensions::KHR_materials_specular | fastgltf::Extensions::KHR_materials_transmission |
@@ -597,9 +790,9 @@ Entity load_entity(VkBackend* backend, const std::filesystem::path& path) {
     entity.path      = path;
     entity.transform = glm::mat4(1.f);
 
-    for (auto& image : gltf_images) {
-        stbi_image_free(image.data);
-    }
+    // for (auto& image : gltf_images) {
+    //     stbi_image_free(image.data);
+    // }
 
     return entity;
 }

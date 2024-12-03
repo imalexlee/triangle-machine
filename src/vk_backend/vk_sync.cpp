@@ -44,7 +44,8 @@ VkSemaphoreSubmitInfo vk_semaphore_submit_info_create(VkSemaphore semaphore, VkP
 }
 
 void vk_image_memory_barrier_insert(VkCommandBuffer cmd_buf, VkImage image, VkImageLayout current_layout, VkImageLayout new_layout,
-                                    uint32_t layer_count, VkPipelineStageFlags2 src_stages, VkPipelineStageFlags2 dst_stages) {
+                                    uint32_t mip_levels, uint32_t base_mip_level, uint32_t layer_count, VkPipelineStageFlags2 src_stages,
+                                    VkPipelineStageFlags2 dst_stages) {
 
     VkImageMemoryBarrier2 image_mem_barrier{};
     image_mem_barrier.sType         = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -66,7 +67,7 @@ void vk_image_memory_barrier_insert(VkCommandBuffer cmd_buf, VkImage image, VkIm
         aspect_flags = VK_IMAGE_ASPECT_DEPTH_BIT;
     }
 
-    VkImageSubresourceRange subresource_range = vk_image_subresource_range_create(aspect_flags, layer_count, 1);
+    VkImageSubresourceRange subresource_range = vk_image_subresource_range_create(aspect_flags, layer_count, mip_levels, base_mip_level);
     image_mem_barrier.subresourceRange        = subresource_range;
 
     dep_info.pImageMemoryBarriers    = &image_mem_barrier;

@@ -97,7 +97,7 @@ void backend_init(VkBackend* backend, VkInstance instance, VkSurfaceKHR surface,
         backend->entity_id_images[i] =
             allocated_image_create(backend->device_ctx.logical_device, backend->allocator,
                                    VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-                                   VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16_UINT, 1, VMA_MEMORY_USAGE_AUTO);
+                                   VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16_UINT, 1, 1, VMA_MEMORY_USAGE_AUTO);
 
         DescriptorWriter writer{};
         desc_writer_write_image_desc(&writer, 1, backend->entity_id_images[i].image_view, backend->default_linear_sampler, VK_IMAGE_LAYOUT_GENERAL,
@@ -116,15 +116,15 @@ void backend_init(VkBackend* backend, VkInstance instance, VkSurfaceKHR surface,
 
     backend->color_resolve_image = allocated_image_create(backend->device_ctx.logical_device, backend->allocator,
                                                           VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                                                          VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
+                                                          VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1, 1);
 
     backend->color_image = allocated_image_create(
         backend->device_ctx.logical_device, backend->allocator, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
-        VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, backend->device_ctx.raster_samples);
+        VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1, backend->device_ctx.raster_samples);
 
     backend->depth_image =
         allocated_image_create(backend->device_ctx.logical_device, backend->allocator, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                               VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_D32_SFLOAT, backend->device_ctx.raster_samples);
+                               VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_D32_SFLOAT, 1, backend->device_ctx.raster_samples);
 
     backend->mode = mode;
     // TODO: don't worry about viewport images in released scenes. only for editor/debugging
@@ -132,7 +132,7 @@ void backend_init(VkBackend* backend, VkInstance instance, VkSurfaceKHR surface,
         for (size_t i = 0; i < backend->swapchain_context.images.size(); i++) {
             AllocatedImage new_viewport_image = allocated_image_create(
                 backend->device_ctx.logical_device, backend->allocator, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
+                VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1, 1);
             backend->viewport_images.push_back(new_viewport_image);
         }
     }
@@ -231,7 +231,6 @@ void create_sky_box(VkBackend* backend) {
 
 void backend_upload_sky_box(VkBackend* backend, const uint8_t* texture_data, uint32_t color_channels, uint32_t width, uint32_t height) {
     TextureSampler sky_box_tex_sampler{};
-    sky_box_tex_sampler.data      = texture_data;
     sky_box_tex_sampler.sampler   = backend->default_linear_sampler;
     sky_box_tex_sampler.view_type = VK_IMAGE_VIEW_TYPE_CUBE;
 
@@ -239,6 +238,13 @@ void backend_upload_sky_box(VkBackend* backend, const uint8_t* texture_data, uin
     sky_box_tex_sampler.height         = height;
     sky_box_tex_sampler.color_channels = color_channels;
     sky_box_tex_sampler.layer_count    = 6;
+
+    MipLevel mip_level{};
+    mip_level.data   = (void*)texture_data;
+    mip_level.height = height;
+    mip_level.width  = width;
+
+    sky_box_tex_sampler.mip_levels.push_back(mip_level);
 
     upload_sky_box_texture(backend, &sky_box_tex_sampler);
 }
@@ -399,14 +405,23 @@ void create_default_data(VkBackend* backend) {
     default_tex_sampler.height         = 4;
     default_tex_sampler.color_channels = 4;
     default_tex_sampler.layer_count    = 1;
-    default_tex_sampler.data           = reinterpret_cast<const uint8_t*>(&white_data);
     default_tex_sampler.sampler        = backend->default_linear_sampler;
     default_tex_sampler.view_type      = VK_IMAGE_VIEW_TYPE_2D;
+
+    MipLevel new_mip_level{};
+    new_mip_level.data   = &white_data;
+    new_mip_level.height = 4;
+    new_mip_level.width  = 4;
+
+    default_tex_sampler.mip_levels.push_back(new_mip_level);
+
+    // default_tex_sampler.data      = reinterpret_cast<const uint8_t*>(&white_data);
+    // default_tex_sampler.byte_size = 4 * 4 * 4;
 
     std::vector<TextureSampler> tex_samplers = {default_tex_sampler};
 
     // default texture will always be assumed to be at index 0
-    std::ignore = backend_upload_2d_textures(backend, tex_samplers);
+    std::ignore = backend_upload_2d_textures(backend, tex_samplers, VK_FORMAT_R8G8B8A8_SRGB);
 }
 
 void backend_create_imgui_resources(VkBackend* backend) {
@@ -716,7 +731,7 @@ void backend_draw(VkBackend* backend, std::vector<Entity>& entities, const World
                                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
     VkClearValue            entity_id_clear_value = {.color = {{0, 0, 0, 0}}};
-    VkImageSubresourceRange range                 = vk_image_subresource_range_create(VK_IMAGE_ASPECT_COLOR_BIT, 1, 1);
+    VkImageSubresourceRange range                 = vk_image_subresource_range_create(VK_IMAGE_ASPECT_COLOR_BIT, 1, 1, 0);
 
     vkCmdClearColorImage(cmd_buffer, backend->entity_id_images[backend->current_frame_i].image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                          &entity_id_clear_value.color, 1, &range);
@@ -757,8 +772,7 @@ void backend_draw(VkBackend* backend, std::vector<Entity>& entities, const World
         VkImage curr_viewport_img = backend->viewport_images[backend->current_frame_i].image;
         vk_image_memory_barrier_insert(cmd_buffer, curr_viewport_img, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-        vk_image_blit(cmd_buffer, backend->color_resolve_image.image, curr_viewport_img, backend->swapchain_context.extent, backend->image_extent, 1,
-                      1);
+        vk_image_blit(cmd_buffer, backend->color_resolve_image.image, curr_viewport_img, backend->swapchain_context.extent, backend->image_extent);
 
         vk_image_memory_barrier_insert(cmd_buffer, curr_viewport_img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
@@ -777,7 +791,7 @@ void backend_draw(VkBackend* backend, std::vector<Entity>& entities, const World
 
     vk_image_memory_barrier_insert(cmd_buffer, swapchain_image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-    vk_image_blit(cmd_buffer, backend->color_resolve_image.image, swapchain_image, backend->swapchain_context.extent, backend->image_extent, 1, 1);
+    vk_image_blit(cmd_buffer, backend->color_resolve_image.image, swapchain_image, backend->swapchain_context.extent, backend->image_extent);
 
     vk_image_memory_barrier_insert(cmd_buffer, swapchain_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
@@ -835,22 +849,22 @@ void resize(VkBackend* backend) {
     backend->color_resolve_image =
         allocated_image_create(backend->device_ctx.logical_device, backend->allocator,
                                VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                               VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
+                               VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1, 1);
 
     backend->color_image = allocated_image_create(
         backend->device_ctx.logical_device, backend->allocator, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
-        VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, backend->device_ctx.raster_samples);
+        VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1, backend->device_ctx.raster_samples);
 
     backend->depth_image =
         allocated_image_create(backend->device_ctx.logical_device, backend->allocator, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                               VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_D32_SFLOAT, backend->device_ctx.raster_samples);
+                               VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_D32_SFLOAT, 1, backend->device_ctx.raster_samples);
 
     if (backend->mode == EngineMode::EDIT) {
         for (size_t i = 0; i < backend->swapchain_context.images.size(); i++) {
             allocated_image_destroy(backend->device_ctx.logical_device, backend->allocator, &backend->viewport_images[i]);
             AllocatedImage new_viewport_image = allocated_image_create(
                 backend->device_ctx.logical_device, backend->allocator, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1);
+                VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1, 1);
             backend->viewport_images[i] = new_viewport_image;
 
             for (size_t j = 0; j < backend->viewport_images.size(); j++) {
@@ -866,7 +880,7 @@ void resize(VkBackend* backend) {
 
         backend->entity_id_images[i] = allocated_image_create(
             backend->device_ctx.logical_device, backend->allocator, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16_UINT, 1, VMA_MEMORY_USAGE_AUTO);
+            VK_IMAGE_VIEW_TYPE_2D, backend->image_extent, VK_FORMAT_R16G16_UINT, 1, 1, VMA_MEMORY_USAGE_AUTO);
 
         DescriptorWriter writer{};
         desc_writer_write_image_desc(&writer, 1, backend->entity_id_images[i].image_view, backend->default_linear_sampler, VK_IMAGE_LAYOUT_GENERAL,
@@ -1091,11 +1105,11 @@ void upload_sky_box_texture(VkBackend* backend, const TextureSampler* tex_sample
     AllocatedBuffer staging_buf = allocated_buffer_create(backend->allocator, byte_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                                                           VMA_MEMORY_USAGE_AUTO_PREFER_HOST, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
 
-    vmaCopyMemoryToAllocation(backend->allocator, tex_sampler->data, staging_buf.allocation, 0, byte_size);
+    vmaCopyMemoryToAllocation(backend->allocator, tex_sampler->mip_levels[0].data, staging_buf.allocation, 0, byte_size);
 
     const AllocatedImage new_texture =
         allocated_image_create(backend->device_ctx.logical_device, backend->allocator, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-                               tex_sampler->view_type, extent, VK_FORMAT_R8G8B8A8_UNORM);
+                               tex_sampler->view_type, extent, VK_FORMAT_R8G8B8A8_UNORM, 1);
 
     std::vector<VkBufferImageCopy> copy_regions;
     copy_regions.reserve(tex_sampler->layer_count);
@@ -1119,13 +1133,13 @@ void upload_sky_box_texture(VkBackend* backend, const TextureSampler* tex_sample
     command_ctx_immediate_submit(&backend->immediate_cmd_ctx, backend->device_ctx.logical_device, backend->device_ctx.queues.graphics,
                                  backend->imm_fence, [&](VkCommandBuffer cmd) {
                                      vk_image_memory_barrier_insert(cmd, new_texture.image, VK_IMAGE_LAYOUT_UNDEFINED,
-                                                                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, tex_sampler->layer_count);
+                                                                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, 0, tex_sampler->layer_count);
 
                                      vkCmdCopyBufferToImage(cmd, staging_buf.buffer, new_texture.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                                             copy_regions.size(), copy_regions.data());
 
                                      vk_image_memory_barrier_insert(cmd, new_texture.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                                                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, tex_sampler->layer_count);
+                                                                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 1, 0, tex_sampler->layer_count);
                                  });
 
     DescriptorWriter descriptor_writer;
@@ -1142,10 +1156,13 @@ void upload_sky_box_texture(VkBackend* backend, const TextureSampler* tex_sample
 }
 
 struct UniqueImageInstance {
-    const uint8_t* data;
-    uint32_t       color_channels;
-    uint32_t       height;
-    uint32_t       width;
+    // const uint8_t* data;
+    uint32_t color_channels{};
+    uint32_t height{};
+    uint32_t width{};
+    // uint32_t       mip_levels{1};
+    uint32_t              byte_size{};
+    std::vector<MipLevel> mip_levels;
 };
 
 // [[nodiscard]] static std::vector<void*> compress_2d_color_textures(std::span<const UniqueImageInstance> image_instances,
@@ -1213,38 +1230,38 @@ struct UniqueImageInstance {
 //     return compressed_data_bufs;
 // }
 
-CompressedImage compress_img_task(const UniqueImageInstance* image, uint32_t id) {
-
-    assert(image->color_channels == 4);
-    nvtt::RefImage new_ref_image{};
-    new_ref_image.data         = image->data;
-    new_ref_image.num_channels = image->color_channels;
-    new_ref_image.height       = image->height;
-    new_ref_image.width        = image->width;
-    new_ref_image.depth        = 1;
-
-    nvtt::CPUInputBuffer input_buf(&new_ref_image, nvtt::UINT8);
-
-    const uint32_t compressed_data_bytes = input_buf.NumTiles() * 16;
-
-    CompressedImage new_compressed_img{};
-    new_compressed_img.id   = id;
-    new_compressed_img.size = compressed_data_bytes;
-    new_compressed_img.data = malloc(compressed_data_bytes); // BC7 uses 16 bytes/tile
-
-    nvtt::TimingContext timing_ctx;
-
-    nvtt::EncodeSettings encode_settings;
-
-    const auto settings =
-        nvtt::EncodeSettings().SetFormat(nvtt::Format_BC7).SetQuality(nvtt::Quality_Fastest).SetUseGPU(false).SetOutputToGPUMem(false);
-    bool encoding_successful = nvtt_encode(input_buf, new_compressed_img.data, settings);
-    assert(encoding_successful);
-
-    //    std::cout << "finished id: " << id << std::endl;
-
-    return new_compressed_img;
-}
+// CompressedImage compress_img_task(const UniqueImageInstance* image, uint32_t id) {
+//
+//     assert(image->color_channels == 4);
+//     nvtt::RefImage new_ref_image{};
+//     new_ref_image.data         = image->data;
+//     new_ref_image.num_channels = image->color_channels;
+//     new_ref_image.height       = image->height;
+//     new_ref_image.width        = image->width;
+//     new_ref_image.depth        = 1;
+//
+//     nvtt::CPUInputBuffer input_buf(&new_ref_image, nvtt::UINT8);
+//
+//     const uint32_t compressed_data_bytes = input_buf.NumTiles() * 16;
+//
+//     CompressedImage new_compressed_img{};
+//     new_compressed_img.id   = id;
+//     new_compressed_img.size = compressed_data_bytes;
+//     new_compressed_img.data = malloc(compressed_data_bytes); // BC7 uses 16 bytes/tile
+//
+//     nvtt::TimingContext timing_ctx;
+//
+//     nvtt::EncodeSettings encode_settings;
+//
+//     const auto settings =
+//         nvtt::EncodeSettings().SetFormat(nvtt::Format_BC7).SetQuality(nvtt::Quality_Fastest).SetUseGPU(false).SetOutputToGPUMem(false);
+//     bool encoding_successful = nvtt_encode(input_buf, new_compressed_img.data, settings);
+//     assert(encoding_successful);
+//
+//     //    std::cout << "finished id: " << id << std::endl;
+//
+//     return new_compressed_img;
+// }
 
 /*[[nodiscard]] static std::vector<CompressedImage> compress_2d_color_textures(std::span<const UniqueImageInstance> image_instances,
                                                                              uint32_t* total_compressed_size, uint32_t* largest_img_size) {
@@ -1279,49 +1296,76 @@ CompressedImage compress_img_task(const UniqueImageInstance* image, uint32_t id)
     return compressed_images;
 }*/
 
-[[nodiscard]] static std::vector<CompressedImage> compress_2d_color_textures(std::span<const UniqueImageInstance> image_instances,
-                                                                             uint32_t* total_compressed_size, uint32_t* largest_img_size) {
+// [[nodiscard]] static std::vector<CompressedImage> compress_2d_color_textures(std::span<const UniqueImageInstance> image_instances,
+//                                                                              uint32_t* total_compressed_size, uint32_t* largest_img_size) {
+//
+//     *largest_img_size = 0;
+//     std::vector<CompressedImage> compressed_data_bufs;
+//     compressed_data_bufs.reserve(image_instances.size());
+//     uint32_t total_byte_size = 0;
+//     for (size_t i = 0; i < image_instances.size(); i++) {
+//         const UniqueImageInstance& image = image_instances[i];
+//         assert(image.color_channels == 4);
+//
+//         nvtt::RefImage new_ref_image{};
+//         new_ref_image.data         = image.data;
+//         new_ref_image.num_channels = image.color_channels;
+//         new_ref_image.height       = image.height;
+//         new_ref_image.width        = image.width;
+//         new_ref_image.depth        = 1;
+//
+//         nvtt::CPUInputBuffer input_buf(&new_ref_image, nvtt::UINT8);
+//
+//         const uint32_t compressed_data_bytes = input_buf.NumTiles() * 16;
+//
+//         *largest_img_size = (compressed_data_bytes > *largest_img_size) ? compressed_data_bytes : *largest_img_size;
+//
+//         CompressedImage new_compressed_img{};
+//         new_compressed_img.id   = i;
+//         new_compressed_img.size = compressed_data_bytes;
+//         new_compressed_img.data = malloc(compressed_data_bytes); // BC7 uses 16 bytes/tile
+//
+//         const auto settings =
+//             nvtt::EncodeSettings().SetFormat(nvtt::Format_BC7).SetQuality(nvtt::Quality_Fastest).SetUseGPU(true).SetOutputToGPUMem(false);
+//         bool encoding_successful = nvtt_encode(input_buf, new_compressed_img.data, settings);
+//         assert(encoding_successful);
+//
+//         compressed_data_bufs.push_back(new_compressed_img);
+//         total_byte_size += compressed_data_bytes;
+//     }
+//
+//     *total_compressed_size = total_byte_size;
+//     return compressed_data_bufs;
+// }
 
-    *largest_img_size = 0;
-    std::vector<CompressedImage> compressed_data_bufs;
-    compressed_data_bufs.reserve(image_instances.size());
-    uint32_t total_byte_size = 0;
-    for (size_t i = 0; i < image_instances.size(); i++) {
-        const UniqueImageInstance& image = image_instances[i];
-        assert(image.color_channels == 4);
+void generate_mip_maps(VkBackend* backend, AllocatedImage* allocated_img, VkCommandBuffer cmd_buf) {
+    uint32_t mip_width  = allocated_img->image_extent.width;
+    uint32_t mip_height = allocated_img->image_extent.height;
 
-        nvtt::RefImage new_ref_image{};
-        new_ref_image.data         = image.data;
-        new_ref_image.num_channels = image.color_channels;
-        new_ref_image.height       = image.height;
-        new_ref_image.width        = image.width;
-        new_ref_image.depth        = 1;
+    for (size_t i = 1; i < allocated_img->mip_levels; i++) {
+        vk_image_memory_barrier_insert(cmd_buf, allocated_img->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, 1,
+                                       i - 1);
 
-        nvtt::CPUInputBuffer input_buf(&new_ref_image, nvtt::UINT8);
+        VkExtent2D src_extent = {.width = mip_width, .height = mip_height};
+        VkExtent2D dst_extent = {.width = mip_width > 1 ? mip_width / 2 : 1, .height = mip_height > 1 ? mip_height / 2 : 1};
 
-        const uint32_t compressed_data_bytes = input_buf.NumTiles() * 16;
+        vk_image_blit(cmd_buf, allocated_img->image, allocated_img->image, src_extent, dst_extent, i - 1, i);
 
-        *largest_img_size = (compressed_data_bytes > *largest_img_size) ? compressed_data_bytes : *largest_img_size;
+        vk_image_memory_barrier_insert(cmd_buf, allocated_img->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                       1, i - 1);
 
-        CompressedImage new_compressed_img{};
-        new_compressed_img.id   = i;
-        new_compressed_img.size = compressed_data_bytes;
-        new_compressed_img.data = malloc(compressed_data_bytes); // BC7 uses 16 bytes/tile
+        // if we're at the last image, we never blit from it. so transition from dst optimal instead of src optimal
+        if (i == allocated_img->mip_levels - 1) {
+            vk_image_memory_barrier_insert(cmd_buf, allocated_img->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 1, i);
+        }
 
-        const auto settings =
-            nvtt::EncodeSettings().SetFormat(nvtt::Format_BC7).SetQuality(nvtt::Quality_Fastest).SetUseGPU(true).SetOutputToGPUMem(false);
-        bool encoding_successful = nvtt_encode(input_buf, new_compressed_img.data, settings);
-        assert(encoding_successful);
-
-        compressed_data_bufs.push_back(new_compressed_img);
-        total_byte_size += compressed_data_bytes;
+        mip_width  = mip_width > 1 ? mip_width / 2 : 1;
+        mip_height = mip_height > 1 ? mip_height / 2 : 1;
     }
-
-    *total_compressed_size = total_byte_size;
-    return compressed_data_bufs;
 }
 
-uint32_t backend_upload_2d_textures(VkBackend* backend, std::vector<TextureSampler>& tex_samplers) {
+uint32_t backend_upload_2d_textures(VkBackend* backend, std::vector<TextureSampler>& tex_samplers, VkFormat format) {
     // we will return this at the end of the function. It signifies an offset for
     // materials accessing these textures by their index.
     // For instance, if a gltf mesh is trying to access texture index 3, and this function passes
@@ -1329,34 +1373,46 @@ uint32_t backend_upload_2d_textures(VkBackend* backend, std::vector<TextureSampl
     // descriptor for this texture will actually be found in the shader
     const uint32_t descriptor_index_offset = backend->tex_sampler_desc_count;
 
+    uint32_t largest_image_size = 0;
+
     std::vector<UniqueImageInstance> unique_image_instances;
     unique_image_instances.reserve(tex_samplers.size());
     for (const auto& tex_sampler : tex_samplers) {
+        assert(tex_sampler.mip_levels.size() >= 1);
+        assert(tex_sampler.mip_levels[0].height == tex_sampler.height);
+        assert(tex_sampler.mip_levels[0].width == tex_sampler.width);
+
         UniqueImageInstance new_image{};
-        new_image.data           = tex_sampler.data;
+        // new_image.data           = tex_sampler.data;
         new_image.height         = tex_sampler.height;
         new_image.width          = tex_sampler.width;
         new_image.color_channels = tex_sampler.color_channels;
+        // new_image.mip_levels     = tex_sampler.mip_count;
+        // new_image.byte_size      = tex_sampler.byte_size;
+        new_image.mip_levels = tex_sampler.mip_levels;
 
         bool is_unique = true;
         for (const auto& curr_image : unique_image_instances) {
             // isn't unique if the data and dimensions differ
-            if (new_image.data == curr_image.data && new_image.height == curr_image.height && new_image.width == curr_image.width) {
+            if (new_image.mip_levels[0].data == curr_image.mip_levels[0].data && new_image.height == curr_image.height &&
+                new_image.width == curr_image.width) {
                 is_unique = false;
                 break;
             }
         }
         if (is_unique) {
+            if (largest_image_size < tex_sampler.height * tex_sampler.width * tex_sampler.color_channels) {
+                largest_image_size = tex_sampler.height * tex_sampler.width * tex_sampler.color_channels;
+            }
             unique_image_instances.push_back(new_image);
         }
     }
 
-    uint32_t total_byte_size    = 0;
-    uint32_t largest_image_size = 0;
-    // std::vector<void*> compressed_data_bufs = compress_2d_color_textures(unique_image_instances, &total_byte_size, &largest_image_size);
-    std::vector<CompressedImage> compressed_data_bufs = compress_2d_color_textures(unique_image_instances, &total_byte_size, &largest_image_size);
+    uint32_t total_byte_size = 0;
+    // uint32_t largest_image_size = 0;
 
-    // use the largest image size for our staging buffer, then just reuse it for all images
+    // std::vector<CompressedImage> compressed_data_bufs = compress_2d_color_textures(unique_image_instances, &total_byte_size, &largest_image_size);
+    //   use the largest image size for our staging buffer, then just reuse it for all images
     AllocatedBuffer staging_buf = allocated_buffer_create(backend->allocator, largest_image_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                                                           VMA_MEMORY_USAGE_AUTO_PREFER_HOST, VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
 
@@ -1369,33 +1425,39 @@ uint32_t backend_upload_2d_textures(VkBackend* backend, std::vector<TextureSampl
             .height = image->height,
         };
 
-        //      vmaCopyMemoryToAllocation(backend->allocator, compressed_data_bufs[i], staging_buf.allocation, 0, image->height * image->width);
-        vmaCopyMemoryToAllocation(backend->allocator, compressed_data_bufs[i].data, staging_buf.allocation, 0, image->height * image->width);
+        AllocatedImage tex_image =
+            allocated_image_create(backend->device_ctx.logical_device, backend->allocator,
+                                   VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                                   VK_IMAGE_VIEW_TYPE_2D, extent, format, image->mip_levels.size());
 
-        AllocatedImage tex_image = allocated_image_create(backend->device_ctx.logical_device, backend->allocator,
-                                                          VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_VIEW_TYPE_2D, extent,
-                                                          VK_FORMAT_BC7_SRGB_BLOCK);
+        command_ctx_immediate_submit(&backend->immediate_cmd_ctx, backend->device_ctx.logical_device, backend->device_ctx.queues.graphics,
+                                     backend->imm_fence, [&](VkCommandBuffer cmd) {
+                                         // transition all mips to transfer destination
+                                         vk_image_memory_barrier_insert(cmd, tex_image.image, VK_IMAGE_LAYOUT_UNDEFINED,
+                                                                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, tex_image.mip_levels);
+                                         for (size_t mip = 0; mip < image->mip_levels.size(); mip++) {
+                                             const MipLevel* mip_level = &image->mip_levels[mip];
+                                             // copy this mip to staging
+                                             vmaCopyMemoryToAllocation(backend->allocator, image->mip_levels[mip].data, staging_buf.allocation, 0,
+                                                                       mip_level->height * mip_level->width);
 
-        VkBufferImageCopy copy_region{};
-        copy_region.imageSubresource.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
-        copy_region.imageSubresource.mipLevel       = 0;
-        copy_region.imageSubresource.baseArrayLayer = 0;
-        copy_region.imageSubresource.layerCount     = 1;
-        copy_region.imageExtent.width               = image->width;
-        copy_region.imageExtent.height              = image->height;
-        copy_region.imageExtent.depth               = 1;
-        copy_region.bufferOffset                    = 0;
+                                             VkBufferImageCopy copy_region{};
+                                             copy_region.imageSubresource.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+                                             copy_region.imageSubresource.mipLevel       = mip;
+                                             copy_region.imageSubresource.baseArrayLayer = 0;
+                                             copy_region.imageSubresource.layerCount     = 1;
+                                             copy_region.imageExtent.width               = mip_level->width;
+                                             copy_region.imageExtent.height              = mip_level->height;
+                                             copy_region.imageExtent.depth               = 1;
+                                             copy_region.bufferOffset                    = 0;
 
-        command_ctx_immediate_submit(
-            &backend->immediate_cmd_ctx, backend->device_ctx.logical_device, backend->device_ctx.queues.graphics, backend->imm_fence,
-            [&](VkCommandBuffer cmd) {
-                vk_image_memory_barrier_insert(cmd, tex_image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1);
-
-                vkCmdCopyBufferToImage(cmd, staging_buf.buffer, tex_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy_region);
-
-                vk_image_memory_barrier_insert(cmd, tex_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                                               1);
-            });
+                                             vkCmdCopyBufferToImage(cmd, staging_buf.buffer, tex_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
+                                                                    &copy_region);
+                                         }
+                                         // transition all mips back to read only
+                                         vk_image_memory_barrier_insert(cmd, tex_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                                                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, tex_image.mip_levels);
+                                     });
 
         backend->tex_images.push_back(tex_image);
     }
@@ -1405,7 +1467,7 @@ uint32_t backend_upload_2d_textures(VkBackend* backend, std::vector<TextureSampl
         // find which index of unique images this tex_sampler refers to
         uint32_t image_i = 0;
         for (size_t i = 0; i < unique_image_instances.size(); i++) {
-            if (tex_sampler.data == unique_image_instances[i].data) {
+            if (tex_sampler.mip_levels[0].data == unique_image_instances[i].mip_levels[0].data) {
                 image_i = i;
                 break;
             }
@@ -1414,19 +1476,22 @@ uint32_t backend_upload_2d_textures(VkBackend* backend, std::vector<TextureSampl
         // find index into our GPU allocated texture images based on this
         uint32_t tex_img_i = backend->tex_images.size() - unique_image_instances.size() + image_i;
 
-        AllocatedImage tex_image = backend->tex_images[tex_img_i];
+        const AllocatedImage* tex_image = &backend->tex_images[tex_img_i];
 
-        desc_writer_write_image_desc(&descriptor_writer, backend->texture_desc_binding, tex_image.image_view, tex_sampler.sampler,
-                                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                                     backend->tex_sampler_desc_count++);
+        backend->mip_mapped_samplers.push_back(
+            vk_sampler_create(backend->device_ctx.logical_device, VK_FILTER_LINEAR, VK_FILTER_LINEAR, 0.f, tex_image->mip_levels));
+
+        desc_writer_write_image_desc(&descriptor_writer, backend->texture_desc_binding, tex_image->image_view,
+                                     backend->mip_mapped_samplers[backend->mip_mapped_samplers.size() - 1], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                     VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, backend->tex_sampler_desc_count++);
         desc_writer_update_desc_set(&descriptor_writer, backend->device_ctx.logical_device, backend->graphics_desc_set);
         desc_writer_clear(&descriptor_writer);
     }
 
-    for (auto& data : compressed_data_bufs) {
-        // free(data);
-        free(data.data);
-    }
+    // for (auto& data : compressed_data_bufs) {
+    //     // free(data);
+    //     free(data.data);
+    // }
     allocated_buffer_destroy(backend->allocator, &staging_buf);
 
     return descriptor_index_offset;
