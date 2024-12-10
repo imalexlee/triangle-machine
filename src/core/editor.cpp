@@ -75,29 +75,25 @@ static void end_ui(Editor* editor) {
 }
 
 glm::mat4 calculateTransformDifference(const glm::mat4& sourceTransform, const glm::mat4& targetTransform) {
-    // Decompose source transform
     glm::vec3 sourceTranslation, sourceScale;
     glm::quat sourceRotation;
     glm::vec3 sourceSkew;
     glm::vec4 sourcePerspective;
     glm::decompose(sourceTransform, sourceScale, sourceRotation, sourceTranslation, sourceSkew, sourcePerspective);
 
-    // Decompose target transform
     glm::vec3 targetTranslation, targetScale;
     glm::quat targetRotation;
     glm::vec3 targetSkew;
     glm::vec4 targetPerspective;
     glm::decompose(targetTransform, targetScale, targetRotation, targetTranslation, targetSkew, targetPerspective);
 
-    // Calculate differences
     glm::vec3 translationDiff = targetTranslation - sourceTranslation;
     glm::vec3 scaleDiff       = targetScale / sourceScale;
     glm::quat rotationDiff    = glm::inverse(sourceRotation) * targetRotation;
 
-    // Reconstruct difference transform
     glm::mat4 diffTransform = glm::mat4(1.0f);
 
-    // go to origin
+    // go to origin first
     diffTransform *= glm::translate(diffTransform, targetTranslation);
     diffTransform *= glm::mat4_cast(rotationDiff);
     diffTransform = glm::scale(diffTransform, scaleDiff);
@@ -167,8 +163,18 @@ void update_viewport(Editor* editor, const VkBackend* backend, const Window* win
     if (scene->selected_entity >= 0) {
 
         if (ImGuizmo::IsUsing()) {
-            scene->entities[scene->selected_entity].transform = calculateTransformDifference(editor->base_gizmo_transforms[scene->selected_entity],
-                                                                                             editor->curr_gizmo_transforms[scene->selected_entity]);
+            Entity* entity    = &scene->entities[scene->selected_entity];
+            entity->transform = calculateTransformDifference(editor->base_gizmo_transforms[scene->selected_entity],
+                                                             editor->curr_gizmo_transforms[scene->selected_entity]);
+
+            // pull the transform out of the average mesh position
+            glm::vec3 translation, scale;
+            glm::quat rotation;
+            glm::vec3 skew;
+            glm::vec4 perspective;
+
+            glm::decompose(editor->curr_gizmo_transforms[scene->selected_entity], scale, rotation, translation, skew, perspective);
+            entity->orig_pos = translation;
 
             scene_request_update(scene);
         }
@@ -190,28 +196,22 @@ void update_viewport(Editor* editor, const VkBackend* backend, const Window* win
 }
 
 glm::mat4 calculateAverageTransform(const std::vector<glm::mat4>& transformations) {
-    // If no transformations, return identity matrix
     if (transformations.empty()) {
         return glm::mat4(1.0f);
     }
 
     // Calculate the average transformation matrix
-    glm::mat4 averageTransform(1.0f); // Start with identity matrix
+    glm::mat4 averageTransform(1.0f);
 
-    // Decompose each matrix into components
     for (const auto& transform : transformations) {
-        // Decompose matrix into translation, rotation, and scale
         glm::vec3 translation, scale;
         glm::quat rotation;
         glm::vec3 skew;
         glm::vec4 perspective;
 
-        // Use glm::decompose to extract components (requires glm/gtx/matrix_decompose.hpp)
         glm::decompose(transform, scale, rotation, translation, skew, perspective);
 
-        // Accumulate average of components
         averageTransform = glm::translate(averageTransform, translation / static_cast<float>(transformations.size()));
-        // Note: Averaging rotations requires more complex quaternion interpolation
         // Simple averaging of rotation may not produce correct results
     }
 
@@ -261,7 +261,7 @@ void update_file_menu(Editor* editor, VkBackend* backend, Scene* scene) {
 
                 // set gizmo transform at average location of all mesh transforms of a given entity
                 // so the center
-                for (const auto& entity : scene->entities) {
+                for (auto& entity : scene->entities) {
                     std::vector<glm::mat4> transforms;
                     for (const auto opaque_obj : entity.opaque_objs) {
                         transforms.push_back(opaque_obj.mesh_data.local_transform);
@@ -271,7 +271,16 @@ void update_file_menu(Editor* editor, VkBackend* backend, Scene* scene) {
                     }
                     glm::mat4 avg_transform = calculateAverageTransform(transforms);
                     editor->base_gizmo_transforms.push_back(avg_transform);
-                    editor->curr_gizmo_transforms.push_back(avg_transform);
+                    editor->curr_gizmo_transforms.push_back(entity.transform * avg_transform);
+
+                    // pull the transform out of the average mesh position
+                    glm::vec3 translation, scale;
+                    glm::quat rotation;
+                    glm::vec3 skew;
+                    glm::vec4 perspective;
+
+                    glm::decompose(entity.transform * avg_transform, scale, rotation, translation, skew, perspective);
+                    entity.orig_pos = translation;
                 }
             } else {
                 // cancel was clicked
@@ -334,7 +343,16 @@ void update_scene_overview(Editor* editor, VkBackend* backend, const Window* win
                 glm::mat4 avg_transform = calculateAverageTransform(transforms);
                 editor->base_gizmo_transforms.push_back(avg_transform);
                 editor->curr_gizmo_transforms.push_back(avg_transform);
-                // TODO: avg transform
+
+                // pull the transform out of the average mesh position
+                glm::vec3 translation, scale;
+                glm::quat rotation;
+                glm::vec3 skew;
+                glm::vec4 perspective;
+
+                glm::decompose(avg_transform, scale, rotation, translation, skew, perspective);
+                scene->entities[new_entity_idx].orig_pos = translation;
+
                 add_entity_pressed = false;
             } else {
                 add_entity_pressed = false;
@@ -395,7 +413,8 @@ void update_entity_viewer(Editor* editor, Scene* scene) {
         ImGui::InputFloat3("Tr", translation, "%.3f");
         ImGui::InputFloat3("Rt", rotation, "%.3f");
         ImGui::InputFloat3("Sc", scale, "%.3f");
-        ImGuizmo::RecomposeMatrixFromComponents(translation, rotation, scale, glm::value_ptr(editor->curr_gizmo_transforms[scene->selected_entity]));
+        // ImGuizmo::RecomposeMatrixFromComponents(translation, rotation, scale,
+        // glm::value_ptr(editor->curr_gizmo_transforms[scene->selected_entity]));
     } else {
         ImGui::Text("No Entity Selected");
     }

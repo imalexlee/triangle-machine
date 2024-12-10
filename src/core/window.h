@@ -18,6 +18,7 @@ struct Window {
     static inline std::vector<std::function<void(int width, int height)>>                       resize_callbacks;
 };
 
+// see documentation for glfwSetInputMode() for semantics behind the CursorMode options
 enum class CursorMode {
     NORMAL   = GLFW_CURSOR_NORMAL,
     HIDDEN   = GLFW_CURSOR_HIDDEN,
@@ -40,5 +41,4 @@ void window_register_mouse_button_callback(Window* window, std::function<void(in
 
 void window_register_resize_callback(Window* window, std::function<void(int, int)>&& fn_ptr);
 
-// see documentation for glfwSetInputMode() for semantics behind the CursorMode options
 void window_set_cursor_mode(const Window* window, CursorMode mode);

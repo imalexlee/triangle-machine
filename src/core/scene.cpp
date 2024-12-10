@@ -123,6 +123,10 @@ void scene_key_callback(Scene* scene, int key, int action) {
 
 void scene_request_update(Scene* scene) { scene->update_requested = true; }
 
+static glm::mat4 global_translation(1.f);
+static glm::mat4 global_rotation(1.f);
+static glm::mat4 final_transform(1.f);
+
 void scene_update(Scene* scene, VkBackend* backend) {
     if (!scene->update_requested || scene->selected_entity < 0) {
         return;
@@ -130,6 +134,31 @@ void scene_update(Scene* scene, VkBackend* backend) {
 
     Entity* curr_entity = &scene->entities[scene->selected_entity];
 
+    glm::vec3 entity_base_translation = curr_entity->transform[3];
+
+    glm::mat4 base_translation_mat     = glm::translate(glm::mat4(1.f), entity_base_translation);
+    glm::mat4 orig_pos_translation_mat = glm::translate(glm::mat4(1.f), curr_entity->orig_pos);
+
+    // glm::vec3 scale;
+    // glm::quat rotation;
+    // glm::vec3 skew;
+    // glm::vec4 perspective;
+    // glm::vec3 translation;
+    // glm::decompose(curr_entity->transform, scale, rotation, translation, skew, perspective);
+    //
+    // glm::mat4 scale_mat = glm::scale(glm::mat4(1.f), scale);
+    //
+    // // first translate to origin, compute rotations, move back to offset, scale it, and offset it to world position
+    //
+    // final_transform =
+    //     global_translation * orig_pos_translation_mat * global_rotation * glm::toMat4(rotation) * scale_mat *
+    //     glm::inverse(orig_pos_translation_mat);
+
+    static bool first_run = true;
+    if (first_run) {
+        first_run       = false;
+        final_transform = curr_entity->transform;
+    }
     for (DrawObject& obj : curr_entity->opaque_objs) {
         obj.mesh_data.global_transform = curr_entity->transform;
     }
@@ -143,20 +172,77 @@ void scene_update(Scene* scene, VkBackend* backend) {
     scene->update_requested = false;
 }
 
-void scene_update_entity_pos(Scene* scene, uint16_t ent_id, const glm::vec3& new_pos) {
-    if (ent_id == 0) {
+void scene_update_entity_pos(Scene* scene, VkBackend* backend, uint16_t ent_id, const glm::vec3& offset) {
+    if (ent_id == 0)
         return;
-    }
+
+    glm::mat4 translation = glm::translate(glm::mat4(1.f), offset);
+
+    global_translation = translation;
+
     Entity* entity = &scene->entities[ent_id - 1];
 
-    glm::mat4 translation = glm::translate(glm::mat4(1.0f), new_pos);
+    glm::vec3 scale;
+    glm::quat rotation;
+    glm::vec3 skew;
+    glm::vec4 perspective;
+    glm::vec3 translation_comp;
+    glm::decompose(scene->entities[ent_id - 1].transform, scale, rotation, translation_comp, skew, perspective);
 
-    for (DrawObject& obj : entity->opaque_objs) {
-        obj.mesh_data.global_transform = entity->transform * translation;
-    }
-    for (DrawObject& obj : entity->transparent_objs) {
-        obj.mesh_data.global_transform = entity->transform * translation;
-    }
+    glm::mat4 scale_mat = glm::scale(glm::mat4(1.f), scale);
+
+    // first translate to origin, compute rotations, move back to offset, scale it, and offset it to world position
+
+    glm::mat4 orig_pos_translation_mat = glm::translate(glm::mat4(1.f), entity->orig_pos);
+
+    final_transform =
+        global_translation * orig_pos_translation_mat * global_rotation * glm::toMat4(rotation) * scale_mat * glm::inverse(orig_pos_translation_mat);
+
+    entity->transform = translation * entity->transform;
+
+    scene_request_update(scene);
+    scene->selected_entity = ent_id - 1;
+    scene_update(scene, backend);
+}
+
+void scene_update_entity_rotation(Scene* scene, VkBackend* backend, uint16_t ent_id, float rot_degrees) {
+    if (ent_id == 0)
+        return;
+
+    glm::mat4 rotation = glm::rotate(glm::mat4(1.f), glm::radians(rot_degrees), glm::vec3(0, 1, 0));
+
+    global_rotation = rotation;
+
+    const Entity* entity = &scene->entities[ent_id - 1];
+
+    glm::vec3 scale;
+    glm::quat rotation_comp;
+    glm::vec3 skew;
+    glm::vec4 perspective;
+    glm::vec3 translation_comp;
+    glm::decompose(scene->entities[ent_id - 1].transform, scale, rotation_comp, translation_comp, skew, perspective);
+
+    glm::mat4 scale_mat = glm::scale(glm::mat4(1.f), scale);
+
+    // first translate to origin, compute rotations, move back to offset, scale it, and offset it to world position
+
+    glm::mat4 orig_pos_translation_mat = glm::translate(glm::mat4(1.f), entity->orig_pos);
+
+    final_transform = global_translation * orig_pos_translation_mat * global_rotation * glm::toMat4(rotation_comp) * scale_mat *
+                      glm::inverse(orig_pos_translation_mat);
+
+    scene_request_update(scene);
+    scene->selected_entity = ent_id - 1;
+    scene_update(scene, backend);
+}
+
+void scene_revert_entity_transformation(Scene* scene, VkBackend* backend, uint16_t ent_id) {
+    const Entity* entity = &scene->entities[ent_id - 1];
+    final_transform      = entity->transform;
+
+    scene_request_update(scene);
+    scene->selected_entity = ent_id - 1;
+    scene_update(scene, backend);
 }
 
 void scene_save(Scene* scene, const std::filesystem::path& path) {
@@ -181,6 +267,14 @@ void scene_save(Scene* scene, const std::filesystem::path& path) {
             }
         }
 
+        std::vector<float> orig_pos_array;
+        orig_pos_array.reserve(3);
+        const glm::vec3& orig_pos = scene->entities[i].orig_pos;
+        for (size_t idx = 0; idx < 3; idx++) {
+            orig_pos_array.push_back(orig_pos[idx]);
+        }
+
+        entity["orig_pos"]  = orig_pos_array;
         entity["transform"] = transform_array;
         entities.push_back(entity);
     }
@@ -199,8 +293,9 @@ void scene_open(Scene* scene, VkBackend* backend, const std::filesystem::path& p
      *    "scene": {
      *         "entities": [
      *             {
-     *                  "path":"//fda/fda/fdsa"
-     *                  "transform": [0,1.0,1...]
+     *                  "path":"//fda/fda/fdsa",
+     *                  "transform": [0,1.0,1...],
+     *                  "orig_pos": [1,2,3],
      *             },
      *         ],
      *    },
@@ -216,18 +311,31 @@ void scene_open(Scene* scene, VkBackend* backend, const std::filesystem::path& p
 
     std::vector<std::filesystem::path> gltf_paths;
     std::vector<glm::mat4>             transforms;
+    std::vector<glm::vec3>             orig_positions;
 
     gltf_paths.reserve(entity_arr.size());
     transforms.reserve(entity_arr.size());
+    orig_positions.reserve(entity_arr.size());
 
     for (const auto& entity : entity_arr) {
         gltf_paths.push_back(entity["path"].get<std::string>());
+
+        const auto& orig_pos_arr = entity["orig_pos"];
+
+        glm::vec3 orig_pos = {0, 0, 0};
+        size_t    idx      = 0;
+        for (const auto& value : orig_pos_arr) {
+            orig_pos[idx] = value.get<float>();
+            idx++;
+        }
+
+        orig_positions.push_back(orig_pos);
 
         const auto& transform_arr = entity["transform"];
 
         glm::mat4 transform(1.0f);
 
-        size_t idx = 0;
+        idx = 0;
         for (const auto& value : transform_arr) {
             if (idx >= 16)
                 break;
@@ -256,7 +364,7 @@ void scene_open(Scene* scene, VkBackend* backend, const std::filesystem::path& p
         glm::vec3 translation;
         glm::decompose(transforms[i], scale, rotation, translation, skew, perspective);
 
-        entity->orig_pos = translation;
+        entity->orig_pos = orig_positions[i];
 
         scene->selected_entity = i;
         scene_request_update(scene);

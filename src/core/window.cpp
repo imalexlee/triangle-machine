@@ -71,8 +71,13 @@ void window_set_cursor_mode(const Window* window, CursorMode mode) { glfwSetInpu
 
 static void key_callback(GLFWwindow* window, int key, [[maybe_unused]] int scancode, int action, [[maybe_unused]] int mods) {
 
-    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
-        glfwSetWindowShouldClose(window, GLFW_TRUE);
+    if (action == GLFW_PRESS) {
+        if (mods == GLFW_MOD_CONTROL && key == GLFW_KEY_E) {
+            glfwSetWindowShouldClose(window, GLFW_TRUE);
+        }
+        if (key == GLFW_KEY_ESCAPE) {
+            glfwSetWindowShouldClose(window, GLFW_TRUE);
+        }
     }
 
     for (auto& callback : Window::key_callbacks) {

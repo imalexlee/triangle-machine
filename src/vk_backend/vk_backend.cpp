@@ -19,8 +19,6 @@
 #include <fmt/format.h>
 #include <fstream>
 #include <future>
-#include <nvtt/nvtt.h>
-#include <taskflow/taskflow/taskflow.hpp>
 #include <vk_backend/vk_command.h>
 #include <vk_backend/vk_debug.h>
 #include <vk_backend/vk_device.h>
@@ -334,7 +332,7 @@ void create_desc_layouts(VkBackend* backend) {
         VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT;
 
     desc_layout_builder_add_binding(&layout_builder, backend->texture_desc_binding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                                    VK_SHADER_STAGE_FRAGMENT_BIT, texture_binding_flags, 300);
+                                    VK_SHADER_STAGE_FRAGMENT_BIT, texture_binding_flags, vk_opts::texture_desc_limit);
 
     backend->graphics_desc_set_layout = desc_layout_builder_create_layout(&layout_builder, backend->device_ctx.logical_device);
 }
@@ -357,12 +355,12 @@ void create_graphics_desc_set(VkBackend* backend) {
         {{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1},
          {VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 1},
          {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1},
-         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 300}}
+         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, vk_opts::texture_desc_limit}}
     };
     desc_allocator_init(&backend->graphics_desc_allocator, backend->device_ctx.logical_device, 1, pool_sizes);
 
     backend->graphics_desc_set = desc_allocator_allocate_desc_set(&backend->graphics_desc_allocator, backend->device_ctx.logical_device,
-                                                                  backend->graphics_desc_set_layout, 300);
+                                                                  backend->graphics_desc_set_layout, vk_opts::texture_desc_limit);
 }
 
 void configure_render_resources(VkBackend* backend) {
@@ -915,8 +913,7 @@ void render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf, std::vector<En
                                          &backend->shader_ctx.vert_shaders[geometry_vert].shader);
 
     const uint16_t geometry_frag = backend->shader_indices.geometry_frag;
-    backend->ext_ctx.vkCmdBindShadersEXT(cmd_buf, 1, &backend->shader_ctx.frag_shaders[geometry_frag].stage,
-                                         &backend->shader_ctx.frag_shaders[geometry_frag].shader);
+    backend->ext_ctx.vkCmdBindShadersEXT(cmd_buf, 1, &backend->shader_ctx.frag_shaders[4].stage, &backend->shader_ctx.frag_shaders[4].shader);
 
     backend->ext_ctx.vkCmdSetVertexInputEXT(cmd_buf, 0, nullptr, 0, nullptr);
 
@@ -925,6 +922,12 @@ void render_geometry(VkBackend* backend, VkCommandBuffer cmd_buf, std::vector<En
     vkCmdSetDepthWriteEnable(cmd_buf, VK_TRUE);
 
     for (const auto& entity : entities) {
+        if (entity.id == 6) {
+            backend->ext_ctx.vkCmdBindShadersEXT(cmd_buf, 1, &backend->shader_ctx.vert_shaders[geometry_vert].stage,
+                                                 &backend->shader_ctx.vert_shaders[geometry_vert].shader);
+            backend->ext_ctx.vkCmdBindShadersEXT(cmd_buf, 1, &backend->shader_ctx.frag_shaders[geometry_frag].stage,
+                                                 &backend->shader_ctx.frag_shaders[geometry_frag].shader);
+        }
         for (const DrawObject& obj : entity.opaque_objs) {
             record_obj(&obj);
         }
@@ -1109,7 +1112,7 @@ void upload_sky_box_texture(VkBackend* backend, const TextureSampler* tex_sample
 
     const AllocatedImage new_texture =
         allocated_image_create(backend->device_ctx.logical_device, backend->allocator, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-                               tex_sampler->view_type, extent, VK_FORMAT_R8G8B8A8_UNORM, 1);
+                               tex_sampler->view_type, extent, VK_FORMAT_R8G8B8A8_SRGB, 1);
 
     std::vector<VkBufferImageCopy> copy_regions;
     copy_regions.reserve(tex_sampler->layer_count);
@@ -1156,187 +1159,12 @@ void upload_sky_box_texture(VkBackend* backend, const TextureSampler* tex_sample
 }
 
 struct UniqueImageInstance {
-    // const uint8_t* data;
-    uint32_t color_channels{};
-    uint32_t height{};
-    uint32_t width{};
-    // uint32_t       mip_levels{1};
+    uint32_t              color_channels{};
+    uint32_t              height{};
+    uint32_t              width{};
     uint32_t              byte_size{};
     std::vector<MipLevel> mip_levels;
 };
-
-// [[nodiscard]] static std::vector<void*> compress_2d_color_textures(std::span<const UniqueImageInstance> image_instances,
-//                                                                    uint32_t* total_compressed_size, uint32_t* largest_img_size) {
-//
-//     nvtt::Context context;
-//     context.enableCudaAcceleration(true);
-//
-//     *largest_img_size = 0;
-//     std::vector<void*> compressed_data_bufs;
-//     compressed_data_bufs.reserve(image_instances.size());
-//     uint32_t total_byte_size = 0;
-//     for (size_t i = 0; i < image_instances.size(); i++) {
-//         const auto& image = image_instances[i];
-//         assert(image.color_channels == 4);
-//
-//         uint32_t image_bytes = image.height * image.width * image.color_channels;
-//
-//         nvtt::Surface nvtt_image;
-//         bool          res = nvtt_image.loadFromMemory((void*)image.data, image_bytes);
-//         assert(res);
-//
-//         nvtt::CompressionOptions compression_options;
-//         compression_options.setFormat(nvtt::Format_BC7);
-//
-//         // void* compressed_data = malloc(compressed_data_bytes);
-//
-//         std::filesystem::path out_filename = "out_compressed_" + std::to_string(i);
-//         std::ofstream         out_file(out_filename);
-//
-//         nvtt::OutputOptions output_options;
-//         output_options.setFileName(out_filename.string().c_str());
-//
-//         std::ignore = context.compress(nvtt_image, 0, 0, compression_options, output_options);
-//
-//         const uint32_t compressed_data_bytes = std::filesystem::file_size(out_filename); // BC7 uses 16 bytes/tile
-//         std::ifstream  file(out_filename, std::ios::binary | std::ios::ate);
-//         assert(file);
-//
-//         void* out_buffer = malloc(compressed_data_bytes);
-//
-//         file.seekg(0, std::ios::beg);
-//         file.read(static_cast<char*>(out_buffer), compressed_data_bytes);
-//
-//         *largest_img_size = (compressed_data_bytes > *largest_img_size) ? compressed_data_bytes : *largest_img_size;
-//         compressed_data_bufs.push_back(out_buffer);
-//         total_byte_size += compressed_data_bytes;
-//
-//         // nvtt::RefImage new_ref_image{};
-//         // new_ref_image.data         = image.data;
-//         // new_ref_image.num_channels = image.color_channels;
-//         // new_ref_image.height       = image.height;
-//         // new_ref_image.width        = image.width;
-//         // new_ref_image.depth        = 1;
-//         //
-//         // nvtt::CPUInputBuffer input_buf(&new_ref_image, nvtt::UINT8);
-//
-//         //     const auto settings =
-//         //     nvtt::EncodeSettings().SetFormat(nvtt::Format_BC7).SetQuality(nvtt::Quality_Normal).SetUseGPU(true).SetOutputToGPUMem(false);
-//         // bool encoding_successful = nvtt_encode(input_buf, compressed_data, settings);
-//         // assert(encoding_successful);
-//     }
-//
-//     *total_compressed_size = total_byte_size;
-//     return compressed_data_bufs;
-// }
-
-// CompressedImage compress_img_task(const UniqueImageInstance* image, uint32_t id) {
-//
-//     assert(image->color_channels == 4);
-//     nvtt::RefImage new_ref_image{};
-//     new_ref_image.data         = image->data;
-//     new_ref_image.num_channels = image->color_channels;
-//     new_ref_image.height       = image->height;
-//     new_ref_image.width        = image->width;
-//     new_ref_image.depth        = 1;
-//
-//     nvtt::CPUInputBuffer input_buf(&new_ref_image, nvtt::UINT8);
-//
-//     const uint32_t compressed_data_bytes = input_buf.NumTiles() * 16;
-//
-//     CompressedImage new_compressed_img{};
-//     new_compressed_img.id   = id;
-//     new_compressed_img.size = compressed_data_bytes;
-//     new_compressed_img.data = malloc(compressed_data_bytes); // BC7 uses 16 bytes/tile
-//
-//     nvtt::TimingContext timing_ctx;
-//
-//     nvtt::EncodeSettings encode_settings;
-//
-//     const auto settings =
-//         nvtt::EncodeSettings().SetFormat(nvtt::Format_BC7).SetQuality(nvtt::Quality_Fastest).SetUseGPU(false).SetOutputToGPUMem(false);
-//     bool encoding_successful = nvtt_encode(input_buf, new_compressed_img.data, settings);
-//     assert(encoding_successful);
-//
-//     //    std::cout << "finished id: " << id << std::endl;
-//
-//     return new_compressed_img;
-// }
-
-/*[[nodiscard]] static std::vector<CompressedImage> compress_2d_color_textures(std::span<const UniqueImageInstance> image_instances,
-                                                                             uint32_t* total_compressed_size, uint32_t* largest_img_size) {
-
-    // tf::Executor executor;
-    *largest_img_size = 0;
-    std::vector<std::future<CompressedImage>> compressed_data_buf_futures;
-    compressed_data_buf_futures.reserve(image_instances.size());
-    uint32_t total_byte_size = 0;
-    // std::cout << "launching " << image_instances.size() << " async tasks" << std::endl;
-
-    for (size_t i = 0; i < image_instances.size(); i++) {
-        const auto& image = image_instances[i];
-        compressed_data_buf_futures.push_back(std::async(std::launch::async, compress_img_task, &image, i));
-    }
-
-    std::vector<CompressedImage> compressed_images;
-    compressed_images.reserve(compressed_data_buf_futures.size());
-    for (size_t i = 0; i < compressed_data_buf_futures.size(); i++) {
-        // std::cout << "getting " << i << std::endl;
-        std::future<CompressedImage>& future = compressed_data_buf_futures[i];
-        compressed_images.push_back(future.get());
-
-        total_byte_size += compressed_images[i].size;
-
-        *largest_img_size = (compressed_images[i].size > *largest_img_size) ? compressed_images[i].size : *largest_img_size;
-    }
-
-    std::ranges::sort(compressed_images, [&](const CompressedImage& e1, const CompressedImage& e2) { return e1.id < e2.id; });
-
-    *total_compressed_size = total_byte_size;
-    return compressed_images;
-}*/
-
-// [[nodiscard]] static std::vector<CompressedImage> compress_2d_color_textures(std::span<const UniqueImageInstance> image_instances,
-//                                                                              uint32_t* total_compressed_size, uint32_t* largest_img_size) {
-//
-//     *largest_img_size = 0;
-//     std::vector<CompressedImage> compressed_data_bufs;
-//     compressed_data_bufs.reserve(image_instances.size());
-//     uint32_t total_byte_size = 0;
-//     for (size_t i = 0; i < image_instances.size(); i++) {
-//         const UniqueImageInstance& image = image_instances[i];
-//         assert(image.color_channels == 4);
-//
-//         nvtt::RefImage new_ref_image{};
-//         new_ref_image.data         = image.data;
-//         new_ref_image.num_channels = image.color_channels;
-//         new_ref_image.height       = image.height;
-//         new_ref_image.width        = image.width;
-//         new_ref_image.depth        = 1;
-//
-//         nvtt::CPUInputBuffer input_buf(&new_ref_image, nvtt::UINT8);
-//
-//         const uint32_t compressed_data_bytes = input_buf.NumTiles() * 16;
-//
-//         *largest_img_size = (compressed_data_bytes > *largest_img_size) ? compressed_data_bytes : *largest_img_size;
-//
-//         CompressedImage new_compressed_img{};
-//         new_compressed_img.id   = i;
-//         new_compressed_img.size = compressed_data_bytes;
-//         new_compressed_img.data = malloc(compressed_data_bytes); // BC7 uses 16 bytes/tile
-//
-//         const auto settings =
-//             nvtt::EncodeSettings().SetFormat(nvtt::Format_BC7).SetQuality(nvtt::Quality_Fastest).SetUseGPU(true).SetOutputToGPUMem(false);
-//         bool encoding_successful = nvtt_encode(input_buf, new_compressed_img.data, settings);
-//         assert(encoding_successful);
-//
-//         compressed_data_bufs.push_back(new_compressed_img);
-//         total_byte_size += compressed_data_bytes;
-//     }
-//
-//     *total_compressed_size = total_byte_size;
-//     return compressed_data_bufs;
-// }
 
 void generate_mip_maps(VkBackend* backend, AllocatedImage* allocated_img, VkCommandBuffer cmd_buf) {
     uint32_t mip_width  = allocated_img->image_extent.width;
@@ -1478,12 +1306,12 @@ uint32_t backend_upload_2d_textures(VkBackend* backend, std::vector<TextureSampl
 
         const AllocatedImage* tex_image = &backend->tex_images[tex_img_i];
 
-        backend->mip_mapped_samplers.push_back(
-            vk_sampler_create(backend->device_ctx.logical_device, VK_FILTER_LINEAR, VK_FILTER_LINEAR, 0.f, tex_image->mip_levels));
+        // backend->mip_mapped_samplers.push_back(
+        //     vk_sampler_create(backend->device_ctx.logical_device, VK_FILTER_LINEAR, VK_FILTER_LINEAR, 0.f, tex_image->mip_levels));
 
-        desc_writer_write_image_desc(&descriptor_writer, backend->texture_desc_binding, tex_image->image_view,
-                                     backend->mip_mapped_samplers[backend->mip_mapped_samplers.size() - 1], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                                     VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, backend->tex_sampler_desc_count++);
+        desc_writer_write_image_desc(&descriptor_writer, backend->texture_desc_binding, tex_image->image_view, backend->default_linear_sampler,
+                                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                                     backend->tex_sampler_desc_count++);
         desc_writer_update_desc_set(&descriptor_writer, backend->device_ctx.logical_device, backend->graphics_desc_set);
         desc_writer_clear(&descriptor_writer);
     }

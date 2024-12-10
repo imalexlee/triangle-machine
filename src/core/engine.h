@@ -38,7 +38,13 @@ struct Engine {
 
 void engine_init(Engine* engine, EngineMode mode);
 
-void engine_run(Engine* engine);
+bool engine_is_alive(const Engine* engine);
+
+void engine_begin_frame(const Engine* engine);
+
+void engine_end_frame(Engine* engine);
+
+// void engine_run(Engine* engine);
 
 void engine_deinit(Engine* engine);
 

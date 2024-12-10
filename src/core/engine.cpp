@@ -40,9 +40,16 @@ void engine_init(Engine* engine, EngineMode mode) {
     backend_upload_frag_shader(&engine->backend, "../shaders/fragment/pbr.frag", "frag shader");
     backend_upload_sky_box_shaders(&engine->backend, "../shaders/vertex/skybox.vert", "../shaders/fragment/skybox.frag", "skybox shaders");
 
+    // const char* smote_path = "../assets/skybox/smote/smote.jpeg";
+    //  std::array  file_names = {
+    //      "../assets/skybox/right.jpg",  "../assets/skybox/left.jpg",  "../assets/skybox/top.jpg",
+    //      "../assets/skybox/bottom.jpg", "../assets/skybox/front.jpg", "../assets/skybox/back.jpg",
+    //  };
+    //    std::array file_names = {smote_path, smote_path, smote_path, smote_path, smote_path, smote_path};
+
     std::array file_names = {
-        "../assets/skybox/right.jpg",  "../assets/skybox/left.jpg",  "../assets/skybox/top.jpg",
-        "../assets/skybox/bottom.jpg", "../assets/skybox/front.jpg", "../assets/skybox/back.jpg",
+        "../assets/skybox/night/px.png", "../assets/skybox/night/nx.png", "../assets/skybox/night/py.png",
+        "../assets/skybox/night/ny.png", "../assets/skybox/night/pz.png", "../assets/skybox/night/nz.png",
     };
 
     int width, height, nr_channels;
@@ -62,38 +69,68 @@ void engine_init(Engine* engine, EngineMode mode) {
 
     backend_upload_cursor_shaders(&engine->backend);
 
+    backend_upload_frag_shader(&engine->backend, "../shaders/fragment/pbr_entity.frag", "frag shader");
+
     window_register_cursor_callback(&engine->window, [=](double x_pos, double y_pos) { camera_cursor_callback(&engine->camera, x_pos, y_pos); });
 
     window_register_mouse_button_callback(
         &engine->window, [=](int button, int action, int mods) { camera_mouse_button_callback(&engine->camera, button, action, mods); });
 }
 
-void engine_run(Engine* engine) {
+bool engine_is_alive(const Engine* engine) { return !glfwWindowShouldClose(engine->window.glfw_window); }
+
+void engine_begin_frame(const Engine* engine) { glfwPollEvents(); }
+
+void engine_end_frame(Engine* engine) {
+
     WorldData world_data{};
-    while (!glfwWindowShouldClose(engine->window.glfw_window)) {
-        glfwPollEvents();
+    uint32_t  viewport_width  = engine->window.width;
+    uint32_t  viewport_height = engine->window.height;
 
-        uint32_t viewport_width  = engine->window.width;
-        uint32_t viewport_height = engine->window.height;
-
-        if (engine->mode == EngineMode::EDIT) {
-            viewport_width  = engine->editor.viewport_width;
-            viewport_height = engine->editor.viewport_height;
-        }
-
-        world_data = camera_update(&engine->camera, viewport_width, viewport_height);
-
-        if (engine->mode == EngineMode::EDIT) {
-            editor_update(&engine->editor, &engine->backend, &engine->window, &engine->camera, &engine->scene);
-
-            if (engine->editor.quit) {
-                break;
-            }
-        }
-        scene_update(&engine->scene, &engine->backend);
-        backend_draw(&engine->backend, engine->scene.entities, &world_data, engine->features);
+    if (engine->mode == EngineMode::EDIT) {
+        viewport_width  = engine->editor.viewport_width;
+        viewport_height = engine->editor.viewport_height;
     }
+
+    world_data = camera_update(&engine->camera, viewport_width, viewport_height);
+
+    if (engine->mode == EngineMode::EDIT) {
+        editor_update(&engine->editor, &engine->backend, &engine->window, &engine->camera, &engine->scene);
+
+        if (engine->editor.quit) {
+            glfwSetWindowShouldClose(engine->window.glfw_window, GLFW_TRUE);
+        }
+    }
+    scene_update(&engine->scene, &engine->backend);
+    backend_draw(&engine->backend, engine->scene.entities, &world_data, engine->features);
 }
+
+// void engine_run(Engine* engine) {
+//     WorldData world_data{};
+//     while (!glfwWindowShouldClose(engine->window.glfw_window)) {
+//         glfwPollEvents();
+//
+//         uint32_t viewport_width  = engine->window.width;
+//         uint32_t viewport_height = engine->window.height;
+//
+//         if (engine->mode == EngineMode::EDIT) {
+//             viewport_width  = engine->editor.viewport_width;
+//             viewport_height = engine->editor.viewport_height;
+//         }
+//
+//         world_data = camera_update(&engine->camera, viewport_width, viewport_height);
+//
+//         if (engine->mode == EngineMode::EDIT) {
+//             editor_update(&engine->editor, &engine->backend, &engine->window, &engine->camera, &engine->scene);
+//
+//             if (engine->editor.quit) {
+//                 break;
+//             }
+//         }
+//         scene_update(&engine->scene, &engine->backend);
+//         backend_draw(&engine->backend, engine->scene.entities, &world_data, engine->features);
+//     }
+// }
 
 void engine_deinit(Engine* engine) {
     backend_finish_pending_vk_work(&engine->backend);

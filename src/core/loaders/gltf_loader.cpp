@@ -5,13 +5,14 @@
 #include "fastgltf/types.hpp"
 #include "ktx.h"
 #include "libshaderc_util/counting_includer.h"
+#include "set"
 #include "stb_image.h"
 
 #include <fstream>
 #include <iostream>
 
 #include <fastgltf/glm_element_traits.hpp>
-#include <nvtt/nvtt.h>
+// #include <nvtt/nvtt.h>
 #include <string>
 #include <vector>
 #include <vk_backend/vk_backend.h>
@@ -121,70 +122,6 @@ static std::vector<GLTFTexture> load_gltf_textures(const fastgltf::Asset* asset)
     return gltf_textures;
 }
 
-static void customCallback(nvtt::Severity severity, nvtt::Error error, const char* message, const void* userData) {
-    if (severity == nvtt::Severity_Warning || severity == nvtt::Severity_Error) {
-        std::cout << "NVTT ERROR: " << nvtt::errorString(error) << " - " << message << std::endl;
-    }
-}
-[[nodiscard]] static std::vector<MipLevel> compress_image(nvtt::Surface& surface, const std::string& out_file_name) {
-
-    // pass true enabling cuda acceleration
-    nvtt::Context context(true);
-
-    nvtt::CompressionOptions compression_options;
-    compression_options.setFormat(nvtt::Format_BC7);
-
-    nvtt::setMessageCallback(customCallback, nullptr);
-
-    std::filesystem::path file_name = "app_data/cache/" + out_file_name;
-
-    nvtt::OutputOptions output_options;
-    output_options.setFileName(file_name.string().c_str());
-    output_options.setContainer(nvtt::Container_DDS10);
-
-    uint32_t mip_count = surface.countMipmaps();
-
-    bool res = context.outputHeader(surface, mip_count, compression_options, output_options);
-    assert(res);
-
-    std::vector<MipLevel> mip_levels;
-    mip_levels.reserve(mip_count);
-
-    for (size_t i = 0; i < mip_count; i++) {
-
-        res = context.compress(surface, 0, i, compression_options, output_options);
-        assert(res);
-
-        MipLevel new_mip_level{};
-        new_mip_level.height = surface.height();
-        new_mip_level.width  = surface.width();
-
-        mip_levels.push_back(new_mip_level);
-
-        if (i == mip_count - 1) {
-            break;
-        }
-        surface.toLinearFromSrgb();
-        surface.premultiplyAlpha();
-
-        res = surface.buildNextMipmap(nvtt::MipmapFilter_Box);
-        assert(res);
-
-        surface.demultiplyAlpha();
-        surface.toSrgb();
-    }
-
-    // return the data pointers to the compressed texture file we just made
-    nvtt::SurfaceSet surface_set;
-    res = surface_set.loadDDS(file_name.string().c_str());
-
-    for (size_t i = 0; i < mip_levels.size(); i++) {
-        mip_levels[i].data = surface_set.GetSurface(0, i).data();
-    }
-
-    return mip_levels;
-}
-
 static void compress_image_ktx(const void* img_data, uint32_t width, uint32_t height, uint32_t channel_count,
                                const std::filesystem::path& out_file_path) {
 
@@ -226,26 +163,6 @@ static void compress_image_ktx(const void* img_data, uint32_t width, uint32_t he
     ktxTexture_Destroy(ktxTexture(texture));
 }
 
-static std::vector<MipLevel> compress_image_from_path(const std::filesystem::path& path, const std::string& out_file_name) {
-
-    nvtt::Surface surface;
-
-    bool res = surface.load(path.string().c_str());
-    assert(res);
-
-    return compress_image(surface, out_file_name);
-}
-
-static std::vector<MipLevel> compress_image_from_memory(const void* data, uint32_t data_size, const std::string& out_file_name) {
-
-    nvtt::Surface surface;
-
-    bool res = surface.loadFromMemory(data, data_size);
-    assert(res);
-
-    return compress_image(surface, out_file_name);
-}
-
 [[nodiscard]] std::vector<MipLevel> read_ktx_image(const std::filesystem::path& path) {
     ktxTexture2*   texture;
     KTX_error_code res = ktxTexture2_CreateFromNamedFile(path.string().c_str(), KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT, &texture);
@@ -272,7 +189,8 @@ static std::vector<MipLevel> compress_image_from_memory(const void* data, uint32
     return mip_levels;
 }
 
-static std::vector<GLTFImage> load_gltf_images(const fastgltf::Asset* asset) {
+static std::vector<std::string> unique_names;
+static std::vector<GLTFImage>   load_gltf_images(const fastgltf::Asset* asset) {
     using namespace std::chrono;
     auto start_frame_time = system_clock::now();
 
@@ -283,7 +201,15 @@ static std::vector<GLTFImage> load_gltf_images(const fastgltf::Asset* asset) {
     for (const auto& gltf_image : asset->images) {
         GLTFImage new_image{};
 
-        std::string out_file_name = gltf_image.name.data();
+        // make shift hash lmao
+        std::string out_file_name = std::to_string(asset->accessors.size()) + std::to_string(asset->cameras.size()) +
+                                    std::to_string(asset->materials.size()) + gltf_image.name.data() + std::to_string(asset->meshes.size());
+        bool found = std::ranges::find(unique_names, out_file_name) != unique_names.end();
+        if (found) {
+            exit(1);
+        } else {
+            unique_names.push_back(out_file_name);
+        }
         // first, check if we have a cached image already. if so, just get the data from that and move on
         std::filesystem::path full_path = "app_data/cache/" + out_file_name + ".ktx2";
         if (std::filesystem::exists(full_path)) {
@@ -322,26 +248,33 @@ static std::vector<GLTFImage> load_gltf_images(const fastgltf::Asset* asset) {
                            std::visit(fastgltf::visitor{[]([[maybe_unused]] auto& arg) {},
                                                         [&](const fastgltf::sources::Array& vector) {
                                                             data = stbi_load_from_memory(vector.bytes.data() + buffer_view.byteOffset,
-                                                                                         static_cast<int>(buffer_view.byteLength), &width, &height,
-                                                                                         &channel_count, 4);
+                                                                                           static_cast<int>(buffer_view.byteLength), &width, &height,
+                                                                                           &channel_count, 4);
                                                         }},
-                                      buffer.data);
+                                        buffer.data);
                        },
                    },
-                   gltf_image.data);
+                     gltf_image.data);
 
         assert(data);
 
         compress_image_ktx(data, width, height, 4, full_path.string());
 
+        // MipLevel uncompressed_mip_level;
+        // uncompressed_mip_level.data   = data;
+        // uncompressed_mip_level.height = height;
+        // uncompressed_mip_level.width  = width;
+
         new_image.width          = width;
         new_image.height         = height;
         new_image.color_channels = 1; // because of BC7 compression
-        new_image.mip_levels     = read_ktx_image(full_path);
+                                      // new_image.color_channels = 4;
+
+        new_image.mip_levels = read_ktx_image(full_path);
 
         gltf_images.push_back(new_image);
 
-        stbi_image_free(data);
+        // stbi_image_free(data);
     }
     auto end_time = system_clock::now();
     auto dur      = duration<float>(end_time - start_frame_time);
@@ -698,13 +631,13 @@ static uint32_t upload_gltf_materials(VkBackend* backend, std::span<const GLTFMa
 }
 
 Entity load_entity(VkBackend* backend, const std::filesystem::path& path) {
-    // constexpr fastgltf::Extensions supported_extensions =
-    //     fastgltf::Extensions::KHR_mesh_quantization | fastgltf::Extensions::KHR_texture_transform | fastgltf::Extensions::KHR_materials_clearcoat |
-    //     fastgltf::Extensions::KHR_materials_specular | fastgltf::Extensions::KHR_materials_transmission |
-    //     fastgltf::Extensions::KHR_materials_variants;
+    constexpr fastgltf::Extensions supported_extensions =
+        fastgltf::Extensions::KHR_mesh_quantization | fastgltf::Extensions::KHR_texture_transform | fastgltf::Extensions::KHR_materials_clearcoat |
+        fastgltf::Extensions::KHR_materials_specular | fastgltf::Extensions::KHR_materials_transmission |
+        fastgltf::Extensions::KHR_materials_variants;
 
     // all extensions
-    constexpr fastgltf::Extensions supported_extensions = static_cast<fastgltf::Extensions>(0x0007FFFF);
+    //    constexpr fastgltf::Extensions supported_extensions = static_cast<fastgltf::Extensions>(0x0007FFFF);
 
     constexpr auto gltf_options = fastgltf::Options::DontRequireValidAssetMember | fastgltf::Options::AllowDouble |
                                   fastgltf::Options::LoadGLBBuffers | fastgltf::Options::LoadExternalBuffers | fastgltf::Options::LoadExternalImages |
@@ -775,7 +708,8 @@ Entity load_entity(VkBackend* backend, const std::filesystem::path& path) {
             }
 
             if (gltf_materials.size() > 0 && gltf_materials[primitive.material_i.value_or(0)].alpha_mode == fastgltf::AlphaMode::Blend) {
-                entity.transparent_objs.push_back(new_draw_obj);
+                // entity.transparent_objs.push_back(new_draw_obj);
+                entity.opaque_objs.push_back(new_draw_obj);
             } else {
                 entity.opaque_objs.push_back(new_draw_obj);
             }
@@ -790,9 +724,10 @@ Entity load_entity(VkBackend* backend, const std::filesystem::path& path) {
     entity.path      = path;
     entity.transform = glm::mat4(1.f);
 
-    // for (auto& image : gltf_images) {
-    //     stbi_image_free(image.data);
-    // }
+    for (auto& image : gltf_images) {
+        for (auto& mip_level : image.mip_levels)
+            stbi_image_free(mip_level.data);
+    }
 
     return entity;
 }

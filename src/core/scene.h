@@ -23,7 +23,11 @@ void scene_request_update(Scene* scene);
 
 void scene_update(Scene* scene, VkBackend* backend);
 
-void scene_update_entity_pos(Scene* scene, uint16_t ent_id, const glm::vec3& offset);
+void scene_update_entity_pos(Scene* scene, VkBackend* backend, uint16_t ent_id, const glm::vec3& offset);
+
+void scene_revert_entity_transformation(Scene* scene, VkBackend* backend, uint16_t ent_id);
+
+void scene_update_entity_rotation(Scene* scene, VkBackend* backend, uint16_t ent_id, float rot_degrees);
 
 void scene_open(Scene* scene, VkBackend* backend, const std::filesystem::path& path);
 

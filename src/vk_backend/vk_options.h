@@ -5,6 +5,7 @@
 namespace vk_opts {
     inline constexpr bool     msaa_enabled         = true;
     inline constexpr uint32_t desired_msaa_samples = 4;
+    inline constexpr uint32_t texture_desc_limit   = 5000;
     inline constexpr uint64_t timeout_dur          = 1'000'000'000;
 
     // will default to VK_PRESENT_MODE_FIFO_KHR if desired cannot be found
