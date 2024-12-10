@@ -1,13 +1,13 @@
 #pragma once
 
-#include "audio.h"
-#include "camera.h"
-#include "scene.h"
-#include "vk_backend/vk_backend.h"
-#include <core/editor.h>
+#include "audio/audio.h"
+#include "graphics/camera/camera.h"
+#include "graphics/renderer/vk_renderer.h"
+#include "scene/scene.h"
+#include "system/device/vk_context.h"
+#include <editor/editor.h>
 #include <fastgltf/types.hpp>
 #include <libshaderc_util/compiler.h>
-#include <vk_backend/vk_scene.h>
 
 enum class EngineMode {
     EDIT,
@@ -22,10 +22,12 @@ enum class EngineFeatures {
 };
 
 // in Windows environment, generates bitfield operators for an enum type
+// todo: remove
 DEFINE_ENUM_FLAG_OPERATORS(EngineFeatures)
 
 struct Engine {
-    VkBackend    backend{};
+    VkContext    vk_ctx{};
+    Renderer     backend{};
     Scene        scene{};
     Window       window{};
     Camera       camera{};
@@ -43,8 +45,6 @@ bool engine_is_alive(const Engine* engine);
 void engine_begin_frame(const Engine* engine);
 
 void engine_end_frame(Engine* engine);
-
-// void engine_run(Engine* engine);
 
 void engine_deinit(Engine* engine);
 

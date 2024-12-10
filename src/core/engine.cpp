@@ -1,16 +1,15 @@
 #include "engine.h"
 #include "core_options.h"
-#include "loaders/gltf_loader.h"
+#include "resources/loaders/gltf_loader.h"
+#include "system/device/vk_context.h"
 
 #include <GLFW/glfw3.h>
 #include <array>
-#include <core/camera.h>
-#include <core/editor.h>
-#include <core/scene.h>
-#include <core/window.h>
+#include <editor/editor.h>
+#include <graphics/camera/camera.h>
+#include <scene/scene.h>
 #include <stb_image.h>
-
-#include <vk_backend/vk_backend.h>
+#include <system/platform/window.h>
 
 static Engine* active_engine = nullptr;
 
@@ -28,17 +27,21 @@ void engine_init(Engine* engine, EngineMode mode) {
 
     audio_ctx_init(&engine->audio_ctx);
 
-    const VkInstance   instance = vk_instance_create("triangle machine", "my engine");
-    const VkSurfaceKHR surface  = vk_surface_get(&engine->window, instance);
+    // todo: vk_context_init();
 
-    backend_init(&engine->backend, instance, surface, engine->window.width, engine->window.height, mode);
+    // const VkInstance   instance = vk_instance_create("triangle machine", "my engine");
+    // const VkSurfaceKHR surface  = window_get_vk_surface(&engine->window, instance);
+
+    vk_context_init(&engine->vk_ctx, &engine->window);
+
+    renderer_init(&engine->backend, &engine->vk_ctx, engine->window.width, engine->window.height, mode);
     if (mode == EngineMode::EDIT) {
         editor_init(&engine->editor, &engine->backend, &engine->camera, engine->window.glfw_window);
     }
 
-    backend_upload_vert_shader(&engine->backend, "../shaders/vertex/indexed_draw.vert", "vert shader");
-    backend_upload_frag_shader(&engine->backend, "../shaders/fragment/pbr.frag", "frag shader");
-    backend_upload_sky_box_shaders(&engine->backend, "../shaders/vertex/skybox.vert", "../shaders/fragment/skybox.frag", "skybox shaders");
+    renderer_upload_vert_shader(&engine->backend, "../shaders/vertex/indexed_draw.vert", "vert shader");
+    renderer_upload_frag_shader(&engine->backend, "../shaders/fragment/pbr.frag", "frag shader");
+    renderer_upload_sky_box_shaders(&engine->backend, "../shaders/vertex/skybox.vert", "../shaders/fragment/skybox.frag", "skybox shaders");
 
     // const char* smote_path = "../assets/skybox/smote/smote.jpeg";
     //  std::array  file_names = {
@@ -65,11 +68,11 @@ void engine_init(Engine* engine, EngineMode mode) {
         memcpy(skybox_data.data() + offset, data, data_size);
     }
 
-    backend_upload_sky_box(&engine->backend, skybox_data.data(), 4, width, height);
+    renderer_upload_sky_box(&engine->backend, skybox_data.data(), 4, width, height);
 
-    backend_upload_cursor_shaders(&engine->backend);
+    renderer_upload_cursor_shaders(&engine->backend);
 
-    backend_upload_frag_shader(&engine->backend, "../shaders/fragment/pbr_entity.frag", "frag shader");
+    renderer_upload_frag_shader(&engine->backend, "../shaders/fragment/pbr_entity.frag", "frag shader");
 
     window_register_cursor_callback(&engine->window, [=](double x_pos, double y_pos) { camera_cursor_callback(&engine->camera, x_pos, y_pos); });
 
@@ -102,46 +105,19 @@ void engine_end_frame(Engine* engine) {
         }
     }
     scene_update(&engine->scene, &engine->backend);
-    backend_draw(&engine->backend, engine->scene.entities, &world_data, engine->features);
+    renderer_draw(&engine->backend, engine->scene.entities, &world_data, engine->features);
 }
 
-// void engine_run(Engine* engine) {
-//     WorldData world_data{};
-//     while (!glfwWindowShouldClose(engine->window.glfw_window)) {
-//         glfwPollEvents();
-//
-//         uint32_t viewport_width  = engine->window.width;
-//         uint32_t viewport_height = engine->window.height;
-//
-//         if (engine->mode == EngineMode::EDIT) {
-//             viewport_width  = engine->editor.viewport_width;
-//             viewport_height = engine->editor.viewport_height;
-//         }
-//
-//         world_data = camera_update(&engine->camera, viewport_width, viewport_height);
-//
-//         if (engine->mode == EngineMode::EDIT) {
-//             editor_update(&engine->editor, &engine->backend, &engine->window, &engine->camera, &engine->scene);
-//
-//             if (engine->editor.quit) {
-//                 break;
-//             }
-//         }
-//         scene_update(&engine->scene, &engine->backend);
-//         backend_draw(&engine->backend, engine->scene.entities, &world_data, engine->features);
-//     }
-// }
-
 void engine_deinit(Engine* engine) {
-    backend_finish_pending_vk_work(&engine->backend);
+    renderer_finish_pending_vk_work(&engine->backend);
 
     if (engine->mode == EngineMode::EDIT) {
         editor_deinit(&engine->editor);
     }
     window_deinit(&engine->window);
-    backend_deinit(&engine->backend);
+    renderer_deinit(&engine->backend);
 }
-uint16_t engine_select_entity_at(const Engine* engine, int32_t x, int32_t y) { return backend_entity_id_at_pos(&engine->backend, x, y); }
+uint16_t engine_select_entity_at(const Engine* engine, int32_t x, int32_t y) { return renderer_entity_id_at_pos(&engine->backend, x, y); }
 
 void engine_enable_features(Engine* engine, EngineFeatures features) { engine->features |= features; }
 

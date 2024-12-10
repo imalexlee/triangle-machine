@@ -25,32 +25,31 @@ endif ()
 
 add_executable(
         ${PROJECT_NAME}
-        house_of_ashes/entry.cpp
+        src/entry.cpp
         src/core/engine.cpp
-        src/core/window.cpp
-        src/core/camera.cpp
-        src/core/scene.cpp
-        src/core/editor.cpp
-        src/core/loaders/gltf_loader.cpp
-        src/vk_backend/vk_backend.cpp
-        src/vk_backend/vk_debug.cpp
-        src/vk_backend/vk_device.cpp
-        src/vk_backend/vk_command.cpp
-        src/vk_backend/vk_swapchain.cpp
-        src/vk_backend/vk_pipeline.cpp
-        src/vk_backend/vk_sync.cpp
-        src/vk_backend/vk_frame.cpp
-        src/vk_backend/vk_init.cpp
-        src/vk_backend/vk_vma_usage.cpp
-        src/vk_backend/resources/vk_descriptor.cpp
-        src/vk_backend/resources/vk_buffer.cpp
-        src/vk_backend/resources/vk_image.cpp
-        src/vk_backend/vk_shader.cpp
-        src/vk_backend/vk_shader.h
-        src/vk_backend/vk_ext.cpp
-        src/vk_backend/vk_ext.h
-        src/vk_backend/resources/vk_accel_struct.cpp
-        src/vk_backend/resources/vk_accel_struct.h
+        src/system/platform/window.cpp
+        src/graphics/camera/camera.cpp
+        src/scene/scene.cpp
+        src/editor/editor.cpp
+        src/resources/loaders/gltf_loader.cpp
+        src/graphics/renderer/vk_renderer.cpp
+        src/system/device/vk_debug.cpp
+        src/system/device/vk_device.cpp
+        src/system/device/vk_command.cpp
+        src/graphics/renderer/vk_swapchain.cpp
+        src/graphics/renderer/vk_pipeline.cpp
+        src/system/device/vk_sync.cpp
+        src/graphics/renderer/vk_frame.cpp
+        src/graphics/renderer/vk_init.cpp
+        src/system/device/memory/vk_descriptor.cpp
+        src/system/device/memory/vk_buffer.cpp
+        src/system/device/memory/vk_image.cpp
+        src/graphics/renderer/vk_shader.cpp
+        src/graphics/renderer/vk_shader.h
+        src/system/device/vk_ext.cpp
+        src/system/device/vk_ext.h
+        src/system/device/memory/vk_accel_struct.cpp
+        src/system/device/memory/vk_accel_struct.h
 
         thirdparty/ImGuizmo/ImGuizmo.cpp
         thirdparty/ImGuizmo/ImGuizmo.h
@@ -58,8 +57,17 @@ add_executable(
         thirdparty/ImGuiFileDialog/ImGuiFileDialog.h
         thirdparty/ImGuiFileDialog/ImGuiFileDialogConfig.h
         thirdparty/nlohmann/json.hpp
-        src/core/audio.cpp
-        src/core/audio.h
+        src/audio/audio.cpp
+        src/audio/audio.h
+        src/editor/editor.h
+        src/scene/scene.h
+        src/system/device/vk_context.cpp
+        src/system/device/vk_context.h
+        src/system/device/vk_device.h
+        src/system/device/vk_debug.h
+        src/system/device/vk_options.h
+        src/system/device/vk_types.h
+        src/system/device/vk_vma_usage.cpp
 )
 
 
