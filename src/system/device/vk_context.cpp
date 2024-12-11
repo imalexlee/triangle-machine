@@ -73,3 +73,12 @@ static VkInstance vk_instance_create(const char* app_name, const char* engine_na
     VK_CHECK(vkCreateInstance(&instance_ci, nullptr, &instance));
     return instance;
 }
+
+void vk_context_deinit(VkContext* vk_ctx) {
+    if (vk_opts::validation_enabled) {
+        debugger_deinit(&vk_ctx->debugger, vk_ctx->instance);
+    }
+    vkDestroyDevice(vk_ctx->logical_device, nullptr);
+    vkDestroySurfaceKHR(vk_ctx->instance, vk_ctx->surface, nullptr);
+    vkDestroyInstance(vk_ctx->instance, nullptr);
+}

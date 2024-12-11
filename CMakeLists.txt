@@ -68,6 +68,10 @@ add_executable(
         src/system/device/vk_options.h
         src/system/device/vk_types.h
         src/system/device/vk_vma_usage.cpp
+        src/resources/shader_compiler.cpp
+        src/resources/shader_compiler.h
+        src/system/host/io.cpp
+        src/system/host/io.h
 )
 
 

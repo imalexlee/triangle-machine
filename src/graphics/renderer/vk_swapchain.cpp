@@ -8,16 +8,15 @@
 #include <set>
 #include <vulkan/vulkan_core.h>
 
-[[nodiscard]] SwapchainSupportDetails query_support_details(const SwapchainContext* swapchain_ctx, VkPhysicalDevice physical_device);
+[[nodiscard]] static SwapchainSupportDetails query_support_details(const VkContext* vk_ctx);
 
 void create_swapchain(SwapchainContext* swapchain_ctx, const VkContext* vk_ctx);
 void destroy_swapchain(SwapchainContext* swapchain_ctx, VkDevice device);
 
 void swapchain_ctx_init(SwapchainContext* swapchain_ctx, const VkContext* vk_ctx, VkPresentModeKHR desired_present_mode) {
-    swapchain_ctx->surface      = vk_ctx->surface;
     swapchain_ctx->present_mode = VK_PRESENT_MODE_FIFO_KHR; // fifo is guaranteed
 
-    swapchain_ctx->support_details = query_support_details(swapchain_ctx, vk_ctx->physical_device);
+    swapchain_ctx->support_details = query_support_details(vk_ctx);
     for (const auto& mode : swapchain_ctx->support_details.present_modes) {
         if (mode == desired_present_mode) {
             swapchain_ctx->present_mode = mode;
@@ -31,13 +30,10 @@ void swapchain_ctx_reset(SwapchainContext* swapchain_ctx, const VkContext* vk_ct
     create_swapchain(swapchain_ctx, vk_ctx);
 }
 
-void swapchain_ctx_deinit(SwapchainContext* swapchain_ctx, const VkContext* vk_ctx) {
-    destroy_swapchain(swapchain_ctx, vk_ctx->logical_device);
-    vkDestroySurfaceKHR(vk_ctx->instance, swapchain_ctx->surface, nullptr);
-}
+void swapchain_ctx_deinit(SwapchainContext* swapchain_ctx, const VkContext* vk_ctx) { destroy_swapchain(swapchain_ctx, vk_ctx->logical_device); }
 
 void create_swapchain(SwapchainContext* swapchain_ctx, const VkContext* vk_ctx) {
-    swapchain_ctx->support_details = query_support_details(swapchain_ctx, vk_ctx->physical_device);
+    swapchain_ctx->support_details = query_support_details(vk_ctx);
     swapchain_ctx->extent          = swapchain_ctx->support_details.capabilities.currentExtent;
 
     VkSurfaceFormatKHR surface_format = swapchain_ctx->support_details.formats[0];
@@ -61,7 +57,7 @@ void create_swapchain(SwapchainContext* swapchain_ctx, const VkContext* vk_ctx) 
     swapchain_ci.minImageCount    = desired_image_count;
     swapchain_ci.imageFormat      = surface_format.format;
     swapchain_ci.imageColorSpace  = surface_format.colorSpace;
-    swapchain_ci.surface          = swapchain_ctx->surface;
+    swapchain_ci.surface          = vk_ctx->surface;
     swapchain_ci.presentMode      = swapchain_ctx->present_mode;
     swapchain_ci.imageExtent      = swapchain_ctx->extent;
     swapchain_ci.imageArrayLayers = 1;
@@ -118,25 +114,25 @@ void destroy_swapchain(SwapchainContext* swapchain_ctx, VkDevice device) {
     swapchain_ctx->image_views.clear();
 }
 
-SwapchainSupportDetails query_support_details(const SwapchainContext* swapchain_ctx, VkPhysicalDevice physical_device) {
+SwapchainSupportDetails query_support_details(const VkContext* vk_ctx) {
     SwapchainSupportDetails swap_chain_details{};
-    VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, swapchain_ctx->surface, &swap_chain_details.capabilities));
+    VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vk_ctx->physical_device, vk_ctx->surface, &swap_chain_details.capabilities));
 
     uint32_t surface_format_count{};
-    VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, swapchain_ctx->surface, &surface_format_count, nullptr));
+    VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(vk_ctx->physical_device, vk_ctx->surface, &surface_format_count, nullptr));
 
     if (surface_format_count > 0) {
         swap_chain_details.formats.resize(surface_format_count);
         VK_CHECK(
-            vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, swapchain_ctx->surface, &surface_format_count, swap_chain_details.formats.data()));
+            vkGetPhysicalDeviceSurfaceFormatsKHR(vk_ctx->physical_device, vk_ctx->surface, &surface_format_count, swap_chain_details.formats.data()));
     }
 
     uint32_t present_modes_count{};
-    VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, swapchain_ctx->surface, &present_modes_count, nullptr));
+    VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(vk_ctx->physical_device, vk_ctx->surface, &present_modes_count, nullptr));
 
     if (present_modes_count > 0) {
         swap_chain_details.present_modes.resize(present_modes_count);
-        VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, swapchain_ctx->surface, &present_modes_count,
+        VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(vk_ctx->physical_device, vk_ctx->surface, &present_modes_count,
                                                            swap_chain_details.present_modes.data()));
     }
     return swap_chain_details;

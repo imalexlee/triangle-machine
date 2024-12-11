@@ -13,3 +13,5 @@ struct VkContext {
 };
 
 void vk_context_init(VkContext* vk_ctx, const struct Window* window);
+
+void vk_context_deinit(VkContext* vk_ctx);

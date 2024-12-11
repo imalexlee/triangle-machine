@@ -27,7 +27,7 @@ DEFINE_ENUM_FLAG_OPERATORS(EngineFeatures)
 
 struct Engine {
     VkContext    vk_ctx{};
-    Renderer     backend{};
+    Renderer     renderer{};
     Scene        scene{};
     Window       window{};
     Camera       camera{};
