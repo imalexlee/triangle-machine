@@ -22,7 +22,7 @@ struct DeviceQueueFamilies {
 //     DeviceQueues     queues{};
 //     VkDevice         logical_device;
 //     VkPhysicalDevice physical_device;
-//     uint32_t         raster_samples{1};
+//     uint32_t         msaa_samples{1};
 // };
 //
 

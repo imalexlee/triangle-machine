@@ -15,6 +15,10 @@ void camera_init(Camera* cam, const Window* window, glm::vec4 initial_pos, float
     cam->yaw_theta   = glm::degrees(atan2(cam->direction.z, cam->direction.x));
     cam->cursor_x    = window->width / 2.0;
     cam->cursor_y    = window->height / 2.0;
+
+    // TODO: this is temporary
+    cam->position = {3.26572, 7.32148, 1.17265};
+    cam->look_at  = {-4.56251, 11.3571, -2.24117};
     update_view_matrix(cam);
     camera_update(cam, window->width, window->height);
 }

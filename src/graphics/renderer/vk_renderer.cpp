@@ -81,7 +81,7 @@ void renderer_init(Renderer* renderer, const VkContext* vk_ctx, uint32_t width, 
     // attempt to do 2x2 MSAA
     VkPhysicalDeviceProperties properties{};
     vkGetPhysicalDeviceProperties(vk_ctx->physical_device, &properties);
-    renderer->raster_samples = std::min(properties.limits.framebufferColorSampleCounts, 4u);
+    renderer->msaa_samples = std::min(properties.limits.framebufferColorSampleCounts, 1u);
 
     for (size_t i = 0; i < renderer->frames.size(); i++) {
         Frame* frame = &renderer->frames[i];
@@ -110,16 +110,18 @@ void renderer_init(Renderer* renderer, const VkContext* vk_ctx, uint32_t width, 
 
     renderer->render_area = initial_render_area;
 
-    renderer->color_resolve_image =
+    if (renderer->msaa_samples) {
+        renderer->color_msaa_image = allocated_image_create(
+            vk_ctx->logical_device, renderer->allocator, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
+            VK_IMAGE_VIEW_TYPE_2D, renderer->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1, renderer->msaa_samples);
+    }
+
+    renderer->color_image =
         allocated_image_create(vk_ctx->logical_device, renderer->allocator, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
                                VK_IMAGE_VIEW_TYPE_2D, renderer->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1, 1);
 
-    renderer->color_image = allocated_image_create(
-        vk_ctx->logical_device, renderer->allocator, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
-        VK_IMAGE_VIEW_TYPE_2D, renderer->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1, renderer->raster_samples);
-
     renderer->depth_image = allocated_image_create(vk_ctx->logical_device, renderer->allocator, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                                                   VK_IMAGE_VIEW_TYPE_2D, renderer->image_extent, VK_FORMAT_D32_SFLOAT, 1, renderer->raster_samples);
+                                                   VK_IMAGE_VIEW_TYPE_2D, renderer->image_extent, VK_FORMAT_D32_SFLOAT, 1, renderer->msaa_samples);
 
     renderer->mode = mode;
     // TODO: don't worry about viewport images in released scenes. only for editor/debugging
@@ -279,12 +281,12 @@ void configure_debugger(const Renderer* renderer) {
     const Debugger* debugger = &renderer->vk_ctx->debugger;
 
     // debugger_init(&renderer->debugger, renderer->instance, renderer->vk_ctx->logical_device);
-    debugger_set_handle_name(debugger, renderer->color_image.image, VK_OBJECT_TYPE_IMAGE, "color image");
-    debugger_set_handle_name(debugger, renderer->color_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW, "color image view");
+    debugger_set_handle_name(debugger, renderer->color_msaa_image.image, VK_OBJECT_TYPE_IMAGE, "color msaa image");
+    debugger_set_handle_name(debugger, renderer->color_msaa_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW, "color msaa image view");
     debugger_set_handle_name(debugger, renderer->depth_image.image, VK_OBJECT_TYPE_IMAGE, "depth image");
     debugger_set_handle_name(debugger, renderer->depth_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW, "depth image view");
-    debugger_set_handle_name(debugger, renderer->color_resolve_image.image, VK_OBJECT_TYPE_IMAGE, "color resolve image");
-    debugger_set_handle_name(debugger, renderer->color_resolve_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW, "color resolve image view");
+    debugger_set_handle_name(debugger, renderer->color_image.image, VK_OBJECT_TYPE_IMAGE, "color image");
+    debugger_set_handle_name(debugger, renderer->color_image.image_view, VK_OBJECT_TYPE_IMAGE_VIEW, "color image view");
     debugger_set_handle_name(debugger, renderer->immediate_cmd_ctx.primary_buffer, VK_OBJECT_TYPE_COMMAND_BUFFER, "imm cmd_buf buf");
 
     for (size_t i = 0; i < renderer->frames.size(); i++) {
@@ -364,9 +366,15 @@ void configure_render_resources(Renderer* renderer) {
 
     VkClearValue scene_clear_value = {.color = {{0.2f, 0.2f, 0.2f, 0.2f}}};
 
-    renderer->scene_color_attachment =
-        vk_color_attachment_info_create(renderer->color_image.image_view, &scene_clear_value, VK_ATTACHMENT_LOAD_OP_CLEAR,
-                                        VK_ATTACHMENT_STORE_OP_STORE, renderer->color_resolve_image.image_view);
+    VkImageView draw_image_view    = renderer->color_image.image_view;
+    VkImageView resolve_image_view = nullptr;
+    if (renderer->msaa_samples > 1) {
+        draw_image_view    = renderer->color_msaa_image.image_view;
+        resolve_image_view = renderer->color_image.image_view;
+    }
+
+    renderer->scene_color_attachment = vk_color_attachment_info_create(draw_image_view, &scene_clear_value, VK_ATTACHMENT_LOAD_OP_CLEAR,
+                                                                       VK_ATTACHMENT_STORE_OP_STORE, resolve_image_view);
 
     renderer->scene_depth_attachment =
         vk_depth_attachment_info_create(renderer->depth_image.image_view, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_DONT_CARE);
@@ -375,7 +383,7 @@ void configure_render_resources(Renderer* renderer) {
     renderer->scene_rendering_info     = vk_rendering_info_create(scene_color_attachments, &renderer->scene_depth_attachment, renderer->image_extent);
 
     renderer->ui_color_attachment =
-        vk_color_attachment_info_create(renderer->color_resolve_image.image_view, nullptr, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_STORE_OP_STORE);
+        vk_color_attachment_info_create(renderer->color_image.image_view, nullptr, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_STORE_OP_STORE);
 
     std::array ui_color_attachments = {&renderer->ui_color_attachment};
     renderer->ui_rendering_info     = vk_rendering_info_create(ui_color_attachments, nullptr, renderer->image_extent);
@@ -448,7 +456,7 @@ void renderer_create_imgui_resources(Renderer* renderer) {
 
     VkPipelineRenderingCreateInfoKHR pipeline_info{};
     pipeline_info.sType                   = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
-    pipeline_info.pColorAttachmentFormats = &renderer->color_resolve_image.image_format;
+    pipeline_info.pColorAttachmentFormats = &renderer->color_image.image_format;
     pipeline_info.colorAttachmentCount    = 1;
     pipeline_info.depthAttachmentFormat   = renderer->depth_image.image_format;
 
@@ -681,10 +689,12 @@ void renderer_draw(Renderer* renderer, std::vector<Entity>& entities, const Worl
     vk_image_memory_barrier_insert(cmd_buffer, renderer->entity_id_images[renderer->current_frame_i].image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                    VK_IMAGE_LAYOUT_GENERAL);
 
-    vk_image_memory_barrier_insert(cmd_buffer, renderer->color_image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    if (renderer->msaa_samples > 1) {
+        vk_image_memory_barrier_insert(cmd_buffer, renderer->color_msaa_image.image, VK_IMAGE_LAYOUT_UNDEFINED,
+                                       VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    }
 
-    vk_image_memory_barrier_insert(cmd_buffer, renderer->color_resolve_image.image, VK_IMAGE_LAYOUT_UNDEFINED,
-                                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    vk_image_memory_barrier_insert(cmd_buffer, renderer->color_image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
     vk_image_memory_barrier_insert(cmd_buffer, renderer->depth_image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
@@ -708,17 +718,17 @@ void renderer_draw(Renderer* renderer, std::vector<Entity>& entities, const Worl
 
     if (renderer->mode == EngineMode::EDIT) {
         // save image for UI viewport rendering into a dedicated image
-        vk_image_memory_barrier_insert(cmd_buffer, renderer->color_resolve_image.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        vk_image_memory_barrier_insert(cmd_buffer, renderer->color_image.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
         VkImage curr_viewport_img = renderer->viewport_images[renderer->current_frame_i].image;
         vk_image_memory_barrier_insert(cmd_buffer, curr_viewport_img, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-        vk_image_blit(cmd_buffer, renderer->color_resolve_image.image, curr_viewport_img, renderer->swapchain_context.extent, renderer->image_extent);
+        vk_image_blit(cmd_buffer, renderer->color_image.image, curr_viewport_img, renderer->swapchain_context.extent, renderer->image_extent);
 
         vk_image_memory_barrier_insert(cmd_buffer, curr_viewport_img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-        vk_image_memory_barrier_insert(cmd_buffer, renderer->color_resolve_image.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        vk_image_memory_barrier_insert(cmd_buffer, renderer->color_image.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
         vkCmdBeginRendering(cmd_buffer, &renderer->ui_rendering_info);
@@ -728,12 +738,12 @@ void renderer_draw(Renderer* renderer, std::vector<Entity>& entities, const Worl
         vkCmdEndRendering(cmd_buffer);
     }
 
-    vk_image_memory_barrier_insert(cmd_buffer, renderer->color_resolve_image.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    vk_image_memory_barrier_insert(cmd_buffer, renderer->color_image.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
     vk_image_memory_barrier_insert(cmd_buffer, swapchain_image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-    vk_image_blit(cmd_buffer, renderer->color_resolve_image.image, swapchain_image, renderer->swapchain_context.extent, renderer->image_extent);
+    vk_image_blit(cmd_buffer, renderer->color_image.image, swapchain_image, renderer->swapchain_context.extent, renderer->image_extent);
 
     vk_image_memory_barrier_insert(cmd_buffer, swapchain_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
@@ -779,7 +789,7 @@ void resize(Renderer* renderer) {
     swapchain_ctx_reset(&renderer->swapchain_context, renderer->vk_ctx);
 
     allocated_image_destroy(renderer->vk_ctx->logical_device, renderer->allocator, &renderer->depth_image);
-    allocated_image_destroy(renderer->vk_ctx->logical_device, renderer->allocator, &renderer->color_image);
+    allocated_image_destroy(renderer->vk_ctx->logical_device, renderer->allocator, &renderer->color_msaa_image);
 
     renderer->image_extent.width  = renderer->swapchain_context.extent.width;
     renderer->image_extent.height = renderer->swapchain_context.extent.height;
@@ -787,18 +797,17 @@ void resize(Renderer* renderer) {
     renderer->render_area.scissor_dimensions.x += renderer->image_extent.width - renderer->render_area.scissor_dimensions.x;
     renderer->render_area.scissor_dimensions.y += renderer->image_extent.height - renderer->render_area.scissor_dimensions.y;
 
-    allocated_image_destroy(renderer->vk_ctx->logical_device, renderer->allocator, &renderer->color_resolve_image);
-    renderer->color_resolve_image =
-        allocated_image_create(renderer->vk_ctx->logical_device, renderer->allocator,
-                               VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                               VK_IMAGE_VIEW_TYPE_2D, renderer->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1, 1);
+    allocated_image_destroy(renderer->vk_ctx->logical_device, renderer->allocator, &renderer->color_image);
+    renderer->color_image = allocated_image_create(renderer->vk_ctx->logical_device, renderer->allocator,
+                                                   VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                                                   VK_IMAGE_VIEW_TYPE_2D, renderer->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1, 1);
 
-    renderer->color_image = allocated_image_create(
+    renderer->color_msaa_image = allocated_image_create(
         renderer->vk_ctx->logical_device, renderer->allocator, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
-        VK_IMAGE_VIEW_TYPE_2D, renderer->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1, renderer->raster_samples);
+        VK_IMAGE_VIEW_TYPE_2D, renderer->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1, renderer->msaa_samples);
 
     renderer->depth_image = allocated_image_create(renderer->vk_ctx->logical_device, renderer->allocator, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                                                   VK_IMAGE_VIEW_TYPE_2D, renderer->image_extent, VK_FORMAT_D32_SFLOAT, 1, renderer->raster_samples);
+                                                   VK_IMAGE_VIEW_TYPE_2D, renderer->image_extent, VK_FORMAT_D32_SFLOAT, 1, renderer->msaa_samples);
 
     if (renderer->mode == EngineMode::EDIT) {
         for (size_t i = 0; i < renderer->swapchain_context.images.size(); i++) {
@@ -987,13 +996,13 @@ void set_render_state(Renderer* renderer, VkCommandBuffer cmd_buf) {
 
     vkCmdSetPrimitiveRestartEnable(cmd_buf, VK_FALSE);
 
-    renderer->ext_ctx.vkCmdSetRasterizationSamplesEXT(cmd_buf, static_cast<VkSampleCountFlagBits>(renderer->raster_samples));
+    renderer->ext_ctx.vkCmdSetRasterizationSamplesEXT(cmd_buf, static_cast<VkSampleCountFlagBits>(renderer->msaa_samples));
 
     constexpr uint32_t max = ~0;
 
     constexpr VkSampleMask sample_masks[4] = {max, max, max, max};
 
-    renderer->ext_ctx.vkCmdSetSampleMaskEXT(cmd_buf, VK_SAMPLE_COUNT_4_BIT, sample_masks);
+    renderer->ext_ctx.vkCmdSetSampleMaskEXT(cmd_buf, VK_SAMPLE_COUNT_1_BIT, sample_masks);
 
     renderer->ext_ctx.vkCmdSetAlphaToCoverageEnableEXT(cmd_buf, VK_FALSE);
 
@@ -1366,9 +1375,9 @@ void renderer_deinit(Renderer* renderer) {
         allocated_image_destroy(renderer->vk_ctx->logical_device, renderer->allocator, &tex_image);
     }
 
-    allocated_image_destroy(renderer->vk_ctx->logical_device, renderer->allocator, &renderer->color_image);
+    allocated_image_destroy(renderer->vk_ctx->logical_device, renderer->allocator, &renderer->color_msaa_image);
     allocated_image_destroy(renderer->vk_ctx->logical_device, renderer->allocator, &renderer->depth_image);
-    allocated_image_destroy(renderer->vk_ctx->logical_device, renderer->allocator, &renderer->color_resolve_image);
+    allocated_image_destroy(renderer->vk_ctx->logical_device, renderer->allocator, &renderer->color_image);
 
     if (renderer->mode == EngineMode::EDIT) {
         for (const auto& image : renderer->viewport_images) {

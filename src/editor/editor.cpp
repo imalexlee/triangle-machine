@@ -130,6 +130,8 @@ void update_viewport(Editor* editor, const Renderer* backend, const Window* wind
     if (ImGui::IsKeyDown(ImGuiKey_MouseMiddle)) {
         ImVec2 mouse_delta = editor->imgui_io->MouseDelta;
         camera_pan(camera, mouse_delta.x * time_elapsed, mouse_delta.y * time_elapsed);
+        // std::cout << camera->position.x << " " << camera->position.y << " " << camera->position.z << std::endl;
+        // std::cout << camera->look_at.x << " " << camera->look_at.y << " " << camera->look_at.z << '\n' << std::endl;
     }
 
     if (ImGui::IsKeyPressed(ImGuiKey_MouseLeft, false) && !ImGuizmo::IsOver()) {

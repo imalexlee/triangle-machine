@@ -124,7 +124,7 @@ void main() {
 
     vec3 light_dir = normalize(vec3(1, 1, 0.5));
     vec3 light_color = vec3(23.47, 21.31, 20.79);
-    vec3 light_diffuse_intensity = vec3(4);
+    vec3 light_diffuse_intensity = vec3(0.4);
 
     vec3 light_intensity = light_color * light_diffuse_intensity;
 

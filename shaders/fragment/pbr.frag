@@ -95,7 +95,7 @@ void main() {
 
     vec4 bump_tex_val = texture(tex_samplers[nonuniformEXT(mat.normal_tex_i)], normal_uv);
     vec3 normal = normalize(surface_normal);
-    normal = perturbNormal(normal, view_dir, bump_tex_val.xyz, normal_uv);
+    // normal = perturbNormal(normal, view_dir, bump_tex_val.xyz, normal_uv);
 
 
     vec4 tex_color;
@@ -133,7 +133,7 @@ void main() {
 
     float v_dot_h = max(dot(view_dir, halfway), 0.0);
     float n_dot_v = max(dot(normal, view_dir), 0.0);
-    float n_dot_l = max(dot(normal, l), 0.3);
+    float n_dot_l = max(dot(normal, l), 0.1);
 
     vec3 f = fresnel_schlick(v_dot_h, color.rgb, metallic);
     vec3 k_s = f;
@@ -143,7 +143,7 @@ void main() {
     float g = geometry_smith(normal, view_dir, l, roughness);
 
     vec3 specular_nom = g * f * d;
-    float specular_denom = 400.0 * n_dot_v * n_dot_l + 0.0001;
+    float specular_denom = 4.0 * n_dot_v * n_dot_l + 0.0001;
     vec3 specular_brdf = specular_nom / specular_denom;
 
     vec3 lambert = mix(color.rgb, color.rgb * vec3(0.0001), metallic);
@@ -165,7 +165,7 @@ void main() {
     if (rayQueryGetIntersectionTypeEXT(rq, true) != gl_RayQueryCommittedIntersectionNoneEXT) {
         // in shadow
         occlued = 1.0;
-        out_color = vec4(final_color.rgb * vec3(0.2), tex_color.a);
+        // out_color = vec4(final_color.rgb * vec3(0.2), tex_color.a);
 
     }
 
@@ -178,5 +178,5 @@ void main() {
         imageStore(entity_id_img, coord, ivec4(constants.entity_id, z_int, 0, 0));
     }
 
-    //out_color = vec4(color, 1.0);
+    // out_color = vec4(color, 1.0);
 }

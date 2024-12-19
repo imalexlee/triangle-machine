@@ -9,6 +9,10 @@ static constexpr std::array enabled_validation_features{
     VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
 };
 
+static constexpr std::array disabled_validation_features{
+    VK_VALIDATION_FEATURE_DISABLE_UNIQUE_HANDLES_EXT,
+};
+
 static VkBool32 debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageTypes,
                                const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData);
 
@@ -56,9 +60,11 @@ VkDebugUtilsMessengerCreateInfoEXT vk_messenger_info_create() {
 
 VkValidationFeaturesEXT vk_validation_features_create() {
     VkValidationFeaturesEXT validation_features{};
-    validation_features.sType                         = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
-    validation_features.pEnabledValidationFeatures    = enabled_validation_features.data();
-    validation_features.enabledValidationFeatureCount = enabled_validation_features.size();
+    validation_features.sType                          = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
+    validation_features.pEnabledValidationFeatures     = enabled_validation_features.data();
+    validation_features.enabledValidationFeatureCount  = enabled_validation_features.size();
+    validation_features.pDisabledValidationFeatures    = disabled_validation_features.data();
+    validation_features.disabledValidationFeatureCount = disabled_validation_features.size();
     return validation_features;
 }
 

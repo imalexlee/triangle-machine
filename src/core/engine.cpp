@@ -12,6 +12,56 @@
 #include <system/platform/window.h>
 
 static Engine* active_engine = nullptr;
+void           movement_callback(Engine* engine, int key, [[maybe_unused]] int scancode, int action, [[maybe_unused]] int mods) {
+
+    if (key != GLFW_KEY_W && key != GLFW_KEY_A && key != GLFW_KEY_S && key != GLFW_KEY_D && key != GLFW_KEY_UP && key != GLFW_KEY_DOWN) {
+        return;
+    }
+
+    Camera* cam = &engine->camera;
+    if (action == GLFW_PRESS) {
+        // printf("hi\n");
+        if (key == GLFW_KEY_W || key == GLFW_KEY_UP) {
+            cam->velocity.z = cam->movement_speed;
+        }
+        // TODO: remove in final
+        if (key == GLFW_KEY_A) {
+            cam->velocity.x = cam->movement_speed;
+        }
+        if (key == GLFW_KEY_S || key == GLFW_KEY_DOWN) {
+            cam->velocity.z = -cam->movement_speed;
+        }
+        // TODO: remove in final
+        if (key == GLFW_KEY_D) {
+            cam->velocity.x = -cam->movement_speed;
+        }
+    }
+    if (action == GLFW_RELEASE) {
+        if (key == GLFW_KEY_W || key == GLFW_KEY_UP) {
+            cam->velocity.z = 0;
+        }
+        if (key == GLFW_KEY_A) {
+            cam->velocity.x = 0;
+        }
+        if (key == GLFW_KEY_S || key == GLFW_KEY_DOWN) {
+            cam->velocity.z = 0;
+        }
+        if (key == GLFW_KEY_D) {
+            cam->velocity.x = 0;
+        }
+    }
+}
+void eye_movement_callback(Engine* engine, double x_pos, double y_pos) {
+    Camera* cam     = &engine->camera;
+    double  x_delta = cam->cursor_x - x_pos;
+    double  y_delta = cam->cursor_y - y_pos;
+
+    cam->pitch_theta -= y_delta * 0.1;
+    cam->yaw_theta += x_delta * 0.1;
+
+    cam->cursor_x = x_pos;
+    cam->cursor_y = y_pos;
+}
 
 void engine_init(Engine* engine, EngineMode mode) {
     assert(active_engine == nullptr);
@@ -20,6 +70,8 @@ void engine_init(Engine* engine, EngineMode mode) {
     engine->mode = mode;
 
     constexpr glm::vec4 init_cam_pos = {4.85, 1.58, -7.95, 1};
+
+    // constexpr glm::vec4 init_cam_pos = {0, 0, 0, 1};
 
     window_init(&engine->window, core_opts::initial_width, core_opts::initial_height, "Triangle Machine");
 
@@ -35,7 +87,7 @@ void engine_init(Engine* engine, EngineMode mode) {
     }
 
     renderer_upload_vert_shader(&engine->renderer, "../shaders/vertex/indexed_draw.vert", "vert shader");
-    renderer_upload_frag_shader(&engine->renderer, "../shaders/fragment/pbr.frag", "frag shader");
+    renderer_upload_frag_shader(&engine->renderer, "../shaders/fragment/pbr_entity.frag", "frag shader");
     renderer_upload_sky_box_shaders(&engine->renderer, "../shaders/vertex/skybox.vert", "../shaders/fragment/skybox.frag", "skybox shaders");
 
     // const char* smote_path = "../assets/skybox/smote/smote.jpeg";
@@ -69,10 +121,16 @@ void engine_init(Engine* engine, EngineMode mode) {
 
     renderer_upload_frag_shader(&engine->renderer, "../shaders/fragment/pbr_entity.frag", "frag shader");
 
-    window_register_cursor_callback(&engine->window, [=](double x_pos, double y_pos) { camera_cursor_callback(&engine->camera, x_pos, y_pos); });
+    window_register_cursor_callback(&engine->window, [=](double x_pos, double y_pos) {
+        //        eye_movement_callback(engine, x_pos, y_pos);
+        camera_cursor_callback(&engine->camera, x_pos, y_pos);
+    });
 
     window_register_mouse_button_callback(
         &engine->window, [=](int button, int action, int mods) { camera_mouse_button_callback(&engine->camera, button, action, mods); });
+
+    // window_register_key_callback(&engine->window,
+    //                              [&](int key, int scancode, int action, int mods) { movement_callback(engine, key, scancode, action, mods); });
 }
 
 bool engine_is_alive(const Engine* engine) { return !glfwWindowShouldClose(engine->window.glfw_window); }
@@ -99,6 +157,7 @@ void engine_end_frame(Engine* engine) {
             glfwSetWindowShouldClose(engine->window.glfw_window, GLFW_TRUE);
         }
     }
+    scene_request_update(&engine->scene);
     scene_update(&engine->scene, &engine->renderer);
     renderer_draw(&engine->renderer, engine->scene.entities, &world_data, engine->features);
 }

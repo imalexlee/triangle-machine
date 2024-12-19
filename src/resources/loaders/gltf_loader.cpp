@@ -165,7 +165,8 @@ static void compress_image_ktx(const void* img_data, uint32_t width, uint32_t he
     ktxTexture2*   texture;
     KTX_error_code res = ktxTexture2_CreateFromNamedFile(path.string().c_str(), KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT, &texture);
     if (res != KTX_SUCCESS) {
-        exit(EXIT_FAILURE);
+        std::cout << "bruh" << std::endl;
+        // exit(EXIT_FAILURE);
     }
     assert(res == KTX_SUCCESS);
 
@@ -196,15 +197,17 @@ static std::vector<GLTFImage>   load_gltf_images(const fastgltf::Asset* asset) {
     gltf_images.reserve(asset->images.size());
 
     int width{}, height{}, channel_count{};
-    for (const auto& gltf_image : asset->images) {
-        GLTFImage new_image{};
+    for (size_t i = 0; i < asset->images.size(); i++) {
+        const auto& gltf_image = asset->images[i];
+        GLTFImage   new_image{};
 
         // make shift hash lmao
         std::string out_file_name = std::to_string(asset->accessors.size()) + std::to_string(asset->cameras.size()) +
-                                    std::to_string(asset->materials.size()) + gltf_image.name.data() + std::to_string(asset->meshes.size());
+                                    std::to_string(asset->materials.size()) + gltf_image.name.data() + std::to_string(asset->meshes.size()) +
+                                    std::to_string(i);
         bool found = std::ranges::find(unique_names, out_file_name) != unique_names.end();
         if (found) {
-            exit(1);
+            std::cout << "bruh2" << std::endl;
         } else {
             unique_names.push_back(out_file_name);
         }
@@ -631,7 +634,7 @@ Entity load_entity(Renderer* backend, const std::filesystem::path& path) {
     constexpr fastgltf::Extensions supported_extensions =
         fastgltf::Extensions::KHR_mesh_quantization | fastgltf::Extensions::KHR_texture_transform | fastgltf::Extensions::KHR_materials_clearcoat |
         fastgltf::Extensions::KHR_materials_specular | fastgltf::Extensions::KHR_materials_transmission |
-        fastgltf::Extensions::KHR_materials_variants;
+        fastgltf::Extensions::KHR_materials_variants | fastgltf::Extensions::KHR_lights_punctual;
 
     // all extensions
     //    constexpr fastgltf::Extensions supported_extensions = static_cast<fastgltf::Extensions>(0x0007FFFF);
@@ -648,7 +651,7 @@ Entity load_entity(Renderer* backend, const std::filesystem::path& path) {
 
     if (auto error = load.error(); error != fastgltf::Error::None) {
         fmt::println("ERROR LOADING GLTF");
-        std::exit(1);
+        // std::exit(1);
     }
     fastgltf::Asset asset{};
     asset = std::move(load.get());
@@ -705,8 +708,8 @@ Entity load_entity(Renderer* backend, const std::filesystem::path& path) {
             }
 
             if (gltf_materials.size() > 0 && gltf_materials[primitive.material_i.value_or(0)].alpha_mode == fastgltf::AlphaMode::Blend) {
-                // entity.transparent_objs.push_back(new_draw_obj);
-                entity.opaque_objs.push_back(new_draw_obj);
+                entity.transparent_objs.push_back(new_draw_obj);
+                // entity.opaque_objs.push_back(new_draw_obj);
             } else {
                 entity.opaque_objs.push_back(new_draw_obj);
             }

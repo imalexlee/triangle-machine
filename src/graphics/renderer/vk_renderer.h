@@ -77,8 +77,8 @@ struct Renderer {
     CommandContext                 immediate_cmd_ctx{};
     CommandContext                 compute_cmd_ctx{};
     AccelStructContext             accel_struct_ctx{};
+    AllocatedImage                 color_msaa_image{};
     AllocatedImage                 color_image{};
-    AllocatedImage                 color_resolve_image{};
     AllocatedImage                 depth_image{};
     std::vector<AllocatedImage>    tex_images{};
     uint32_t                       tex_sampler_desc_count{};
@@ -99,7 +99,7 @@ struct Renderer {
     static constexpr uint32_t      accel_struct_desc_binding = 1;
     static constexpr uint32_t      sky_box_desc_binding      = 2;
     static constexpr uint32_t      texture_desc_binding      = 3;
-    uint32_t                       raster_samples{1};
+    uint32_t                       msaa_samples{1};
 
     // I hate this so much. only temporary. editor should be completely seperated from renderer and engine
     enum class EngineMode mode {};
