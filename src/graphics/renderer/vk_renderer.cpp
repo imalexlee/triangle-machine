@@ -65,7 +65,6 @@ void renderer_init(Renderer* renderer, const VkContext* vk_ctx, uint32_t width, 
 
     renderer->vk_ctx = vk_ctx;
 
-    // device_ctx_init(&bavk_ctx->device_ctx, vk_ctx->instance, surface);
     swapchain_ctx_init(&renderer->swapchain_context, vk_ctx, vk_opts::desired_present_mode);
 
     create_allocator(renderer);
@@ -81,7 +80,7 @@ void renderer_init(Renderer* renderer, const VkContext* vk_ctx, uint32_t width, 
     // attempt to do 2x2 MSAA
     VkPhysicalDeviceProperties properties{};
     vkGetPhysicalDeviceProperties(vk_ctx->physical_device, &properties);
-    renderer->msaa_samples = std::min(properties.limits.framebufferColorSampleCounts, 1u);
+    renderer->msaa_samples = std::min(properties.limits.framebufferColorSampleCounts, 4u);
 
     for (size_t i = 0; i < renderer->frames.size(); i++) {
         Frame* frame = &renderer->frames[i];
@@ -364,7 +363,7 @@ void create_graphics_desc_set(Renderer* renderer) {
 
 void configure_render_resources(Renderer* renderer) {
 
-    VkClearValue scene_clear_value = {.color = {{0.2f, 0.2f, 0.2f, 0.2f}}};
+    VkClearValue scene_clear_value = {.color = {{0.f, 0.f, 0.f, 1.f}}};
 
     VkImageView draw_image_view    = renderer->color_image.image_view;
     VkImageView resolve_image_view = nullptr;
@@ -410,6 +409,7 @@ void create_default_data(Renderer* renderer) {
     default_tex_sampler.layer_count    = 1;
     default_tex_sampler.sampler        = renderer->default_linear_sampler;
     default_tex_sampler.view_type      = VK_IMAGE_VIEW_TYPE_2D;
+    default_tex_sampler.format         = VK_FORMAT_R8_SRGB;
 
     MipLevel new_mip_level{};
     new_mip_level.data   = &white_data;
@@ -424,7 +424,7 @@ void create_default_data(Renderer* renderer) {
     std::vector<TextureSampler> tex_samplers = {default_tex_sampler};
 
     // default texture will always be assumed to be at index 0
-    std::ignore = renderer_upload_2d_textures(renderer, tex_samplers, VK_FORMAT_R8G8B8A8_SRGB);
+    std::ignore = renderer_upload_2d_textures(renderer, tex_samplers);
 }
 
 void renderer_create_imgui_resources(Renderer* renderer) {
@@ -712,7 +712,7 @@ void renderer_draw(Renderer* renderer, std::vector<Entity>& entities, const Worl
         render_grid(renderer, cmd_buffer);
     }
 
-    render_cursor(renderer, cmd_buffer);
+    // render_cursor(renderer, cmd_buffer);
 
     vkCmdEndRendering(cmd_buffer);
 
@@ -802,9 +802,11 @@ void resize(Renderer* renderer) {
                                                    VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                                                    VK_IMAGE_VIEW_TYPE_2D, renderer->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1, 1);
 
-    renderer->color_msaa_image = allocated_image_create(
-        renderer->vk_ctx->logical_device, renderer->allocator, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
-        VK_IMAGE_VIEW_TYPE_2D, renderer->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1, renderer->msaa_samples);
+    if (renderer->msaa_samples > 1) {
+        renderer->color_msaa_image = allocated_image_create(
+            renderer->vk_ctx->logical_device, renderer->allocator, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
+            VK_IMAGE_VIEW_TYPE_2D, renderer->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1, renderer->msaa_samples);
+    }
 
     renderer->depth_image = allocated_image_create(renderer->vk_ctx->logical_device, renderer->allocator, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
                                                    VK_IMAGE_VIEW_TYPE_2D, renderer->image_extent, VK_FORMAT_D32_SFLOAT, 1, renderer->msaa_samples);
@@ -884,16 +886,14 @@ void render_geometry(Renderer* renderer, VkCommandBuffer cmd_buf, std::vector<En
     for (const auto& entity : entities) {
         VkColorBlendEquationEXT blend_equation = {};
 
-        /*
-                blend_equation = {
-                    .srcColorBlendFactor = VK_BLEND_FACTOR_ONE,
-                    .dstColorBlendFactor = VK_BLEND_FACTOR_DST_ALPHA,
-                    .colorBlendOp        = VK_BLEND_OP_ADD,
-                    .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
-                    .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
-                    .alphaBlendOp        = VK_BLEND_OP_ADD,
-                };
-        */
+        // blend_equation = {
+        //     .srcColorBlendFactor = VK_BLEND_FACTOR_ONE,
+        //     .dstColorBlendFactor = VK_BLEND_FACTOR_DST_ALPHA,
+        //     .colorBlendOp        = VK_BLEND_OP_ADD,
+        //     .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+        //     .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+        //     .alphaBlendOp        = VK_BLEND_OP_ADD,
+        // };
 
         blend_equation = {
             .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
@@ -1032,17 +1032,17 @@ void set_render_state(Renderer* renderer, VkCommandBuffer cmd_buf) {
 
     // set default bindings (null) to all shader types for the graphics bind point
     // https://docs.vulkan.org/spec/latest/chapters/shaders.html#shaders-binding
-    constexpr std::array graphics_pipeline_stages = {
-        VK_SHADER_STAGE_VERTEX_BIT,
-        VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT,
-        VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
-        VK_SHADER_STAGE_GEOMETRY_BIT,
-        VK_SHADER_STAGE_FRAGMENT_BIT,
-        VK_SHADER_STAGE_TASK_BIT_EXT,
-        VK_SHADER_STAGE_MESH_BIT_EXT,
-    };
+    // constexpr std::array graphics_pipeline_stages = {
+    //     VK_SHADER_STAGE_VERTEX_BIT,
+    //     VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT,
+    //     VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
+    //     VK_SHADER_STAGE_GEOMETRY_BIT,
+    //     VK_SHADER_STAGE_FRAGMENT_BIT,
+    //     VK_SHADER_STAGE_TASK_BIT_EXT,
+    //     VK_SHADER_STAGE_MESH_BIT_EXT,
+    // };
 
-    renderer->ext_ctx.vkCmdBindShadersEXT(cmd_buf, graphics_pipeline_stages.size(), graphics_pipeline_stages.data(), VK_NULL_HANDLE);
+    //    renderer->ext_ctx.vkCmdBindShadersEXT(cmd_buf, graphics_pipeline_stages.size(), graphics_pipeline_stages.data(), VK_NULL_HANDLE);
 }
 
 void upload_sky_box_texture(Renderer* renderer, const TextureSampler* tex_sampler) {
@@ -1111,6 +1111,7 @@ struct UniqueImageInstance {
     uint32_t              height{};
     uint32_t              width{};
     uint32_t              byte_size{};
+    VkFormat              format{};
     std::vector<MipLevel> mip_levels;
 };
 
@@ -1141,7 +1142,7 @@ void generate_mip_maps(Renderer* renderer, AllocatedImage* allocated_img, VkComm
     }
 }
 
-uint32_t renderer_upload_2d_textures(Renderer* renderer, std::vector<TextureSampler>& tex_samplers, VkFormat format) {
+uint32_t renderer_upload_2d_textures(Renderer* renderer, std::vector<TextureSampler>& tex_samplers) {
     // we will return this at the end of the function. It signifies an offset for
     // materials accessing these textures by their index.
     // For instance, if a gltf mesh is trying to access texture index 3, and this function passes
@@ -1166,6 +1167,7 @@ uint32_t renderer_upload_2d_textures(Renderer* renderer, std::vector<TextureSamp
         // new_image.mip_levels     = tex_sampler.mip_count;
         // new_image.byte_size      = tex_sampler.byte_size;
         new_image.mip_levels = tex_sampler.mip_levels;
+        new_image.format     = tex_sampler.format;
 
         bool is_unique = true;
         for (const auto& curr_image : unique_image_instances) {
@@ -1204,7 +1206,7 @@ uint32_t renderer_upload_2d_textures(Renderer* renderer, std::vector<TextureSamp
         AllocatedImage tex_image =
             allocated_image_create(renderer->vk_ctx->logical_device, renderer->allocator,
                                    VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                                   VK_IMAGE_VIEW_TYPE_2D, extent, format, image->mip_levels.size());
+                                   VK_IMAGE_VIEW_TYPE_2D, extent, image->format, image->mip_levels.size());
 
         command_ctx_immediate_submit(&renderer->immediate_cmd_ctx, renderer->vk_ctx->logical_device, renderer->vk_ctx->queues.graphics,
                                      renderer->imm_fence, [&](VkCommandBuffer cmd) {
@@ -1351,10 +1353,6 @@ void renderer_deinit(Renderer* renderer) {
 
     renderer->deletion_queue.flush();
 
-    // if constexpr (vk_opts::validation_enabled) {
-    //     debugger_deinit(&renderer->debugger, renderer->instance);
-    // }
-
     for (Frame& frame : renderer->frames) {
         frame_deinit(&frame, renderer->vk_ctx->logical_device);
     }
@@ -1375,7 +1373,9 @@ void renderer_deinit(Renderer* renderer) {
         allocated_image_destroy(renderer->vk_ctx->logical_device, renderer->allocator, &tex_image);
     }
 
-    allocated_image_destroy(renderer->vk_ctx->logical_device, renderer->allocator, &renderer->color_msaa_image);
+    if (renderer->msaa_samples > 1) {
+        allocated_image_destroy(renderer->vk_ctx->logical_device, renderer->allocator, &renderer->color_msaa_image);
+    }
     allocated_image_destroy(renderer->vk_ctx->logical_device, renderer->allocator, &renderer->depth_image);
     allocated_image_destroy(renderer->vk_ctx->logical_device, renderer->allocator, &renderer->color_image);
 
@@ -1410,8 +1410,4 @@ void renderer_deinit(Renderer* renderer) {
     vkDestroyFence(renderer->vk_ctx->logical_device, renderer->imm_fence, nullptr);
 
     vmaDestroyAllocator(renderer->allocator);
-
-    // device_ctx_deinit(&renderer->vk_ctx->device_ctx);
-
-    // vkDestroyInstance(renderer->instance, nullptr);
 }

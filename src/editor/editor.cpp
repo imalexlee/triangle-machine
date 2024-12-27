@@ -425,10 +425,13 @@ void update_entity_viewer(Editor* editor, Scene* scene) {
 }
 
 void editor_update(Editor* editor, Renderer* backend, const Window* window, Camera* camera, Scene* scene) {
+    // set window background to black
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
     begin_ui();
     update_viewport(editor, backend, window, camera, scene);
     update_scene_overview(editor, backend, window, camera, scene);
     update_entity_viewer(editor, scene);
+    ImGui::PopStyleColor();
     end_ui(editor);
 }
 

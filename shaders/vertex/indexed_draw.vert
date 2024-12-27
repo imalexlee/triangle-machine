@@ -11,6 +11,7 @@ layout (location = 2) out vec2 metal_rough_uv;
 layout (location = 3) out vec2 normal_uv;
 layout (location = 4) out vec3 surface_normal;
 layout (location = 5) out vec4 vert_pos;
+layout (location = 6) out vec4 tangent;
 
 void main() {
     Vertex v = constants.vertex_buffer.vertices[gl_VertexIndex];
@@ -28,4 +29,6 @@ void main() {
     metal_rough_uv = v.tex_coord[mat.metal_rough_tex_coord];
 
     normal_uv = v.tex_coord[mat.normal_tex_coord];
+
+    tangent = v.tangent * constants.local_transform;
 }

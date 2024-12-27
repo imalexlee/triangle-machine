@@ -75,6 +75,8 @@ static VkInstance vk_instance_create(const char* app_name, const char* engine_na
 }
 
 void vk_context_deinit(VkContext* vk_ctx) {
+    DEBUG_PRINT("destroying Vulkan Context");
+
     if (vk_opts::validation_enabled) {
         debugger_deinit(&vk_ctx->debugger, vk_ctx->instance);
     }

@@ -26,6 +26,7 @@ struct TextureSampler {
     uint32_t color_channels{};
     uint32_t width{};
     uint32_t height{};
+    VkFormat format{};
     // if mip mapped, will be size of all mips
     // uint32_t              byte_size{};
     std::vector<MipLevel> mip_levels;

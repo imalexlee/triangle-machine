@@ -75,7 +75,7 @@ void engine_init(Engine* engine, EngineMode mode) {
 
     window_init(&engine->window, core_opts::initial_width, core_opts::initial_height, "Triangle Machine");
 
-    camera_init(&engine->camera, &engine->window, init_cam_pos);
+    camera_init(&engine->camera, &engine->window, init_cam_pos, glm::vec3{0, 0, 0});
 
     audio_ctx_init(&engine->audio_ctx);
 
@@ -87,7 +87,7 @@ void engine_init(Engine* engine, EngineMode mode) {
     }
 
     renderer_upload_vert_shader(&engine->renderer, "../shaders/vertex/indexed_draw.vert", "vert shader");
-    renderer_upload_frag_shader(&engine->renderer, "../shaders/fragment/pbr_entity.frag", "frag shader");
+    renderer_upload_frag_shader(&engine->renderer, "../shaders/fragment/pbr.frag", "frag shader");
     renderer_upload_sky_box_shaders(&engine->renderer, "../shaders/vertex/skybox.vert", "../shaders/fragment/skybox.frag", "skybox shaders");
 
     // const char* smote_path = "../assets/skybox/smote/smote.jpeg";
@@ -119,15 +119,14 @@ void engine_init(Engine* engine, EngineMode mode) {
 
     renderer_upload_cursor_shaders(&engine->renderer);
 
-    renderer_upload_frag_shader(&engine->renderer, "../shaders/fragment/pbr_entity.frag", "frag shader");
-
     window_register_cursor_callback(&engine->window, [=](double x_pos, double y_pos) {
         //        eye_movement_callback(engine, x_pos, y_pos);
-        camera_cursor_callback(&engine->camera, x_pos, y_pos);
+        //        camera_cursor_callback(&engine->camera, x_pos, y_pos);
     });
 
-    window_register_mouse_button_callback(
-        &engine->window, [=](int button, int action, int mods) { camera_mouse_button_callback(&engine->camera, button, action, mods); });
+    window_register_mouse_button_callback(&engine->window, [=](int button, int action, int mods) {
+        // camera_mouse_button_callback(&engine->camera, button, action, mods);
+    });
 
     // window_register_key_callback(&engine->window,
     //                              [&](int key, int scancode, int action, int mods) { movement_callback(engine, key, scancode, action, mods); });
@@ -147,7 +146,6 @@ void engine_end_frame(Engine* engine) {
         viewport_width  = engine->editor.viewport_width;
         viewport_height = engine->editor.viewport_height;
     }
-
     world_data = camera_update(&engine->camera, viewport_width, viewport_height);
 
     if (engine->mode == EngineMode::EDIT) {

@@ -1,12 +1,10 @@
 #pragma once
 
-#include "graphics/renderer/vk_frame.h"
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #define GLM_ENABLE_EXPERIMENTAL
 
+#include "graphics/renderer/vk_frame.h"
 #include <system/platform/window.h>
-// #include <glm/gtx/quaternion.hpp>
-#include <glm/gtx/transform.hpp>
 
 struct Camera {
     glm::mat4 view{};
@@ -32,7 +30,7 @@ struct Camera {
     std::vector<std::function<void()>> camera_update_callbacks;
 };
 
-void camera_init(Camera* cam, const Window* window, glm::vec4 initial_pos, float init_pitch_theta = 0.f, float init_yaw_theta = 0.f);
+void camera_init(Camera* cam, const Window* window, glm::vec3 initial_pos, glm::vec3 initial_look_at);
 
 void camera_pan(Camera* camera, float pan_factor_x, float pan_factor_y);
 
@@ -41,11 +39,5 @@ void camera_zoom(Camera* camera, float zoom_factor);
 void camera_orbit(Camera* camera, float pitch_angle, float yaw_angle);
 
 WorldData camera_update(Camera* cam, uint32_t viewport_width, uint32_t viewport_height);
-
-void camera_key_callback(Camera* cam, int key, int scancode, int action, int mods);
-
-void camera_cursor_callback(Camera* cam, double x_pos, double y_pos);
-
-void camera_mouse_button_callback(Camera* cam, int button, int action, int mods);
 
 void camera_register_update_callback(Camera* cam, std::function<void()>&& fn_ptr);

@@ -21,6 +21,7 @@ static constexpr int tex_coord_num = 2;
 struct Vertex {
     glm::vec4 position{};
     glm::vec4 normal{};
+    glm::vec4 tangent{};
     glm::vec2 tex_coord[tex_coord_num] = {
         {0, 0},
         {0, 0}
@@ -33,6 +34,7 @@ struct GLTFImage {
     uint32_t width{};
     uint32_t height{};
     uint32_t color_channels{};
+    VkFormat format{};
     //    uint32_t mip_count{1};
     // if mip mapped, will be the size of all mips
     // uint32_t              byte_size{};
@@ -120,12 +122,12 @@ static std::vector<GLTFTexture> load_gltf_textures(const fastgltf::Asset* asset)
     return gltf_textures;
 }
 
-static void compress_image_ktx(const void* img_data, uint32_t width, uint32_t height, uint32_t channel_count,
+static void compress_image_ktx(const void* img_data, uint32_t width, uint32_t height, uint32_t channel_count, VkFormat format,
                                const std::filesystem::path& out_file_path) {
 
     // no mip maps yet
     ktxTextureCreateInfo texture_ci{};
-    texture_ci.vkFormat        = VK_FORMAT_R8G8B8A8_UNORM;
+    texture_ci.vkFormat        = format;
     texture_ci.baseWidth       = width;
     texture_ci.baseHeight      = height;
     texture_ci.baseDepth       = 1;
@@ -189,7 +191,7 @@ static void compress_image_ktx(const void* img_data, uint32_t width, uint32_t he
 }
 
 static std::vector<std::string> unique_names;
-static std::vector<GLTFImage>   load_gltf_images(const fastgltf::Asset* asset) {
+static std::vector<GLTFImage>   load_gltf_images(const fastgltf::Asset* asset, std::span<const GLTFMaterial> materials) {
     using namespace std::chrono;
     auto start_frame_time = system_clock::now();
 
@@ -205,9 +207,10 @@ static std::vector<GLTFImage>   load_gltf_images(const fastgltf::Asset* asset) {
         std::string out_file_name = std::to_string(asset->accessors.size()) + std::to_string(asset->cameras.size()) +
                                     std::to_string(asset->materials.size()) + gltf_image.name.data() + std::to_string(asset->meshes.size()) +
                                     std::to_string(i);
-        bool found = std::ranges::find(unique_names, out_file_name) != unique_names.end();
-        if (found) {
-            std::cout << "bruh2" << std::endl;
+
+        if (std::ranges::find(unique_names, out_file_name) != unique_names.end()) {
+            std::cout << "multiple images with same name found" << std::endl;
+            exit(0);
         } else {
             unique_names.push_back(out_file_name);
         }
@@ -259,7 +262,7 @@ static std::vector<GLTFImage>   load_gltf_images(const fastgltf::Asset* asset) {
 
         assert(data);
 
-        compress_image_ktx(data, width, height, 4, full_path.string());
+        compress_image_ktx(data, width, height, 4, VK_FORMAT_R8G8B8A8_UNORM, full_path.string());
 
         // MipLevel uncompressed_mip_level;
         // uncompressed_mip_level.data   = data;
@@ -372,6 +375,7 @@ static std::vector<GLTFMesh> load_gltf_meshes(const fastgltf::Asset* my_asset) {
             const fastgltf::Accessor* pos_accessor     = &my_asset->accessors[primitive.findAttribute("POSITION")->second];
             const fastgltf::Accessor* indices_accessor = &my_asset->accessors[primitive.indicesAccessor.value()];
             const fastgltf::Accessor* normal_accessor  = &my_asset->accessors[primitive.findAttribute("NORMAL")->second];
+            const fastgltf::Accessor* tangent_accessor = &my_asset->accessors[primitive.findAttribute("TANGENT")->second];
 
             new_primitive.indices_count = indices_accessor->count;
             new_primitive.indices_start = index_offset;
@@ -392,6 +396,16 @@ static std::vector<GLTFMesh> load_gltf_meshes(const fastgltf::Asset* my_asset) {
                     new_mesh.vertices[i + vertex_count].normal.x = normal.x;
                     new_mesh.vertices[i + vertex_count].normal.y = normal.y;
                     new_mesh.vertices[i + vertex_count].normal.z = normal.z;
+                });
+            }
+
+            if (primitive.findAttribute("TANGENT") != primitive.attributes.cend()) {
+                fastgltf::iterateAccessorWithIndex<glm::vec4>(*my_asset, *tangent_accessor, [&](const glm::vec4& tangent, size_t i) {
+                    assert(i + vertex_count < new_mesh.vertices.size());
+                    new_mesh.vertices[i + vertex_count].tangent.x = tangent.x;
+                    new_mesh.vertices[i + vertex_count].tangent.y = tangent.y;
+                    new_mesh.vertices[i + vertex_count].tangent.z = tangent.z;
+                    new_mesh.vertices[i + vertex_count].tangent.w = tangent.w;
                 });
             }
 
@@ -538,7 +552,7 @@ static std::vector<VkSampler> upload_gltf_samplers(Renderer* backend, std::span<
 }
 
 static uint32_t upload_gltf_textures(Renderer* backend, std::span<const GLTFImage> images, std::span<const GLTFTexture> textures,
-                                     std::span<const fastgltf::Sampler> samplers) {
+                                     std::span<const GLTFMaterial> materials, std::span<const fastgltf::Sampler> samplers) {
     if (images.size() == 0) {
         return 0;
     }
@@ -559,10 +573,13 @@ static uint32_t upload_gltf_textures(Renderer* backend, std::span<const GLTFImag
         new_tex_sampler.layer_count    = 1;
         new_tex_sampler.color_channels = image->color_channels;
         new_tex_sampler.mip_levels     = image->mip_levels;
-        // new_tex_sampler.data           = image->data;
-        // new_tex_sampler.mip_count      = image->mip_count;
-        // new_tex_sampler.mip_extents    = image->mip_extents;
-        // new_tex_sampler.byte_size      = image->byte_size;
+        new_tex_sampler.format         = VK_FORMAT_BC7_UNORM_BLOCK;
+        // if any material uses this texture for a color texture, it's srgb encoded
+        for (const auto& material : materials) {
+            if (material.mat_data.color_tex_i == i) {
+                new_tex_sampler.format = VK_FORMAT_BC7_SRGB_BLOCK;
+            }
+        }
 
         if (texture->sampler_i.has_value()) {
             new_tex_sampler.sampler = vk_samplers[texture->sampler_i.value()];
@@ -572,7 +589,7 @@ static uint32_t upload_gltf_textures(Renderer* backend, std::span<const GLTFImag
         tex_samplers.push_back(new_tex_sampler);
     }
 
-    return renderer_upload_2d_textures(backend, tex_samplers, VK_FORMAT_BC7_SRGB_BLOCK);
+    return renderer_upload_2d_textures(backend, tex_samplers);
 }
 
 static std::vector<MeshBuffers> upload_gltf_mesh_buffers(Renderer* backend, std::span<const GLTFMesh> meshes) {
@@ -656,14 +673,14 @@ Entity load_entity(Renderer* backend, const std::filesystem::path& path) {
     fastgltf::Asset asset{};
     asset = std::move(load.get());
 
-    const std::vector<GLTFImage>    gltf_images     = load_gltf_images(&asset);
     const std::vector<GLTFTexture>  gltf_textures   = load_gltf_textures(&asset);
     const std::vector<GLTFMaterial> gltf_materials  = load_gltf_materials(&asset);
+    const std::vector<GLTFImage>    gltf_images     = load_gltf_images(&asset, gltf_materials);
     const std::vector<GLTFMesh>     gltf_meshes     = load_gltf_meshes(&asset);
     const std::vector<GLTFNode>     gltf_mesh_nodes = load_gltf_mesh_nodes(&asset);
 
     const std::vector<MeshBuffers> vk_meshes       = upload_gltf_mesh_buffers(backend, gltf_meshes);
-    const uint32_t                 tex_desc_offset = upload_gltf_textures(backend, gltf_images, gltf_textures, asset.samplers);
+    const uint32_t                 tex_desc_offset = upload_gltf_textures(backend, gltf_images, gltf_textures, gltf_materials, asset.samplers);
     const uint32_t                 mat_desc_offset = upload_gltf_materials(backend, gltf_materials, tex_desc_offset);
 
     const std::vector<MeshData> mesh_data = create_mesh_data(backend, gltf_mesh_nodes, vk_meshes);

@@ -8,12 +8,11 @@
 #include <assert.h>
 #include <fstream>
 #include <iostream>
+#include <resources/shader_compiler.h>
 #include <system/device/vk_utils.h>
 
-static std::string           read_file(const std::string& filename);
-static void                  flush_builder_state(ShaderBuilder* builder);
-static std::vector<uint32_t> compile_shader_spv(shaderc_compiler_t compiler, shaderc_compile_options_t compile_options, const std::string& filename,
-                                                VkShaderStageFlagBits shader_stage);
+static std::string read_file(const std::string& filename);
+static void        flush_builder_state(ShaderBuilder* builder);
 
 void shader_ctx_init(ShaderContext* shader_ctx) {
 
