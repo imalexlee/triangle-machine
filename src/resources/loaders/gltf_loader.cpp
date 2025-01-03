@@ -52,8 +52,8 @@ struct TexCoordPair {
 
 struct MaterialData {
     glm::vec4 color_factors{1.f, 1.f, 1.f, 1.f};
-    float     metal_factor{0};
-    float     rough_factor{0};
+    float     metal_factor{0.0};
+    float     rough_factor{1.0};
 
     int32_t  color_tex_i{-1}; // -1 represents no texture
     uint32_t color_tex_coord{0};
@@ -102,7 +102,7 @@ constexpr TexCoordPair default_tex_coord_pair = {
 };
 
 [[maybe_unused]] static constexpr GLTFMaterial default_material = {
-    .mat_data = {.color_factors = {1.f, 1.f, 1.f, 1.f}, .metal_factor = 1.0, .rough_factor = 1.0}
+    .mat_data = {.color_factors = {1.f, 1.f, 1.f, 1.f}, .metal_factor = 0.0, .rough_factor = 1.0}
 };
 
 static std::vector<GLTFTexture> load_gltf_textures(const fastgltf::Asset* asset) {

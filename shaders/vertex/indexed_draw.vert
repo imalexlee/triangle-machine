@@ -15,11 +15,12 @@ layout (location = 6) out vec4 tangent;
 
 void main() {
     Vertex v = constants.vertex_buffer.vertices[gl_VertexIndex];
+    mat4 model = constants.global_transform * constants.local_transform;
 
-    vert_pos = constants.global_transform * constants.local_transform * vec4(v.pos.xyz, 1.f);
+    vert_pos = model * vec4(v.pos.xyz, 1.f);
     gl_Position = scene_data.proj * scene_data.view * vert_pos;
 
-    surface_normal = mat3(constants.local_transform) * v.norm.xyz;
+    surface_normal = mat3(model) * v.norm.xyz;
 
 
     PBR_Material mat = material_buf.materials[nonuniformEXT (constants.material_i)];
@@ -30,5 +31,5 @@ void main() {
 
     normal_uv = v.tex_coord[mat.normal_tex_coord];
 
-    tangent = v.tangent * constants.local_transform;
+    tangent = model * v.tangent;
 }

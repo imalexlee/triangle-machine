@@ -132,7 +132,7 @@ void renderer_upload_sky_box(Renderer* renderer, const uint8_t* texture_data, ui
 
 void renderer_recompile_frag_shader(Renderer* renderer, uint32_t shader_idx);
 
-[[nodiscard]] uint32_t renderer_upload_2d_textures(Renderer* renderer, std::vector<TextureSampler>& tex_samplers);
+[[nodiscard]] uint32_t renderer_upload_2d_textures(Renderer* renderer, std::vector<TextureSampler>& tex_samplers, uint32_t color_channels = 1);
 
 void renderer_create_accel_struct(Renderer* renderer, std::span<const BottomLevelGeometry> bottom_level_geometries,
                                   std::span<const TopLevelInstanceRef> instance_refs);

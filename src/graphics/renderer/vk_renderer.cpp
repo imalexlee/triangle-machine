@@ -363,7 +363,7 @@ void create_graphics_desc_set(Renderer* renderer) {
 
 void configure_render_resources(Renderer* renderer) {
 
-    VkClearValue scene_clear_value = {.color = {{0.f, 0.f, 0.f, 1.f}}};
+    VkClearValue scene_clear_value = {.color = {{0.02f, 0.02f, 0.02f, 0.f}}};
 
     VkImageView draw_image_view    = renderer->color_image.image_view;
     VkImageView resolve_image_view = nullptr;
@@ -398,8 +398,8 @@ void create_default_data(Renderer* renderer) {
 
     renderer->default_nearest_sampler = vk_sampler_create(renderer->vk_ctx->logical_device, VK_FILTER_NEAREST, VK_FILTER_NEAREST);
 
-    uint32_t white_data[16];
-    for (size_t i = 0; i < 16; i++) {
+    uint32_t white_data[64];
+    for (size_t i = 0; i < 64; i++) {
         white_data[i] = 0xFFFFFFFF;
     }
     TextureSampler default_tex_sampler{};
@@ -409,7 +409,7 @@ void create_default_data(Renderer* renderer) {
     default_tex_sampler.layer_count    = 1;
     default_tex_sampler.sampler        = renderer->default_linear_sampler;
     default_tex_sampler.view_type      = VK_IMAGE_VIEW_TYPE_2D;
-    default_tex_sampler.format         = VK_FORMAT_R8_SRGB;
+    default_tex_sampler.format         = VK_FORMAT_R8G8B8A8_UNORM;
 
     MipLevel new_mip_level{};
     new_mip_level.data   = &white_data;
@@ -424,7 +424,7 @@ void create_default_data(Renderer* renderer) {
     std::vector<TextureSampler> tex_samplers = {default_tex_sampler};
 
     // default texture will always be assumed to be at index 0
-    std::ignore = renderer_upload_2d_textures(renderer, tex_samplers);
+    std::ignore = renderer_upload_2d_textures(renderer, tex_samplers, 4);
 }
 
 void renderer_create_imgui_resources(Renderer* renderer) {
@@ -1142,7 +1142,8 @@ void generate_mip_maps(Renderer* renderer, AllocatedImage* allocated_img, VkComm
     }
 }
 
-uint32_t renderer_upload_2d_textures(Renderer* renderer, std::vector<TextureSampler>& tex_samplers) {
+uint32_t renderer_upload_2d_textures(Renderer* renderer, std::vector<TextureSampler>& tex_samplers, uint32_t color_channels) {
+
     // we will return this at the end of the function. It signifies an offset for
     // materials accessing these textures by their index.
     // For instance, if a gltf mesh is trying to access texture index 3, and this function passes
@@ -1217,7 +1218,7 @@ uint32_t renderer_upload_2d_textures(Renderer* renderer, std::vector<TextureSamp
                                              const MipLevel* mip_level = &image->mip_levels[mip];
                                              // copy this mip to staging
                                              vmaCopyMemoryToAllocation(renderer->allocator, image->mip_levels[mip].data, staging_buf.allocation, 0,
-                                                                       mip_level->height * mip_level->width);
+                                                                       mip_level->height * mip_level->width * color_channels);
 
                                              VkBufferImageCopy copy_region{};
                                              copy_region.imageSubresource.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;

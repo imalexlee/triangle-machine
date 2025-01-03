@@ -87,7 +87,7 @@ void engine_init(Engine* engine, EngineMode mode) {
     }
 
     renderer_upload_vert_shader(&engine->renderer, "../shaders/vertex/indexed_draw.vert", "vert shader");
-    renderer_upload_frag_shader(&engine->renderer, "../shaders/fragment/pbr.frag", "frag shader");
+    renderer_upload_frag_shader(&engine->renderer, "../shaders/fragment/pbr3.frag", "frag shader");
     renderer_upload_sky_box_shaders(&engine->renderer, "../shaders/vertex/skybox.vert", "../shaders/fragment/skybox.frag", "skybox shaders");
 
     // const char* smote_path = "../assets/skybox/smote/smote.jpeg";
