@@ -51,24 +51,35 @@ struct TexCoordPair {
 };
 
 struct MaterialData {
+    // base factors
     glm::vec4 color_factors{1.f, 1.f, 1.f, 1.f};
     float     metal_factor{0.0};
     float     rough_factor{1.0};
-    float     clearcoat_factor{0.0};
-    float     clearcoat_rough_factor{0.0};
+    float     occlusion_strength{1.0};
 
+    // extension factors
+    float clearcoat_factor{0.0};
+    float clearcoat_rough_factor{0.0};
+
+    // base textures
     int32_t  color_tex_i{-1}; // -1 represents no texture
     uint32_t color_tex_coord{0};
     int32_t  metal_rough_tex_i{-1};
     uint32_t metal_rough_tex_coord{0};
     int32_t  normal_tex_i{-1};
     uint32_t normal_tex_coord{0};
+    int32_t  occlusion_tex_i{-1};
+    uint32_t occlusion_tex_coord{0};
+
+    // extension textures
     int32_t  clearcoat_tex_i{-1};
     uint32_t clearcoat_tex_coord{0};
     int32_t  clearcoat_rough_tex_i{-1};
     uint32_t clearcoat_rough_tex_coord{0};
     int32_t  clearcoat_normal_tex_i{-1};
     uint32_t clearcoat_normal_tex_coord{0};
+
+    uint32_t padding;
 };
 
 struct GLTFMaterial {
@@ -316,6 +327,15 @@ std::vector<GLTFMaterial> load_gltf_materials(const fastgltf::Asset* asset) {
             new_mat.mat_data.normal_tex_coord = normal_tex->texCoordIndex;
             new_mat.mat_data.normal_tex_i     = normal_tex->textureIndex;
         }
+
+        // occlusion
+        if (material.occlusionTexture.has_value()) {
+            const auto occlusion_tex             = &material.occlusionTexture.value();
+            new_mat.mat_data.occlusion_tex_coord = occlusion_tex->texCoordIndex;
+            new_mat.mat_data.occlusion_tex_i     = occlusion_tex->textureIndex;
+            new_mat.mat_data.occlusion_strength  = occlusion_tex->strength;
+        }
+
         new_mat.mat_data.metal_factor  = material.pbrData.metallicFactor;
         new_mat.mat_data.rough_factor  = material.pbrData.roughnessFactor;
         new_mat.mat_data.color_factors = glm::make_vec4(material.pbrData.baseColorFactor.data());
@@ -664,6 +684,12 @@ static uint32_t upload_gltf_materials(Renderer* backend, std::span<const GLTFMat
         } else {
             new_mat_data.normal_tex_i = 0;
         }
+        if (gltf_mat.mat_data.occlusion_tex_i >= 0) {
+            new_mat_data.occlusion_tex_i = gltf_mat.mat_data.occlusion_tex_i + tex_desc_offset;
+        } else {
+            new_mat_data.occlusion_tex_i = 0;
+        }
+
         // EXTENSIONS
         if (gltf_mat.mat_data.clearcoat_tex_i >= 0) {
             new_mat_data.clearcoat_tex_i = gltf_mat.mat_data.clearcoat_tex_i + tex_desc_offset;

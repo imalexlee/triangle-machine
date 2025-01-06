@@ -12,9 +12,10 @@ layout (location = 3) out vec2 normal_uv;
 layout (location = 4) out vec2 clearcoat_uv;
 layout (location = 5) out vec2 clearcoat_rough_uv;
 layout (location = 6) out vec2 clearcoat_normal_uv;
-layout (location = 7) out vec3 surface_normal;
-layout (location = 8) out vec4 vert_pos;
-layout (location = 9) out vec4 tangent;
+layout (location = 7) out vec2 occlusion_uv;
+layout (location = 8) out vec3 surface_normal;
+layout (location = 9) out vec4 vert_pos;
+layout (location = 10) out vec4 tangent;
 
 void main() {
     Vertex v = constants.vertex_buffer.vertices[gl_VertexIndex];
@@ -33,6 +34,7 @@ void main() {
     clearcoat_uv = v.tex_coord[mat.clearcoat_tex_coord];
     clearcoat_rough_uv = v.tex_coord[mat.clearcoat_rough_tex_coord];
     clearcoat_normal_uv = v.tex_coord[mat.clearcoat_normal_tex_coord];
+    occlusion_uv = v.tex_coord[mat.occlusion_tex_coord];
 
     tangent = model * v.tangent;
 }

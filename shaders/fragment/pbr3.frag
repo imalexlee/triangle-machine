@@ -17,9 +17,10 @@ layout (location = 3) in vec2 normal_uv;
 layout (location = 4) in vec2 clearcoat_uv;
 layout (location = 5) in vec2 clearcoat_rough_uv;
 layout (location = 6) in vec2 clearcoat_normal_uv;
-layout (location = 7) in vec3 surface_normal;
-layout (location = 8) in vec4 vert_pos;
-layout (location = 9) in vec4 tangent;
+layout (location = 7) in vec2 occlusion_uv;
+layout (location = 8) in vec3 surface_normal;
+layout (location = 9) in vec4 vert_pos;
+layout (location = 10) in vec4 tangent;
 
 float PI = 3.1415926535897932384626433832795;
 
@@ -108,19 +109,12 @@ void main() {
     vec3 view_dir = normalize(scene_data.eye_pos.xyz - vert_pos.xyz);
     vec3 normal = normalize(surface_normal);
 
+    float loaded_occlusion_val = texture(tex_samplers[nonuniformEXT (mat.occlusion_tex_i)], occlusion_uv).r;
+    float occlusion = 1.0 + mat.occlusion_strength * (loaded_occlusion_val - 1.0);
+
     vec4 loaded_tex_color = texture(tex_samplers[nonuniformEXT (mat.color_tex_i)], color_uv);
-
-    //vec4 tex_color = mat.color_factors * loaded_tex_color;
-    vec3 linear_color = pow(loaded_tex_color.rgb, vec3(1));
-    vec4 tex_color = vec4(linear_color, loaded_tex_color.a) * mat.color_factors;
-    vec3 color = tex_color.rgb;
-
-    //    if (tex_color.a < 0.9) {
-    //        out_color = vec4(0);
-    //        return;
-    //    }
-    // fractional specular and diffuse components
-
+    vec4 tex_color = mat.color_factors * loaded_tex_color;
+    vec3 color = tex_color.rgb * occlusion;
 
     // Bump Mapping
     vec3 bump_tex_val = texture(tex_samplers[nonuniformEXT(mat.normal_tex_i)], normal_uv).xyz;
@@ -135,7 +129,6 @@ void main() {
         normal = normalize(TBN * bump_tex_val);
 
     }
-
 
     //vec3 light_color = normalize(vec3(23.47, 21.31, 20.79));
     vec3 light_color = normalize(vec3(1, 1, 1));
@@ -169,9 +162,7 @@ void main() {
     vec3 specular_reflection = fresnel_schlick(halfway, view_dir, color, metallic);
     vec3 specular_brdf = (specular_distribution * specular_reflection * specular_masking) / specular_brdf_denom;
 
-    //    float el = roughness;
-    //    out_color = vec4(el, el, el, tex_color.a);
-    //    return;
+
 
 
     vec3 albedo = mix(color, vec3(0.0), metallic);
@@ -227,10 +218,11 @@ void main() {
 
 
     material = (PI * material) * in_radiance * n_dot_l;
+    //material *= occlusion;
 
 
 
-    vec3 ambient = vec3(0.03) * color;
+    vec3 ambient = vec3(0.05) * color;
     color = material + ambient;
 
     // hard shadow calculation

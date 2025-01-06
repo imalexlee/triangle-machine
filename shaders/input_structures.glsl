@@ -14,6 +14,8 @@ struct PBR_Material {
     vec4 color_factors;
     float metal_factor;
     float rough_factor;
+    float occlusion_strength;
+
     float clearcoat_factor;
     float clearcoat_rough_factor;
 
@@ -23,12 +25,17 @@ struct PBR_Material {
     uint metal_rough_tex_coord;
     uint normal_tex_i;
     uint normal_tex_coord;
+    uint occlusion_tex_i;
+    uint occlusion_tex_coord;
+
     uint clearcoat_tex_i;
     uint clearcoat_tex_coord;
     uint clearcoat_rough_tex_i;
     uint clearcoat_rough_tex_coord;
     uint clearcoat_normal_tex_i;
     uint clearcoat_normal_tex_coord;
+
+    uint padding;
 };
 
 layout (std430, set = 1, binding = 0) readonly buffer MaterialBuffer {
