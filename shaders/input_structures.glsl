@@ -14,12 +14,21 @@ struct PBR_Material {
     vec4 color_factors;
     float metal_factor;
     float rough_factor;
+    float clearcoat_factor;
+    float clearcoat_rough_factor;
+
     uint color_tex_i;
     uint color_tex_coord;
     uint metal_rough_tex_i;
     uint metal_rough_tex_coord;
     uint normal_tex_i;
     uint normal_tex_coord;
+    uint clearcoat_tex_i;
+    uint clearcoat_tex_coord;
+    uint clearcoat_rough_tex_i;
+    uint clearcoat_rough_tex_coord;
+    uint clearcoat_normal_tex_i;
+    uint clearcoat_normal_tex_coord;
 };
 
 layout (std430, set = 1, binding = 0) readonly buffer MaterialBuffer {

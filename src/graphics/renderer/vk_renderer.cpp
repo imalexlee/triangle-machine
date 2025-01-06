@@ -363,7 +363,7 @@ void create_graphics_desc_set(Renderer* renderer) {
 
 void configure_render_resources(Renderer* renderer) {
 
-    VkClearValue scene_clear_value = {.color = {{0.02f, 0.02f, 0.02f, 0.f}}};
+    VkClearValue scene_clear_value = {.color = {{0.0f, 0.0f, 0.0f, 0.f}}};
 
     VkImageView draw_image_view    = renderer->color_image.image_view;
     VkImageView resolve_image_view = nullptr;

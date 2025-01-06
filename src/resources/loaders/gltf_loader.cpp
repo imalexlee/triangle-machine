@@ -54,15 +54,21 @@ struct MaterialData {
     glm::vec4 color_factors{1.f, 1.f, 1.f, 1.f};
     float     metal_factor{0.0};
     float     rough_factor{1.0};
+    float     clearcoat_factor{0.0};
+    float     clearcoat_rough_factor{0.0};
 
     int32_t  color_tex_i{-1}; // -1 represents no texture
     uint32_t color_tex_coord{0};
-
     int32_t  metal_rough_tex_i{-1};
     uint32_t metal_rough_tex_coord{0};
-
     int32_t  normal_tex_i{-1};
     uint32_t normal_tex_coord{0};
+    int32_t  clearcoat_tex_i{-1};
+    uint32_t clearcoat_tex_coord{0};
+    int32_t  clearcoat_rough_tex_i{-1};
+    uint32_t clearcoat_rough_tex_coord{0};
+    int32_t  clearcoat_normal_tex_i{-1};
+    uint32_t clearcoat_normal_tex_coord{0};
 };
 
 struct GLTFMaterial {
@@ -297,29 +303,48 @@ std::vector<GLTFMaterial> load_gltf_materials(const fastgltf::Asset* asset) {
             const auto base_color_tex        = &material.pbrData.baseColorTexture.value();
             new_mat.mat_data.color_tex_coord = base_color_tex->texCoordIndex;
             new_mat.mat_data.color_tex_i     = base_color_tex->textureIndex;
-        } else {
-            new_mat.mat_data.color_tex_coord = 0;
         }
         // metallic roughness
         if (material.pbrData.metallicRoughnessTexture.has_value()) {
             const auto metal_rough_tex             = &material.pbrData.metallicRoughnessTexture.value();
             new_mat.mat_data.metal_rough_tex_coord = metal_rough_tex->texCoordIndex;
             new_mat.mat_data.metal_rough_tex_i     = metal_rough_tex->textureIndex;
-        } else {
-            new_mat.mat_data.metal_rough_tex_coord = 0;
         }
         // normal
         if (material.normalTexture.has_value()) {
             const auto normal_tex             = &material.normalTexture.value();
             new_mat.mat_data.normal_tex_coord = normal_tex->texCoordIndex;
             new_mat.mat_data.normal_tex_i     = normal_tex->textureIndex;
-        } else {
-            new_mat.mat_data.normal_tex_coord = 0;
         }
         new_mat.mat_data.metal_factor  = material.pbrData.metallicFactor;
         new_mat.mat_data.rough_factor  = material.pbrData.roughnessFactor;
         new_mat.mat_data.color_factors = glm::make_vec4(material.pbrData.baseColorFactor.data());
         new_mat.alpha_mode             = material.alphaMode;
+
+        // EXTENSIONS
+
+        if (material.clearcoat.get() != nullptr) {
+            // clearcoat
+            if (material.clearcoat->clearcoatTexture.has_value()) {
+                const auto clearcoat_tex             = &material.clearcoat->clearcoatTexture.value();
+                new_mat.mat_data.clearcoat_tex_coord = clearcoat_tex->texCoordIndex;
+                new_mat.mat_data.clearcoat_tex_i     = clearcoat_tex->textureIndex;
+            }
+            // clearcoat roughness
+            if (material.clearcoat->clearcoatRoughnessTexture.has_value()) {
+                const auto clearcoat_rough_tex             = &material.clearcoat->clearcoatRoughnessTexture.value();
+                new_mat.mat_data.clearcoat_rough_tex_coord = clearcoat_rough_tex->texCoordIndex;
+                new_mat.mat_data.clearcoat_rough_tex_i     = clearcoat_rough_tex->textureIndex;
+            }
+            // clearcoat normal
+            if (material.clearcoat->clearcoatNormalTexture.has_value()) {
+                const auto clearcoat_normal_tex             = &material.clearcoat->clearcoatNormalTexture.value();
+                new_mat.mat_data.clearcoat_normal_tex_coord = clearcoat_normal_tex->texCoordIndex;
+                new_mat.mat_data.clearcoat_normal_tex_i     = clearcoat_normal_tex->textureIndex;
+            }
+            new_mat.mat_data.clearcoat_factor       = material.clearcoat->clearcoatFactor;
+            new_mat.mat_data.clearcoat_rough_factor = material.clearcoat->clearcoatRoughnessFactor;
+        }
 
         gltf_materials.push_back(new_mat);
     }
@@ -638,6 +663,22 @@ static uint32_t upload_gltf_materials(Renderer* backend, std::span<const GLTFMat
             new_mat_data.normal_tex_i = gltf_mat.mat_data.normal_tex_i + tex_desc_offset;
         } else {
             new_mat_data.normal_tex_i = 0;
+        }
+        // EXTENSIONS
+        if (gltf_mat.mat_data.clearcoat_tex_i >= 0) {
+            new_mat_data.clearcoat_tex_i = gltf_mat.mat_data.clearcoat_tex_i + tex_desc_offset;
+        } else {
+            new_mat_data.clearcoat_tex_i = 0;
+        }
+        if (gltf_mat.mat_data.clearcoat_rough_tex_i >= 0) {
+            new_mat_data.clearcoat_rough_tex_i = gltf_mat.mat_data.clearcoat_rough_tex_i + tex_desc_offset;
+        } else {
+            new_mat_data.clearcoat_rough_tex_i = 0;
+        }
+        if (gltf_mat.mat_data.clearcoat_normal_tex_i >= 0) {
+            new_mat_data.clearcoat_normal_tex_i = gltf_mat.mat_data.clearcoat_normal_tex_i + tex_desc_offset;
+        } else {
+            new_mat_data.clearcoat_normal_tex_i = 0;
         }
         materials.push_back(new_mat_data);
     }

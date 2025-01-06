@@ -57,6 +57,7 @@ vec3 fresnel_schlick(float n_dot_l, vec3 albedo, float metallic)
 }
 
 
+
 void main() {
     PBR_Material mat = material_buf.materials[nonuniformEXT(constants.material_i)];
 
