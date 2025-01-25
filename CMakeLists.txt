@@ -3,7 +3,14 @@ cmake_minimum_required(VERSION 3.29)
 include(CMakePrintHelpers)
 
 project(triangle-machine)
+
 find_package(Vulkan REQUIRED)
+
+# thank you https://github.com/opencv/opencv/issues/6132
+set(OpenCV_DIR $ENV{OpenCV_DIR}/x64/vc16/lib)
+set(OpenCV_STATIC ON)
+
+find_package(OpenCV REQUIRED)
 
 if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
@@ -20,30 +27,29 @@ add_executable(
         ${PROJECT_NAME}
         src/entry.cpp
         src/core/engine.cpp
-        src/core/window.cpp
-        src/core/camera.cpp
-        src/core/scene.cpp
-        src/core/editor.cpp
-        src/core/loaders/gltf_loader.cpp
-        src/vk_backend/vk_backend.cpp
-        src/vk_backend/vk_debug.cpp
-        src/vk_backend/vk_device.cpp
-        src/vk_backend/vk_command.cpp
-        src/vk_backend/vk_swapchain.cpp
-        src/vk_backend/vk_pipeline.cpp
-        src/vk_backend/vk_sync.cpp
-        src/vk_backend/vk_frame.cpp
-        src/vk_backend/vk_init.cpp
-        src/vk_backend/vk_vma_usage.cpp
-        src/vk_backend/resources/vk_descriptor.cpp
-        src/vk_backend/resources/vk_buffer.cpp
-        src/vk_backend/resources/vk_image.cpp
-        src/vk_backend/vk_shader.cpp
-        src/vk_backend/vk_shader.h
-        src/vk_backend/vk_ext.cpp
-        src/vk_backend/vk_ext.h
-        src/vk_backend/resources/vk_accel_struct.cpp
-        src/vk_backend/resources/vk_accel_struct.h
+        src/system/platform/window.cpp
+        src/graphics/camera/camera.cpp
+        src/scene/scene.cpp
+        src/editor/editor.cpp
+        src/resources/loaders/gltf_loader.cpp
+        src/graphics/renderer/vk_renderer.cpp
+        src/system/device/vk_debug.cpp
+        src/system/device/vk_device.cpp
+        src/system/device/vk_command.cpp
+        src/graphics/renderer/vk_swapchain.cpp
+        src/graphics/renderer/vk_pipeline.cpp
+        src/system/device/vk_sync.cpp
+        src/graphics/renderer/vk_frame.cpp
+        src/graphics/renderer/vk_init.cpp
+        src/system/device/memory/vk_descriptor.cpp
+        src/system/device/memory/vk_buffer.cpp
+        src/system/device/memory/vk_image.cpp
+        src/graphics/renderer/vk_shader.cpp
+        src/graphics/renderer/vk_shader.h
+        src/system/device/vk_ext.cpp
+        src/system/device/vk_ext.h
+        src/system/device/memory/vk_accel_struct.cpp
+        src/system/device/memory/vk_accel_struct.h
 
         thirdparty/ImGuizmo/ImGuizmo.cpp
         thirdparty/ImGuizmo/ImGuizmo.h
@@ -51,8 +57,21 @@ add_executable(
         thirdparty/ImGuiFileDialog/ImGuiFileDialog.h
         thirdparty/ImGuiFileDialog/ImGuiFileDialogConfig.h
         thirdparty/nlohmann/json.hpp
-        src/core/audio.cpp
-        src/core/audio.h
+        src/audio/audio.cpp
+        src/audio/audio.h
+        src/editor/editor.h
+        src/scene/scene.h
+        src/system/device/vk_context.cpp
+        src/system/device/vk_context.h
+        src/system/device/vk_device.h
+        src/system/device/vk_debug.h
+        src/system/device/vk_options.h
+        src/system/device/vk_types.h
+        src/system/device/vk_vma_usage.cpp
+        src/resources/shader_compiler.cpp
+        src/resources/shader_compiler.h
+        src/system/host/io.cpp
+        src/system/host/io.h
 )
 
 
@@ -77,6 +96,7 @@ add_subdirectory(thirdparty/fastgltf)
 add_subdirectory(thirdparty/ImGuiFileDialog)
 #add_subdirectory(thirdparty/meshoptimizer)
 add_subdirectory(thirdparty/glfw)
+add_subdirectory(thirdparty/KTX-Software)
 #add_subdirectory(thirdparty/glslang)
 add_subdirectory(thirdparty/shaderc)
 add_subdirectory(thirdparty)
@@ -98,6 +118,7 @@ target_include_directories(
         PRIVATE thirdparty/ImGuiFileDialog
         PRIVATE thirdparty/
         PRIVATE ${FMOD_PATH}/inc/
+        PRIVATE ${OpenCV_INCLUDE_DIRS}
 )
 
 target_link_directories(${PROJECT_NAME} PUBLIC thirdparty/fmt/src PUBLIC
@@ -116,70 +137,6 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         $<TARGET_FILE_DIR:${PROJECT_NAME}>
 )
 
-# Find NVTT.
-if (NOT NVTT_DIR)
-    set(_SEARCH_PATHS "$ENV{NVTT_DIR}" "${CMAKE_CURRENT_LIST_DIR}" "${CMAKE_CURRENT_LIST_DIR}/.." "${CMAKE_CURRENT_LIST_DIR}/../nvtt" "C:/Program Files/NVIDIA Corporation/NVIDIA Texture Tools")
-
-    foreach (_PATH ${_SEARCH_PATHS})
-        file(GLOB _DLL_POSSIBILITIES "${_PATH}/nvtt*.dll" "${_PATH}/libnvtt.so.*")
-        if (_DLL_POSSIBILITIES) # If this folder contains a DLL matching the NVTT DLL pattern
-            set(NVTT_DIR "${_PATH}")
-            break()
-        endif ()
-    endforeach ()
-
-    if (NOT NVTT_DIR)
-        message(WARNING "NVTT not found! Please install NVTT from https://developer.nvidia.com/nvidia-texture-tools-exporter and set the CMake NVTT_DIR variable to the folder containing nvtt*.dll (e.g. C:\\Program Files\\NVIDIA Corporation\\NVIDIA Texture Tools).")
-        return()
-    endif ()
-endif ()
-
-# Get the NVTT shared library name.
-file(GLOB _NVTT_SL_POSSIBILITIES "${NVTT_DIR}/nvtt*.dll" "${NVTT_DIR}/libnvtt.so.*")
-if (NOT _NVTT_SL_POSSIBILITIES)
-    message(WARNING "NVTT_DIR didn't contain an NVTT shared library of the form nvtt*.dll or libnvtt.so.*! Is NVTT_DIR set correctly? NVTT_DIR was ${NVTT_DIR}")
-    return()
-else ()
-    list(LENGTH _NVTT_SL_POSSIBILITIES _NVTT_SL_POSSIBILITIES_LEN)
-    math(EXPR _NVTT_SL_IDX ${_NVTT_SL_POSSIBILITIES_LEN}-1)
-    list(GET _NVTT_SL_POSSIBILITIES ${_NVTT_SL_IDX} _NVTT_SL)
-endif ()
-
-# Find the NVTT linker library on Windows.
-if (WIN32)
-    if (NOT NVTT_LIB)
-        file(GLOB _NVTT_LIB_ALL "${NVTT_DIR}/lib/x64-v*/nvtt*.lib")
-        if (NOT _NVTT_LIB_ALL)
-            message(WARNING "Found nvtt.dll in ${NVTT_DIR}, but was unable to find nvtt.lib in ${NVTT_DIR}/lib/... ! Please check the NVTT directory and this CMake script to see if the path is correct.")
-            return()
-        endif ()
-        list(LENGTH _NVTT_LIB_ALL _NVTT_LIB_LEN)
-        math(EXPR _NVTT_LIB_IDX ${_NVTT_LIB_LEN}-1)
-        list(GET _NVTT_LIB_ALL ${_NVTT_LIB_IDX} NVTT_LIB)
-    endif ()
-endif ()
-
-# Print out information to help with error reports.
-message(STATUS "NVTT Shared Library: ${_NVTT_SL}")
-message(STATUS "NVTT .lib (Windows): ${NVTT_LIB}")
-
-# Link with NVTT
-if (WIN32)
-    target_link_libraries("${PROJECT_NAME}" PRIVATE "${NVTT_LIB}")
-else ()
-    target_link_libraries("${PROJECT_NAME}" PRIVATE "${_NVTT_SL}")
-endif ()
-
-target_include_directories("${PROJECT_NAME}"
-        PRIVATE
-        "${NVTT_DIR}/include"
-)
-
-# Copy NVTT to the output directory.
-add_custom_command(
-        TARGET "${PROJECT_NAME}"
-        POST_BUILD
-        COMMAND cmake -E copy_if_different "${_NVTT_SL}" "$<TARGET_FILE_DIR:${PROJECT_NAME}>")
 
 target_link_libraries(
         ${PROJECT_NAME}
@@ -190,11 +147,10 @@ target_link_libraries(
         shaderc
         shaderc_util
         Vulkan::Vulkan
-        #        fmod_vc
         fmod
-
+        ktx
+        ${OpenCV_LIBS}
 )
-
 
 find_program(
         GLSL_VALIDATOR glslangValidator

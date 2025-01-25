@@ -23,6 +23,7 @@ vec3 unprojectPoint(float x, float y, float z, mat4 viewProjectionInverse) {
 }
 
 vec3 gridPlane[6] = vec3[](
+
 vec3(1, 1, 0), vec3(-1, -1, 0), vec3(-1, 1, 0),
 vec3(-1, -1, 0), vec3(1, 1, 0), vec3(1, -1, 0)
 );
@@ -39,6 +40,4 @@ void main() {
     projection = scene_data.proj;
 
     gl_Position = vec4(pos, 1.0);
-
-
 }

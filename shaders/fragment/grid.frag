@@ -7,6 +7,7 @@ layout (location = 6) in mat4 projection;
 layout (location = 0) out vec4 outColor;
 
 vec4 grid(vec3 pos) {
+
     vec2 coord = pos.xz;
     vec2 derivative = fwidth(coord);
     vec2 grid = abs(fract(coord - 0.5) - 0.5) / derivative;
