@@ -5,6 +5,7 @@
 #include "system/device/vk_utils.h"
 #include <algorithm>
 #include <cstdint>
+#include <iostream>
 #include <set>
 #include <vulkan/vulkan_core.h>
 
@@ -37,6 +38,10 @@ void create_swapchain(SwapchainContext* swapchain_ctx, const VkContext* vk_ctx) 
     swapchain_ctx->extent          = swapchain_ctx->support_details.capabilities.currentExtent;
 
     VkSurfaceFormatKHR surface_format = swapchain_ctx->support_details.formats[0];
+    for (auto format : swapchain_ctx->support_details.formats) {
+        std::cout << string_VkFormat(format.format) << '\n';
+        std::cout << string_VkColorSpaceKHR(format.colorSpace) << '\n' << std::endl;
+    }
     for (const auto& format : swapchain_ctx->support_details.formats) {
         if (format.format == VK_FORMAT_B8G8R8A8_SRGB && format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
             surface_format = format;

@@ -17,10 +17,13 @@ layout (location = 3) in vec2 normal_uv;
 layout (location = 4) in vec2 clearcoat_uv;
 layout (location = 5) in vec2 clearcoat_rough_uv;
 layout (location = 6) in vec2 clearcoat_normal_uv;
-layout (location = 7) in vec2 occlusion_uv;
-layout (location = 8) in vec3 surface_normal;
-layout (location = 9) in vec4 vert_pos;
-layout (location = 10) in vec4 tangent;
+layout (location = 7) in vec2 specular_strength_uv;
+layout (location = 8) in vec2 specular_color_uv;
+layout (location = 9) in vec2 occlusion_uv;
+layout (location = 10) in vec3 surface_normal;
+layout (location = 11) in vec4 vert_pos;
+layout (location = 12) in vec4 tangent;
+
 
 float PI = 3.1415926535897932384626433832795;
 
@@ -65,7 +68,7 @@ vec3 fresnel_schlick(vec3 normal, vec3 incident, vec3 albedo, float metallic)
 {
     float alignment = max(dot(normal, incident), 0.000);
     vec3 f_0 = mix(vec3(0.04), albedo, metallic);
-    return f_0 + (1.0 - f_0) * pow(clamp(1.0 - alignment, 0.0, 1.0), 5.0);
+    return f_0 + (1.0 - f_0) * pow(1.0 - max(alignment, 0.0), 5.0);
 }
 
 vec3 hammon_diffuse_brdf(vec3 normal, vec3 view, vec3 light, float roughness) {
@@ -112,10 +115,24 @@ void main() {
     float loaded_occlusion_val = texture(tex_samplers[nonuniformEXT (mat.occlusion_tex_i)], occlusion_uv).r;
     float occlusion = 1.0 + mat.occlusion_strength * (loaded_occlusion_val - 1.0);
 
+    float loaded_specular_strength_val = texture(tex_samplers[nonuniformEXT (mat.specular_strength_tex_i)], specular_strength_uv).a;
+    vec3 loaded_specular_color_val = texture(tex_samplers[nonuniformEXT (mat.specular_color_tex_i)], specular_color_uv).rgb;
+
+    float specular_strength = loaded_specular_strength_val * mat.specular_strength;
+    vec3 specular_color = loaded_specular_color_val * mat.specular_color_factors.rgb;
+
+
+
+
     vec4 loaded_tex_color = texture(tex_samplers[nonuniformEXT (mat.color_tex_i)], color_uv);
     vec4 tex_color = mat.color_factors * loaded_tex_color;
     vec3 color = tex_color.rgb * occlusion;
 
+    //    float el = specular_strength;
+    //    out_color = vec4(specular_color, tex_color.a);
+    //    return;
+    //
+    //
     // Bump Mapping
     vec3 bump_tex_val = texture(tex_samplers[nonuniformEXT(mat.normal_tex_i)], normal_uv).xyz;
 
@@ -213,11 +230,14 @@ void main() {
         float clearcoat_masking = g2_smith_correlated(clearcoat_normal, view_dir, light_dir, clearcoat_roughness);
         vec3 clearcoat_reflection = fresnel_schlick(clearcoat_normal, view_dir, color, metallic);
         float clearcoat_specular_brdf = (clearcoat_distribution * clearcoat_masking) / clearcoat_brdf_denom;
-        material = mix(material, vec3(clearcoat_specular_brdf), clearcoat * clearcoat_reflection.r);
+        //vec3 material_2 = (PI * vec3(clearcoat_specular_brdf)) * in_radiance * nc_dot_l;
+        vec3 material_2 = vec3(clearcoat_specular_brdf);
+
+        material = mix(material, material_2, clearcoat * clearcoat_reflection.r);
     }
 
-
     material = (PI * material) * in_radiance * n_dot_l;
+
     //material *= occlusion;
 
 

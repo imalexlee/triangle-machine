@@ -40,8 +40,11 @@ void shader_ctx_stage_shader(ShaderContext* shader_ctx, const std::filesystem::p
                              std::span<VkDescriptorSetLayout> desc_set_layouts, std::span<VkPushConstantRange> push_constant_ranges,
                              VkShaderStageFlagBits stage, VkShaderStageFlags next_stage) {
 
-    std::vector<uint32_t> shader_spv =
-        compile_shader_spv(shader_ctx->builder.compiler, shader_ctx->builder.shader_options, file_path.string(), stage);
+    std::vector<uint32_t> shader_spv;
+    bool success = compile_shader_spv(shader_ctx->builder.compiler, shader_ctx->builder.shader_options, file_path.string(), stage, &shader_spv);
+    if (!success) {
+        return;
+    }
 
     VkShaderCreateInfoEXT vk_shader_ci{};
     vk_shader_ci.sType                  = VK_STRUCTURE_TYPE_SHADER_CREATE_INFO_EXT;
@@ -105,7 +108,9 @@ void shader_ctx_commit_shaders(ShaderContext* shader_ctx, const ExtContext* ext_
 }
 
 void shader_ctx_replace_shader(ShaderContext* shader_ctx, const ExtContext* ext_ctx, VkDevice device, ShaderType shader_type, uint32_t shader_idx) {
-    assert(shader_ctx->builder.create_infos.size() == 1);
+    if (shader_ctx->builder.create_infos.size() != 1) {
+        return;
+    }
 
     ShaderBuilder* builder = &shader_ctx->builder;
     builder->create_infos[0].flags |= shader_type == ShaderType::linked ? VK_SHADER_CREATE_LINK_STAGE_BIT_EXT : 0;

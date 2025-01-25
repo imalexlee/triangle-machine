@@ -35,8 +35,9 @@ std::string parse_shader_file(const std::string& filename) {
     return content;
 }
 
-std::vector<uint32_t> compile_shader_spv(shaderc_compiler_t compiler, shaderc_compile_options_t compile_options, const std::string& filename,
-                                         VkShaderStageFlagBits shader_stage) {
+// returns true if successful
+bool compile_shader_spv(shaderc_compiler_t compiler, shaderc_compile_options_t compile_options, const std::string& filename,
+                        VkShaderStageFlagBits shader_stage, std::vector<uint32_t>* out_spv) {
 
     std::string shader_source = parse_shader_file(filename);
 
@@ -46,14 +47,14 @@ std::vector<uint32_t> compile_shader_spv(shaderc_compiler_t compiler, shaderc_co
         shaderc_compile_into_spv(compiler, shader_source.data(), shader_source.size(), shader_kind, filename.data(), "main", compile_options);
     if (result->num_errors > 0) {
         std::cout << result->messages << std::endl;
-        exit(EXIT_FAILURE);
+        return false;
     }
 
-    std::vector<uint32_t> spv;
-    spv.resize(result->output_data_size / sizeof(uint32_t));
-    memcpy(spv.data(), result->GetBytes(), result->output_data_size);
+    out_spv->clear();
+    out_spv->resize(result->output_data_size / sizeof(uint32_t));
+    memcpy(out_spv->data(), result->GetBytes(), result->output_data_size);
 
     shaderc_result_release(result);
 
-    return spv;
+    return true;
 }

@@ -36,6 +36,7 @@ static void create_grid_pipeline(Renderer* renderer);
 static void create_pipeline_layouts(Renderer* renderer);
 static void create_sky_box(Renderer* renderer);
 static void create_compute_resources(Renderer* renderer);
+static void create_render_images(Renderer* renderer);
 static void configure_debugger(const Renderer* renderer);
 static void configure_render_resources(Renderer* renderer);
 
@@ -85,19 +86,10 @@ void renderer_init(Renderer* renderer, const VkContext* vk_ctx, uint32_t width, 
     for (size_t i = 0; i < renderer->frames.size(); i++) {
         Frame* frame = &renderer->frames[i];
         frame_init(frame, vk_ctx->logical_device, renderer->allocator, vk_ctx->queue_families.graphics);
+
         renderer->scene_data_buffers[i] =
             allocated_buffer_create(renderer->allocator, sizeof(WorldData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_AUTO,
                                     VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
-
-        renderer->entity_id_images[i] =
-            allocated_image_create(vk_ctx->logical_device, renderer->allocator,
-                                   VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-                                   VK_IMAGE_VIEW_TYPE_2D, renderer->image_extent, VK_FORMAT_R16G16_UINT, 1, 1, VMA_MEMORY_USAGE_AUTO);
-
-        DescriptorWriter writer{};
-        desc_writer_write_image_desc(&writer, 1, renderer->entity_id_images[i].image_view, renderer->default_linear_sampler, VK_IMAGE_LAYOUT_GENERAL,
-                                     VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-        desc_writer_update_desc_set(&writer, vk_ctx->logical_device, renderer->scene_desc_sets[i]);
     }
 
     renderer->entity_id_result_buffer =
@@ -109,32 +101,7 @@ void renderer_init(Renderer* renderer, const VkContext* vk_ctx, uint32_t width, 
 
     renderer->render_area = initial_render_area;
 
-    if (renderer->msaa_samples) {
-        renderer->color_msaa_image = allocated_image_create(
-            vk_ctx->logical_device, renderer->allocator, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
-            VK_IMAGE_VIEW_TYPE_2D, renderer->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1, renderer->msaa_samples);
-    }
-
-    renderer->color_image =
-        allocated_image_create(vk_ctx->logical_device, renderer->allocator, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                               VK_IMAGE_VIEW_TYPE_2D, renderer->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1, 1);
-
-    renderer->depth_image = allocated_image_create(vk_ctx->logical_device, renderer->allocator, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                                                   VK_IMAGE_VIEW_TYPE_2D, renderer->image_extent, VK_FORMAT_D32_SFLOAT, 1, renderer->msaa_samples);
-
     renderer->mode = mode;
-    // TODO: don't worry about viewport images in released scenes. only for editor/debugging
-    if (renderer->mode == EngineMode::EDIT) {
-        for (size_t i = 0; i < renderer->swapchain_context.images.size(); i++) {
-            AllocatedImage new_viewport_image =
-                allocated_image_create(vk_ctx->logical_device, renderer->allocator, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                                       VK_IMAGE_VIEW_TYPE_2D, renderer->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1, 1);
-            renderer->viewport_images.push_back(new_viewport_image);
-        }
-    }
-
-    // create color attachments and  rendering information from our allocated images
-    configure_render_resources(renderer);
 
     renderer->imm_fence = vk_fence_create(vk_ctx->logical_device, VK_FENCE_CREATE_SIGNALED_BIT);
 
@@ -151,6 +118,10 @@ void renderer_init(Renderer* renderer, const VkContext* vk_ctx, uint32_t width, 
     create_compute_resources(renderer);
 
     create_default_data(renderer);
+
+    create_render_images(renderer);
+
+    configure_render_resources(renderer);
 
     shader_ctx_init(&renderer->shader_ctx);
 
@@ -363,7 +334,7 @@ void create_graphics_desc_set(Renderer* renderer) {
 
 void configure_render_resources(Renderer* renderer) {
 
-    VkClearValue scene_clear_value = {.color = {{0.0f, 0.0f, 0.0f, 0.f}}};
+    VkClearValue scene_clear_value = {.color = {{0.f, 0.f, 0.f, 0.f}}};
 
     VkImageView draw_image_view    = renderer->color_image.image_view;
     VkImageView resolve_image_view = nullptr;
@@ -783,6 +754,45 @@ void renderer_draw(Renderer* renderer, std::vector<Entity>& entities, const Worl
     }
 }
 
+void create_render_images(Renderer* renderer) {
+    renderer->color_image = allocated_image_create(renderer->vk_ctx->logical_device, renderer->allocator,
+                                                   VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                                                   VK_IMAGE_VIEW_TYPE_2D, renderer->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1, 1);
+
+    if (renderer->msaa_samples > 1) {
+        renderer->color_msaa_image = allocated_image_create(
+            renderer->vk_ctx->logical_device, renderer->allocator, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
+            VK_IMAGE_VIEW_TYPE_2D, renderer->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1, renderer->msaa_samples);
+    }
+
+    renderer->depth_image = allocated_image_create(renderer->vk_ctx->logical_device, renderer->allocator, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                                                   VK_IMAGE_VIEW_TYPE_2D, renderer->image_extent, VK_FORMAT_D32_SFLOAT, 1, renderer->msaa_samples);
+
+    if (renderer->mode == EngineMode::EDIT) {
+        if (renderer->viewport_images.size() != renderer->swapchain_context.images.size()) {
+            renderer->viewport_images.resize(renderer->swapchain_context.images.size());
+        }
+        for (size_t i = 0; i < renderer->swapchain_context.images.size(); i++) {
+            AllocatedImage new_viewport_image = allocated_image_create(
+                renderer->vk_ctx->logical_device, renderer->allocator, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                VK_IMAGE_VIEW_TYPE_2D, renderer->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1, 1);
+            renderer->viewport_images[i] = new_viewport_image;
+        }
+    }
+
+    for (size_t i = 0; i < renderer->entity_id_images.size(); i++) {
+
+        renderer->entity_id_images[i] = allocated_image_create(
+            renderer->vk_ctx->logical_device, renderer->allocator, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_IMAGE_VIEW_TYPE_2D, renderer->image_extent, VK_FORMAT_R16G16_UINT, 1, 1, VMA_MEMORY_USAGE_AUTO);
+
+        DescriptorWriter writer{};
+        desc_writer_write_image_desc(&writer, 1, renderer->entity_id_images[i].image_view, renderer->default_linear_sampler, VK_IMAGE_LAYOUT_GENERAL,
+                                     VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+        desc_writer_update_desc_set(&writer, renderer->vk_ctx->logical_device, renderer->scene_desc_sets[i]);
+    }
+}
+
 void resize(Renderer* renderer) {
     vkDeviceWaitIdle(renderer->vk_ctx->logical_device);
 
@@ -798,46 +808,23 @@ void resize(Renderer* renderer) {
     renderer->render_area.scissor_dimensions.y += renderer->image_extent.height - renderer->render_area.scissor_dimensions.y;
 
     allocated_image_destroy(renderer->vk_ctx->logical_device, renderer->allocator, &renderer->color_image);
-    renderer->color_image = allocated_image_create(renderer->vk_ctx->logical_device, renderer->allocator,
-                                                   VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                                                   VK_IMAGE_VIEW_TYPE_2D, renderer->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1, 1);
 
-    if (renderer->msaa_samples > 1) {
-        renderer->color_msaa_image = allocated_image_create(
-            renderer->vk_ctx->logical_device, renderer->allocator, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
-            VK_IMAGE_VIEW_TYPE_2D, renderer->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1, renderer->msaa_samples);
+    for (size_t i = 0; i < renderer->entity_id_images.size(); i++) {
+        allocated_image_destroy(renderer->vk_ctx->logical_device, renderer->allocator, &renderer->entity_id_images[i]);
     }
-
-    renderer->depth_image = allocated_image_create(renderer->vk_ctx->logical_device, renderer->allocator, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                                                   VK_IMAGE_VIEW_TYPE_2D, renderer->image_extent, VK_FORMAT_D32_SFLOAT, 1, renderer->msaa_samples);
 
     if (renderer->mode == EngineMode::EDIT) {
         for (size_t i = 0; i < renderer->swapchain_context.images.size(); i++) {
             allocated_image_destroy(renderer->vk_ctx->logical_device, renderer->allocator, &renderer->viewport_images[i]);
-            AllocatedImage new_viewport_image = allocated_image_create(
-                renderer->vk_ctx->logical_device, renderer->allocator, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                VK_IMAGE_VIEW_TYPE_2D, renderer->image_extent, VK_FORMAT_R16G16B16A16_SFLOAT, 1, 1);
-            renderer->viewport_images[i] = new_viewport_image;
-
-            for (size_t j = 0; j < renderer->viewport_images.size(); j++) {
-                VkDescriptorSet new_viewport_ds = ImGui_ImplVulkan_AddTexture(
-                    renderer->default_linear_sampler, renderer->viewport_images[j].image_view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-                renderer->viewport_desc_sets[j] = new_viewport_ds;
-            }
         }
     }
 
-    for (size_t i = 0; i < renderer->entity_id_images.size(); i++) {
-        allocated_image_destroy(renderer->vk_ctx->logical_device, renderer->allocator, &renderer->entity_id_images[i]);
+    create_render_images(renderer);
 
-        renderer->entity_id_images[i] = allocated_image_create(
-            renderer->vk_ctx->logical_device, renderer->allocator, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            VK_IMAGE_VIEW_TYPE_2D, renderer->image_extent, VK_FORMAT_R16G16_UINT, 1, 1, VMA_MEMORY_USAGE_AUTO);
-
-        DescriptorWriter writer{};
-        desc_writer_write_image_desc(&writer, 1, renderer->entity_id_images[i].image_view, renderer->default_linear_sampler, VK_IMAGE_LAYOUT_GENERAL,
-                                     VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-        desc_writer_update_desc_set(&writer, renderer->vk_ctx->logical_device, renderer->scene_desc_sets[i]);
+    for (size_t j = 0; j < renderer->viewport_images.size(); j++) {
+        VkDescriptorSet new_viewport_ds = ImGui_ImplVulkan_AddTexture(renderer->default_linear_sampler, renderer->viewport_images[j].image_view,
+                                                                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        renderer->viewport_desc_sets[j] = new_viewport_ds;
     }
 
     configure_render_resources(renderer);

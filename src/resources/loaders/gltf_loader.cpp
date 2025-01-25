@@ -51,15 +51,22 @@ struct TexCoordPair {
 };
 
 struct MaterialData {
-    // base factors
+    // base color factors
     glm::vec4 color_factors{1.f, 1.f, 1.f, 1.f};
-    float     metal_factor{0.0};
-    float     rough_factor{1.0};
-    float     occlusion_strength{1.0};
+    glm::vec4 emissive_factors{0.f, 0.f, 0.f, 1.f};
+
+    // extension color factors
+    glm::vec4 specular_color_factors{1.f, 1.f, 1.f, 1.f};
+
+    // base factors
+    float metal_factor{0.0};
+    float rough_factor{1.0};
+    float occlusion_strength{1.0};
 
     // extension factors
     float clearcoat_factor{0.0};
     float clearcoat_rough_factor{0.0};
+    float specular_strength{1.0};
 
     // base textures
     int32_t  color_tex_i{-1}; // -1 represents no texture
@@ -70,6 +77,8 @@ struct MaterialData {
     uint32_t normal_tex_coord{0};
     int32_t  occlusion_tex_i{-1};
     uint32_t occlusion_tex_coord{0};
+    int32_t  emissive_tex_i{-1};
+    uint32_t emissive_tex_coord{0};
 
     // extension textures
     int32_t  clearcoat_tex_i{-1};
@@ -78,8 +87,12 @@ struct MaterialData {
     uint32_t clearcoat_rough_tex_coord{0};
     int32_t  clearcoat_normal_tex_i{-1};
     uint32_t clearcoat_normal_tex_coord{0};
+    int32_t  specular_strength_tex_i{-1};
+    uint32_t specular_strength_tex_coord{0};
+    int32_t  specular_color_tex_i{-1};
+    uint32_t specular_color_tex_coord{0};
 
-    uint32_t padding;
+    uint32_t padding[2];
 };
 
 struct GLTFMaterial {
@@ -327,7 +340,6 @@ std::vector<GLTFMaterial> load_gltf_materials(const fastgltf::Asset* asset) {
             new_mat.mat_data.normal_tex_coord = normal_tex->texCoordIndex;
             new_mat.mat_data.normal_tex_i     = normal_tex->textureIndex;
         }
-
         // occlusion
         if (material.occlusionTexture.has_value()) {
             const auto occlusion_tex             = &material.occlusionTexture.value();
@@ -336,13 +348,24 @@ std::vector<GLTFMaterial> load_gltf_materials(const fastgltf::Asset* asset) {
             new_mat.mat_data.occlusion_strength  = occlusion_tex->strength;
         }
 
-        new_mat.mat_data.metal_factor  = material.pbrData.metallicFactor;
-        new_mat.mat_data.rough_factor  = material.pbrData.roughnessFactor;
-        new_mat.mat_data.color_factors = glm::make_vec4(material.pbrData.baseColorFactor.data());
-        new_mat.alpha_mode             = material.alphaMode;
+        // emissive
+        if (material.emissiveTexture.has_value()) {
+            const auto emissive_tex             = &material.emissiveTexture.value();
+            new_mat.mat_data.emissive_tex_coord = emissive_tex->texCoordIndex;
+            new_mat.mat_data.emissive_tex_i     = emissive_tex->textureIndex;
+        }
+
+        std::cout << material.emissiveFactor[0] << " " << material.emissiveFactor[1] << " " << material.emissiveFactor[2] << std::endl;
+
+        new_mat.mat_data.emissive_factors = glm::vec4(glm::make_vec3(material.emissiveFactor.data()), 1.f);
+        new_mat.mat_data.color_factors    = glm::make_vec4(material.pbrData.baseColorFactor.data());
+        new_mat.mat_data.metal_factor     = material.pbrData.metallicFactor;
+        new_mat.mat_data.rough_factor     = material.pbrData.roughnessFactor;
+        new_mat.alpha_mode                = material.alphaMode;
 
         // EXTENSIONS
 
+        // clearcoat
         if (material.clearcoat.get() != nullptr) {
             // clearcoat
             if (material.clearcoat->clearcoatTexture.has_value()) {
@@ -364,6 +387,23 @@ std::vector<GLTFMaterial> load_gltf_materials(const fastgltf::Asset* asset) {
             }
             new_mat.mat_data.clearcoat_factor       = material.clearcoat->clearcoatFactor;
             new_mat.mat_data.clearcoat_rough_factor = material.clearcoat->clearcoatRoughnessFactor;
+        }
+
+        // specular
+        if (material.specular.get() != nullptr) {
+            if (material.specular->specularTexture.has_value()) {
+                const auto specular_strength_tex             = &material.specular->specularTexture.value();
+                new_mat.mat_data.specular_strength_tex_coord = specular_strength_tex->texCoordIndex;
+                new_mat.mat_data.specular_strength_tex_i     = specular_strength_tex->textureIndex;
+            }
+            if (material.specular->specularColorTexture.has_value()) {
+                const auto specular_color_tex             = &material.specular->specularColorTexture.value();
+                new_mat.mat_data.specular_color_tex_coord = specular_color_tex->texCoordIndex;
+                new_mat.mat_data.specular_color_tex_i     = specular_color_tex->textureIndex;
+            }
+            glm::vec3 color                         = glm::make_vec3(material.specular->specularColorFactor.data());
+            new_mat.mat_data.specular_color_factors = glm::vec4(color.r, color.g, color.b, 1.f);
+            new_mat.mat_data.specular_strength      = material.specular->specularFactor;
         }
 
         gltf_materials.push_back(new_mat);
@@ -420,7 +460,6 @@ static std::vector<GLTFMesh> load_gltf_meshes(const fastgltf::Asset* my_asset) {
             const fastgltf::Accessor* pos_accessor     = &my_asset->accessors[primitive.findAttribute("POSITION")->second];
             const fastgltf::Accessor* indices_accessor = &my_asset->accessors[primitive.indicesAccessor.value()];
             const fastgltf::Accessor* normal_accessor  = &my_asset->accessors[primitive.findAttribute("NORMAL")->second];
-            const fastgltf::Accessor* tangent_accessor = &my_asset->accessors[primitive.findAttribute("TANGENT")->second];
 
             new_primitive.indices_count = indices_accessor->count;
             new_primitive.indices_start = index_offset;
@@ -445,6 +484,7 @@ static std::vector<GLTFMesh> load_gltf_meshes(const fastgltf::Asset* my_asset) {
             }
 
             if (primitive.findAttribute("TANGENT") != primitive.attributes.cend()) {
+                const fastgltf::Accessor* tangent_accessor = &my_asset->accessors[primitive.findAttribute("TANGENT")->second];
                 fastgltf::iterateAccessorWithIndex<glm::vec4>(*my_asset, *tangent_accessor, [&](const glm::vec4& tangent, size_t i) {
                     assert(i + vertex_count < new_mesh.vertices.size());
                     new_mesh.vertices[i + vertex_count].tangent.x = tangent.x;
@@ -538,28 +578,34 @@ static std::vector<VkSampler> upload_gltf_samplers(Renderer* backend, std::span<
     vk_samplers.reserve(samplers.size());
 
     for (auto& gltf_sampler : samplers) {
-        VkSampler sampler;
 
         VkSamplerCreateInfo sampler_ci{};
+        sampler_ci.magFilter = VK_FILTER_LINEAR;
+        sampler_ci.minFilter = VK_FILTER_LINEAR;
+
         sampler_ci.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-        switch (gltf_sampler.magFilter.value()) {
-        case fastgltf::Filter::Nearest:
-        case fastgltf::Filter::NearestMipMapNearest:
-        case fastgltf::Filter::LinearMipMapNearest:
-            sampler_ci.magFilter = VK_FILTER_NEAREST;
-            break;
-        default:
-            sampler_ci.magFilter = VK_FILTER_LINEAR;
+        if (gltf_sampler.magFilter.has_value()) {
+            switch (gltf_sampler.magFilter.value()) {
+            case fastgltf::Filter::Nearest:
+            case fastgltf::Filter::NearestMipMapNearest:
+            case fastgltf::Filter::LinearMipMapNearest:
+                sampler_ci.magFilter = VK_FILTER_NEAREST;
+                break;
+            default:
+                sampler_ci.magFilter = VK_FILTER_LINEAR;
+            }
         }
 
-        switch (gltf_sampler.minFilter.value()) {
-        case fastgltf::Filter::Nearest:
-        case fastgltf::Filter::NearestMipMapNearest:
-        case fastgltf::Filter::LinearMipMapNearest:
-            sampler_ci.minFilter = VK_FILTER_NEAREST;
-            break;
-        default:
-            sampler_ci.minFilter = VK_FILTER_LINEAR;
+        if (gltf_sampler.minFilter.has_value()) {
+            switch (gltf_sampler.minFilter.value()) {
+            case fastgltf::Filter::Nearest:
+            case fastgltf::Filter::NearestMipMapNearest:
+            case fastgltf::Filter::LinearMipMapNearest:
+                sampler_ci.minFilter = VK_FILTER_NEAREST;
+                break;
+            default:
+                sampler_ci.minFilter = VK_FILTER_LINEAR;
+            }
         }
 
         switch (gltf_sampler.wrapS) {
@@ -583,6 +629,7 @@ static std::vector<VkSampler> upload_gltf_samplers(Renderer* backend, std::span<
             sampler_ci.addressModeV = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
         }
 
+        VkSampler sampler;
         VK_CHECK(vkCreateSampler(backend->vk_ctx->logical_device, &sampler_ci, nullptr, &sampler));
         vk_samplers.push_back(sampler);
 
@@ -622,6 +669,9 @@ static uint32_t upload_gltf_textures(Renderer* backend, std::span<const GLTFImag
         // if any material uses this texture for a color texture, it's srgb encoded
         for (const auto& material : materials) {
             if (material.mat_data.color_tex_i == i) {
+                new_tex_sampler.format = VK_FORMAT_BC7_SRGB_BLOCK;
+            }
+            if (material.mat_data.specular_color_tex_i == i) {
                 new_tex_sampler.format = VK_FORMAT_BC7_SRGB_BLOCK;
             }
         }
@@ -689,8 +739,14 @@ static uint32_t upload_gltf_materials(Renderer* backend, std::span<const GLTFMat
         } else {
             new_mat_data.occlusion_tex_i = 0;
         }
+        if (gltf_mat.mat_data.emissive_tex_i >= 0) {
+            new_mat_data.emissive_tex_i = gltf_mat.mat_data.emissive_tex_i + tex_desc_offset;
+        } else {
+            new_mat_data.emissive_tex_i = 0;
+        }
 
         // EXTENSIONS
+        // clearcoat
         if (gltf_mat.mat_data.clearcoat_tex_i >= 0) {
             new_mat_data.clearcoat_tex_i = gltf_mat.mat_data.clearcoat_tex_i + tex_desc_offset;
         } else {
@@ -705,6 +761,18 @@ static uint32_t upload_gltf_materials(Renderer* backend, std::span<const GLTFMat
             new_mat_data.clearcoat_normal_tex_i = gltf_mat.mat_data.clearcoat_normal_tex_i + tex_desc_offset;
         } else {
             new_mat_data.clearcoat_normal_tex_i = 0;
+        }
+
+        // occlusion
+        if (gltf_mat.mat_data.specular_strength_tex_i >= 0) {
+            new_mat_data.specular_strength_tex_i = gltf_mat.mat_data.specular_strength_tex_i + tex_desc_offset;
+        } else {
+            new_mat_data.specular_strength_tex_i = 0;
+        }
+        if (gltf_mat.mat_data.specular_color_tex_i >= 0) {
+            new_mat_data.specular_color_tex_i = gltf_mat.mat_data.specular_color_tex_i + tex_desc_offset;
+        } else {
+            new_mat_data.specular_color_tex_i = 0;
         }
         materials.push_back(new_mat_data);
     }
